@@ -1313,6 +1313,7 @@ fixtures/regression/* -> artifacts/runs/* -> verifier_report.json summary
 7. Local Read-only Runner：仅在 fixture gate 通过后，再决定是否引入 capability registry、真实 log adapter、SQLite event store、极简 step runner 和更完整的 run state。
 8. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
 9. Phase 1a Evidence Intake Review：在 fixture runner 输出完整 artifact packet 前，后续优化只允许维护评分、Decision Log、Open Questions 和 Research Sprint Log；只有 `verifier_report.json` 失败、grounded email 问题、真实脱敏日志差异或 Build vs Integrate 运行证据出现后，才修改正式设计章节。
+10. Plan Maintenance Evidence Wait：本轮仓库内仍未发现 `fixtures/regression`、`artifacts/runs`、`verifier_report.json`、`evidence.json` 或 `regression_result.json`；下一次有意义的优化仍应等待 Phase 1a 五个 synthetic fixture artifact packet，而不是继续扩写 Open Source Mapping、CUA adapter 或 workflow backend。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -1586,6 +1587,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-11：本轮 Plan Optimizer 继续选择 `Plan Maintenance`，材料性改进限定为消除 Phase 1a contract 歧义，而不是新增产品范围。
 - 2026-05-11：`verifier_report.json` 被固定为 Phase 1a fixture gate 的唯一验收事实源；`regression_result.json` 只是业务候选结论，`run.json` 和 `events.jsonl` 只承担生命周期索引与审计职责。
 - 2026-05-11：Phase 1a 的 `read_log`、`extract_regression_result`、`write_artifact` 只作为 fixture runner 内部 deterministic functions；capability registry、adapter plugin、daemon、HTTP API 和 workspace registry 均延后到 Phase 1b 证据成立后再评估。
+- 2026-05-11 22:01 UTC：本轮 Plan Optimizer 选择 `Plan Maintenance`；由于仓库内没有 Phase 1a fixture artifact、verifier failure、email grounding failure 或真实脱敏日志差异，不新增正式设计章节，也不把 Open Source Mapping 4/5 解读为继续扩项目清单的理由。
 
 ## 20. Open Questions
 
@@ -1618,6 +1620,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 真实脱敏日志出现前，是否有必要继续补 Open Source Mapping，还是应冻结集成研究，等待 fixture gate 证明哪些 adapter/provider 真的影响 MVP？
 - 第一份完整 artifact packet 中，`verifier_report.json` 与 `regression_result.json` 是否会出现状态表达冲突？如果会，是否需要把业务 verdict 与 verification status 在 schema 中更强地分离？
 - Phase 1a 内部 deterministic functions 是否足够表达 evidence provenance，还是实际实现会证明需要提前引入最小 capability call envelope？
+- 下一次 Plan Optimizer 是否应只在发现完整 `fixtures/regression/* -> artifacts/runs/* -> verifier_report.json` 证据链后才修改正式设计章节，否则继续仅记录 evidence wait？
 
 ## 21. Research Sprint Log
 
@@ -2016,6 +2019,54 @@ Plan Maintenance
 ```text
 执行 Fixture Runner Evidence Review：
 先收集 Phase 1a 的 5 个 synthetic fixture artifact packet 和 verifier_report.json summary；只根据实际失败模式调整 schema、规则、evidence locator 或 Build vs Integrate 决策。若没有新 artifact evidence，只追加短 Research Sprint Log，不修改正式设计章节。
+```
+
+### 2026-05-11 22:01 UTC: Plan Optimizer Sprint - Evidence Wait Maintenance
+
+本轮目标：按 agentic-plan-optimizer skill 执行一轮 bounded loop，评分当前主计划，选择唯一 sprint 类型，并判断是否存在材料性计划改进。
+
+本轮评分：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：5/5
+- Open Source Mapping 完整度：4/5
+- Build vs Integrate 清晰度：5/5
+- Evidence Graph 设计成熟度：5/5
+- Verifier Runtime 设计成熟度：5/5
+- CUA Adapter 边界清晰度：5/5
+- 风险控制和范围收敛度：5/5
+
+最低分维度：
+
+- Open Source Mapping 完整度
+
+自动选择的 sprint 类型：
+
+```text
+Plan Maintenance
+```
+
+多视角评审结论：
+
+- Open Source Mapping Agent：当前 mapping 已足够支撑 Phase 1a 的 Build vs Integrate；缺口来自没有 fixture 运行证据，而不是缺少更多项目枚举。
+- Architecture Agent：正式设计章节已经把 MVP 收敛到 deterministic fixture runner；没有 artifact packet 前继续改 schema 或 runner contract 会变成猜测。
+- CUA Adapter Agent：CUA 继续是 post-MVP adapter；本轮没有 trajectory、screenshot 或 sandbox observation 证据进入 Phase 1a。
+- Feasibility Critic Agent：没有新证据时继续扩写计划会降低收敛度；只记录证据缺口是更安全的维护动作。
+- Research Strategy Agent：下一轮有价值输入仍是五个 synthetic fixture 的 `verifier_report.json`、`evidence.json`、`regression_result.json` 和 grounded `email_draft.md`。
+
+本轮证据检查：
+
+- 未发现 `fixtures/regression`。
+- 未发现 `artifacts/runs`。
+- 未发现 `verifier_report.json`、`evidence.json` 或 `regression_result.json`。
+
+本轮写回：仅更新 Research Backlog、Decision Log、Open Questions 和本 Research Sprint Log；不修改产品代码，不扩写正式设计章节，不新增 generic vision。
+
+下一轮建议：
+
+```text
+执行 Fixture Runner Evidence Review：
+先收集或实现 Phase 1a 的 5 个 synthetic fixture artifact packet。若仍没有 verifier_report.json / evidence.json / regression_result.json / grounded email evidence，只追加短 evidence-wait Research Sprint Log，不修改正式设计章节。
 ```
 
 ## 22. Parking Lot
