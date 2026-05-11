@@ -27,7 +27,7 @@ todos:
     content: 设计 Evidence Graph 和 Verifier Runtime，让每个结论都有可追溯证据和验证流程
     status: in_progress
   - id: build-local-mvp
-    content: 规划本地 read-only MVP：固定 log fixture、run.json/events.jsonl、三个 capability、rule verifier、artifact writer
+    content: 规划本地 read-only MVP：固定 log fixture、run.json/events.jsonl、三个同进程函数、rule verifier、artifact writer
     status: pending
   - id: validate-engineering-loop
     content: 用 regression log 分析和英文汇报邮件生成验证端到端工程闭环
@@ -668,13 +668,13 @@ interface Capability<I, O> {
 - `summarize_log`
 - `request_approval`
 
-MVP 只实现三个 capability：
+Phase 1a 只把这三个名字实现为同进程 deterministic functions；Phase 1b+ 才评估是否升级为 capability：
 
 - `read_log`
 - `extract_regression_result`
 - `write_artifact`
 
-成功标准：workflow 不知道底层是 IDE、shell 还是云端 worker，只调用标准 capability；第一版先用最小 read-only 子集验证 contract 是否成立。
+成功标准：Phase 1a 先用最小 read-only function 子集验证 contract 是否成立；fixture gate 通过后，workflow 才需要不知道底层是 IDE、shell 还是云端 worker，只调用标准 capability。
 
 ### Phase 4：Context Broker
 
@@ -783,7 +783,7 @@ MVP verifier 只做三类检查：
 1. 创建 Run
 2. 生成 regression 场景 TaskSpec
 3. Planner 生成 steps
-4. Capability Runtime 调 read_log / extract_regression_result / write_artifact
+4. Phase 1a runner 调同进程 read_log / extract_regression_result / write_artifact functions
 5. Evidence Builder 生成 Evidence list
 6. Verifier 确认 all passed 是否有足够证据
 7. Artifact System 生成 RegressionResultArtifact 和 EmailDraftArtifact
@@ -809,13 +809,13 @@ Read-only Regression Evidence Demo
 最小输出：
 
 - `run.json`：记录 task、TaskSpec、steps、events、状态。
-- `events.jsonl`：append-only 记录每个 step、capability call、verification result。
+- `events.jsonl`：append-only 记录每个 step、Phase 1a function call、verification result。
 - `evidence.json`：记录 log 片段、来源路径、时间戳、提取结论、可信度。
 - `regression_result.json`：结构化结果，包括 passed/failed/incomplete/warning/unknown。
 - `email_draft.md`：英文邮件草稿，必须引用 `regression_result.json` 的结论，而不是重新自由生成。
 - `verifier_report.json`：记录 rule id、status、message 和相关 evidence ids。
 
-最小 capability：
+Phase 1a 最小同进程函数：
 
 - `read_log`
 - `extract_regression_result`
@@ -827,7 +827,7 @@ Read-only Regression Evidence Demo
 - 能区分 `all passed`、`failed`、`incomplete`、`warning/waiver`、`unknown`。
 - 证据不足时必须输出 `unknown` 或 `needs_human_check`，不能编造结论。
 - artifact 必须引用 evidence ids。
-- `verifier_report.json` 必须包含 `overall_status`、`checks[]`、`blocking_failures[]`、`rule_id`、`evidence_ids` 和 `fixture_hash`。
+- `verifier_report.json` 必须包含 canonical `status`、`ruleResults[]`、`artifactChecks[]`、`blockingFailures[]`、`evidenceIds` 和 `fixtureHash`。
 - 邮件草稿如果出现未被 `regression_result.json` 或 evidence ids 支撑的新结论，verifier 必须失败。
 
 硬性验收：
@@ -1126,6 +1126,7 @@ type VerifierReportV1 = {
   fixtureId: string;
   status: "passed" | "failed";
   generatedAt: string;
+  fixtureHash: string;
   ruleResults: {
     ruleId: string;
     status: "passed" | "failed" | "not_applicable";
@@ -1137,6 +1138,11 @@ type VerifierReportV1 = {
     artifactType: "regression_result" | "email_draft" | "evidence";
     status: "passed" | "failed";
     message: string;
+  }[];
+  blockingFailures: {
+    ruleId: string;
+    message: string;
+    evidenceIds: string[];
   }[];
   summary: string;
 };
@@ -1498,10 +1504,10 @@ fixtures/regression/* -> artifacts/runs/* -> verifier_report.json summary
 - 不做 CI/CD pipeline 引擎：Dagger、现有 CI 已经覆盖。
 - 不做商业云 IDE/app builder：Replit 已经覆盖。
 
-第一版应该做一个薄但有差异化的 OS kernel：
+第一版应该拆成 Phase 1a contract gate 和 Phase 1b runner extension。Phase 1a 只做一个薄但有差异化的 fixture evidence kernel：
 
 ```text
-Template TaskSpec generator
+Template RegressionTaskSpecV1
 run.json + events.jsonl file event record
 Run/Step/ToolCall/Observation/Evidence/Artifact JSON schema
 Deterministic fixture runner functions
