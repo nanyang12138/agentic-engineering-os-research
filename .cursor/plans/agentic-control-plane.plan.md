@@ -27,7 +27,7 @@ todos:
     content: 设计 Evidence Graph 和 Verifier Runtime，让每个结论都有可追溯证据和验证流程
     status: in_progress
   - id: build-local-mvp
-    content: 规划本地 MVP：先用 static fixture runner 验证契约，再进入 SQLite event store、log adapter、approval gate
+    content: 规划本地 read-only MVP：固定 log fixture、SQLite event store、三个 capability、rule verifier、artifact writer
     status: pending
   - id: validate-engineering-loop
     content: 用 regression log 分析和英文汇报邮件生成验证端到端工程闭环
@@ -792,6 +792,151 @@ Read-only Regression Evidence Demo
 - MVP 不执行写代码、发邮件、开 PR、控制 IDE、控制桌面或运行危险命令。
 - Phase 1a 必须先用 fixture 负例证明 verifier 能拒绝 `ambiguous`、`incomplete` 或证据不足的结论，然后才能进入 SQLite 或真实 log adapter。
 
+### 13.2 Evidence / Verifier v1 Contract
+
+本轮收敛决策：MVP 不再把 Evidence Graph 和 Verifier Runtime 留在概念层。第一版只自研最小 evidence 语义、artifact 引用规则和 verifier 规则表；JSON/schema 校验工具可以集成，但不能替代 OS 层的 evidence / artifact 语义。
+
+第一版唯一执行路径：
+
+```text
+固定用户目标 + 固定 regression log 路径
+  -> 模板化 TaskSpec
+  -> read_log
+  -> extract_regression_result
+  -> write_artifact
+  -> schema + rule verifier
+  -> regression_result.json + evidence.json + email_draft.md
+```
+
+不在 Phase 1 出现的能力：
+
+- `computer.*`
+- `sandbox.*`
+- `trajectory.*`
+- GUI / desktop / browser automation
+- repo 写入、git 操作、真实邮件发送
+- 多 agent planner 或完整 durable workflow backend
+
+#### TaskSpec v1 默认决策
+
+`TaskSpec` v1 先用模板/表单化字段生成。LLM 可以生成草稿，但只有通过 schema 和规则校验后的 TaskSpec 才能进入执行。
+
+最小字段：
+
+```typescript
+type RegressionTaskSpecV1 = {
+  id: string;
+  goal: string;
+  inputLogPath: string;
+  allowedActions: ["read_log", "extract_regression_result", "write_artifact"];
+  forbiddenActions: string[];
+  successCriteria: string[];
+  requiredEvidence: string[];
+  expectedArtifacts: ["evidence.json", "regression_result.json", "email_draft.md"];
+  approvalPoints: ["send_email_requires_human_approval"];
+};
+```
+
+默认禁止动作必须包含：
+
+- 修改 repo 或 log。
+- 执行外部副作用。
+- 发送邮件。
+- 调用 GUI / desktop / CUA / browser capability。
+- 在证据不足时输出确定性 `all passed` 结论。
+
+#### Evidence list v1
+
+MVP 不实现完整图数据库，先实现 append-only `evidence.json`。最小 evidence 节点：
+
+```typescript
+type LogEvidenceV1 = {
+  id: string;
+  type: "log";
+  sourcePath: string;
+  lineRange?: [number, number];
+  excerpt: string;
+  observedAt: string;
+  classification:
+    | "all_passed_marker"
+    | "failure_marker"
+    | "incomplete_marker"
+    | "warning_marker"
+    | "waiver_marker"
+    | "metadata"
+    | "ambiguous";
+  confidence: "high" | "medium" | "low";
+};
+```
+
+`lineRange` 如果无法可靠取得，可以为空，但 `sourcePath`、`excerpt`、`classification` 和 `confidence` 必须存在。任何 artifact 的结论都必须引用至少一个 evidence id。
+
+#### RegressionResultArtifact v1
+
+```typescript
+type RegressionResultArtifactV1 = {
+  id: string;
+  verdict:
+    | "passed"
+    | "failed"
+    | "incomplete"
+    | "warning_or_waiver"
+    | "unknown"
+    | "needs_human_check";
+  summary: string;
+  evidenceIds: string[];
+  ruleResults: {
+    ruleId: string;
+    status: "passed" | "failed" | "not_applicable";
+    evidenceIds: string[];
+    message: string;
+  }[];
+  generatedAt: string;
+};
+```
+
+`email_draft.md` 必须引用 `RegressionResultArtifactV1.id` 和相关 `evidenceIds`。邮件生成阶段不得重新判断 pass/fail；它只能把 `regression_result.json` 的结论转述为英文草稿。如果 verdict 是 `unknown` 或 `needs_human_check`，邮件草稿必须明确写成“cannot confirm yet / needs human check”，不得写成 all passed。
+
+#### Verifier v1 规则表
+
+| Rule | 输入 | 判定 | 禁止行为 |
+| --- | --- | --- | --- |
+| `schema.required_fields` | `TaskSpec`、`evidence.json`、`regression_result.json` | 必填字段齐全，枚举值合法 | 字段缺失时继续生成确定性邮件 |
+| `evidence.required_for_verdict` | `regression_result.evidenceIds` | 每个 verdict 至少引用一个 matching evidence id | 无 evidence id 时输出 `passed` |
+| `verdict.failed_precedence` | failure markers | 出现 failure marker 时 verdict 必须是 `failed` 或 `needs_human_check` | 把失败片段覆盖成 `passed` |
+| `verdict.incomplete_precedence` | incomplete/running/missing summary markers | 未完成或 summary 缺失时 verdict 必须是 `incomplete`、`unknown` 或 `needs_human_check` | 把未完成任务写成 all passed |
+| `verdict.warning_guard` | warning/waiver markers | 有 warning/waiver 时 verdict 必须是 `warning_or_waiver` 或 `needs_human_check` | 忽略 warning/waiver 后输出纯 `passed` |
+| `verdict.passed_sufficiency` | all passed marker + absence of conflict markers | 只有明确 all-pass 且无冲突 evidence 时才能输出 `passed` | 单凭模型总结输出 `passed` |
+| `artifact.email_grounding` | `email_draft.md`、`regression_result.json` | 邮件只转述结构化 verdict，并引用 artifact/evidence ids | 邮件阶段生成新的未引用结论 |
+
+`unknown` 的默认触发条件：
+
+- 没有明确 pass/fail/incomplete marker。
+- evidence 之间互相冲突。
+- 只有模型自然语言总结，没有原始 log excerpt。
+- log 来源、时间或路径缺失到无法复查。
+
+`needs_human_check` 的默认触发条件：
+
+- 发现 warning/waiver，但规则无法判断是否可接受。
+- 同时存在 pass marker 和 failure/incomplete marker。
+- 用户目标、log 路径或 run metadata 不一致。
+- verifier 发现 schema 合法但业务规则无法给出安全结论。
+
+#### Fixture Gate
+
+Phase 1 合并前至少需要 5 个脱敏或合成 fixture：
+
+| Fixture | 期望 verdict | 是否允许普通 all-passed 邮件 |
+| --- | --- | --- |
+| `all_passed.log` | `passed` | 是 |
+| `failed_tests.log` | `failed` | 否 |
+| `incomplete_jobs.log` | `incomplete` | 否 |
+| `passed_with_warning_or_waiver.log` | `warning_or_waiver` 或 `needs_human_check` | 否 |
+| `ambiguous_summary.log` | `unknown` 或 `needs_human_check` | 否 |
+
+如果这些 fixture 不能稳定产出预期 artifact，暂停扩展 Local Workflow Daemon、CUA adapter 或多 agent planner。
+
 ## 14. 第一版不要做什么
 
 - 不要先做多 IDE 控制。
@@ -900,13 +1045,12 @@ Read-only Regression Evidence Demo
 推荐按以下顺序推进：
 
 1. Open Source Coverage Mapping：已完成，结论是自研 OS 语义，集成底层 runtime 和 coding agent。
-2. Static Fixture Contract：先定义固定 regression fixtures、golden outputs、`events.jsonl` 和 `verifier_report.json`，用负例验证 verifier 能拒绝证据不足。
-3. MVP Verification Contract：已启动，把第一版压缩成 read-only regression evidence demo，并以 Phase 1a 作为进入本地 runner 的门禁。
-4. Intent-to-Spec MVP：定义 regression 场景的 `TaskSpec` schema、成功标准、证据要求和审批点；Phase 1a 先用模板 fixture，LLM 生成后移。
-5. Evidence List + Verifier Runtime：定义 `LogEvidence`、`RegressionResultArtifact`、`EmailDraftArtifact`、`VerifierReportArtifact` 和 rule verifier。
-6. Local Read-only Runner：在 Phase 1a 通过后，再设计 SQLite event store、极简 step runner、`read_log`、`extract_regression_result`、`write_artifact`。
-7. Feasibility Critic Review：在 MVP schema 明确后，再用反方视角砍掉不必要字段和流程。
-8. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
+2. MVP Verification Contract：已启动，把第一版压缩成 read-only regression evidence demo。
+3. Intent-to-Spec MVP：MVP 默认使用模板/表单化 `RegressionTaskSpecV1`；LLM 只能生成草稿，必须通过 schema/rule verifier。
+4. Evidence List + Verifier Runtime：本轮已固化 `LogEvidenceV1`、`RegressionResultArtifactV1`、email grounding 规则和 fixture gate；下一步实现或用反方评审继续删减。
+5. Local Read-only Runner：设计 SQLite event store、极简 step runner、`read_log`、`extract_regression_result`、`write_artifact`，只跑 fixture gate。
+6. Feasibility Critic Review：在 Evidence/Verifier v1 contract 明确后，再用反方视角砍掉不必要字段和流程。
+7. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -1056,11 +1200,11 @@ Read-only Regression Evidence Demo
 
 - `Intent-to-Spec Engine`：这是差异化核心。现有工具大多从 prompt 直接进入 agent loop，缺少工程规格、成功标准、证据要求和审批点。
 - `Run Kernel`：需要定义我们自己的 `Task`、`TaskSpec`、`Run`、`Step`、`RunEvent`、`Observation`、`Evidence`、`Artifact` 语义。
-- `Evidence Graph`：现有工具有 logs、trajectory、trace，但很少把工程结论、证据、artifact 绑定成一等对象。
+- `Evidence Graph`：现有工具有 logs、trajectory、trace，但很少把工程结论、证据、artifact 绑定成一等对象；MVP 先自研 `LogEvidenceV1` 和 artifact evidence-id 引用规则。
 - `Policy/Approval Engine`：需要面向工程动作的权限等级、human gate、危险操作拦截和外部副作用控制。
 - `Artifact Manager`：需要把 patch、PR、email、report、test evidence、decision record 作为长期交付物管理。
 - `Capability Contract`：需要统一描述 `read_file`、`run_command`、`summarize_log`、`request_approval`、`computer.click`、`browser.open` 等能力的输入输出、权限和证据行为。
-- `MVP Verifier Runtime`：第一版至少要有 log check、schema validation、command result check 和 human approval verifier。
+- `MVP Verifier Runtime`：第一版至少要有 schema validation、log rule check、email grounding check 和 fixture gate；human approval 先作为外部副作用前的 policy，不实际发送邮件。
 
 #### 应该集成或借鉴的层
 
@@ -1132,11 +1276,11 @@ SQLite event store、minimal capability registry、`read_log` / `extract_regress
 
 ### 18.6 下一轮问题
 
-- Phase 1a 的 fixture 目录结构、schema 文件路径、golden artifact 命名和 `verifier_report.json` 字段应该如何冻结？
-- Phase 1a 通过后，SQLite event store 应该如何复用同一套 Run/Event/Evidence/Artifact schema，避免另起一套格式？
-- `TaskSpec` 是否应该先由 LLM 生成，再由规则 verifier 检查，还是直接用表单/模板约束？
-- Evidence Graph 的最小节点类型是否只需要 `CommandEvidence`、`FileEvidence`、`LogEvidence`、`HumanApprovalEvidence`？
-- Regression demo 是否应该完全避开代码修改，只聚焦 read-only evidence 和 email artifact？
+- 如果 MVP 不引入 LangGraph/Temporal，SQLite event store 的最小 `runs` / `events` / `artifacts` schema 应该怎么设计？
+- 第一批 fixture log 应该使用真实脱敏样例，还是先用合成日志覆盖 all passed / failed / incomplete / warning / ambiguous 五类路径？
+- `lineRange` 在 summary-only 或压缩日志场景下是否需要 content hash 辅助引用？
+- 本地 MVP 应该先提供 CLI 入口，还是先用固定脚本跑通 fixture gate？
+- Feasibility Critic Review 是否能进一步删减 `13.2 Evidence / Verifier v1 Contract` 的字段和规则？
 
 ### 18.7 Prompt 2 Completion Checklist
 
@@ -1161,19 +1305,27 @@ SQLite event store、minimal capability registry、`read_log` / `extract_regress
 - 2026-05-11：MVP 收敛为 `Read-only Regression Evidence Demo`，只做 regression log -> TaskSpec -> Evidence list -> rule verifier -> email draft artifact。
 - 2026-05-11：第一版不实际集成 CUA、Browser-use、E2B、Modal、Dagger、Temporal、LangGraph；只预留 adapter contract。
 - 2026-05-11：第一版不实现完整 Evidence Graph，先实现 Evidence list；不实现完整 Capability Runtime，先实现 `read_log`、`extract_regression_result`、`write_artifact`。
-- 2026-05-11：新增 Phase 1a `Static Fixture Contract` 作为进入 SQLite / local runner 前的门禁；Build 固定 fixture harness、schema、rule verifier 和 `verifier_report.json`，Defer SQLite daemon、真实 adapter、LLM TaskSpec、CUA 和 workflow backend。
+- 2026-05-11：本轮 Plan Optimizer 选择 `Evidence Graph / Verifier Runtime` sprint，因为最低分维度是 Evidence Graph 设计成熟度和 Verifier Runtime 设计成熟度。
+- 2026-05-11：`TaskSpec` v1 默认采用模板/表单化 schema；LLM 只能生成草稿，不能绕过 schema 和 verifier 直接驱动执行。
+- 2026-05-11：Evidence/Verifier 属于自研 OS 语义；第一版只可集成通用 JSON/schema 校验工具，不集成 CUA、LangGraph、Temporal 或 coding agent 作为核心依赖。
+- 2026-05-11：`unknown` 和 `needs_human_check` 是安全 verdict，不是失败兜底；证据冲突、来源不足、warning/waiver 不可判定时必须优先输出它们，而不是假定 all passed。
 
 ## 20. Open Questions
 
-- `TaskSpec` 应该先由 LLM 生成再由规则校验，还是先用模板/表单约束生成？
-- `LogEvidence` 的最小字段应该包括哪些：source path、line range、excerpt、timestamp、classification、confidence 是否足够？
-- `extract_regression_result` 应该先用规则解析，还是允许 LLM 提取后再由规则校验？
-- `unknown / needs_human_check` 的触发条件应该如何定义，才能避免虚假 `all passed`？
-- `email_draft.md` 如何强制引用 `regression_result.json`，避免邮件生成阶段重新幻觉？
-- 本地 MVP 应该用 CLI 启动，还是先用 Cursor 手动驱动一轮流程来验证 schema？
-- `verifier_report.json` 与 `regression_result.json` 的职责边界如何切分：谁拥有最终 verdict，谁只是候选提取结果？
-- 第一批脱敏 regression fixture 是否足以覆盖 `all passed`、`failed`、`incomplete`、`warning/waiver`、`ambiguous` 五类判定？
-- schema 文件应该如何版本化，才能避免 Phase 1a golden artifacts 和 Phase 1b SQLite runner 分叉？
+### 20.1 已收敛为 MVP 默认决策
+
+- `TaskSpec` v1 先用模板/表单化 schema；LLM 只能生成草稿，必须经过 schema/rule verifier。
+- `LogEvidence` v1 最小字段为 `id`、`type`、`sourcePath`、可选 `lineRange`、`excerpt`、`observedAt`、`classification`、`confidence`。
+- `extract_regression_result` v1 以规则解析为主；如允许 LLM 辅助，只能填充候选 excerpt/classification，最终 verdict 必须由规则 verifier 决定。
+- `unknown / needs_human_check` 的默认触发条件写入 `13.2 Evidence / Verifier v1 Contract`，用于避免虚假 `all passed`。
+- `email_draft.md` 必须引用 `regression_result.json` 的 artifact id 和 evidence ids，且不得在邮件阶段生成新的 pass/fail 结论。
+
+### 20.2 仍开放的问题
+
+- 第一批 fixture log 应该使用真实脱敏样例，还是先用合成日志覆盖 all passed / failed / incomplete / warning / ambiguous 五类路径？
+- `lineRange` 在只有 summary 文件或压缩日志片段时如何稳定生成，是否需要 content hash 辅助引用？
+- SQLite event store 的最小表结构是否只需要 `runs`、`events`、`artifacts`，还是需要单独的 `evidence` 表？
+- 本地 MVP 应该先提供一个 CLI 入口，还是先用固定脚本跑通 fixture gate？
 
 ## 21. Research Sprint Log
 
@@ -1271,69 +1423,64 @@ Evidence Graph / Verifier Runtime Sprint
 只为 regression log 场景定义 TaskSpec schema、字段约束、成功标准、证据要求、unknown/needs_human_check 触发条件。
 ```
 
-### 2026-05-11: Evidence Graph / Verifier Runtime Sprint
+### 2026-05-11: Plan Optimizer Sprint - Evidence/Verifier Contract
 
-本轮目标：按 Plan Optimizer 流程重新评分主计划，选择一个最低分方向，并只做能让 MVP 更可执行的收敛修改。
+本轮目标：执行一轮 bounded Plan Optimizer Loop，只补齐最低分维度，不扩展通用平台愿景。
 
-本轮开始质量评分：
-
-- Vision 清晰度：5/5
-- MVP 可执行性：3/5
-- Open Source Mapping 完整度：4/5
-- Build vs Integrate 清晰度：4/5
-- Evidence Graph 设计成熟度：3/5
-- Verifier Runtime 设计成熟度：2/5
-- CUA Adapter 边界清晰度：4/5
-- 风险控制和范围收敛度：3/5
-
-最低分维度：
-
-- Verifier Runtime 设计成熟度
-- MVP 可执行性
-
-选择的 sprint 类型：
-
-```text
-Evidence Graph / Verifier Runtime
-```
-
-五视角评审结论：
-
-- Open Source Mapping Agent：支持先用 fixture harness 验证 OS 语义，schema validation 可集成成熟 JSON Schema 或等价库，不自研 schema DSL。
-- Architecture Agent：支持把 Phase 1 拆为 1a fixture contract 和 1b local read-only runner；SQLite、daemon、adapter 应消费同一套 schema，而不是先定义运行时。
-- CUA Adapter Agent：确认 CUA 不进入 MVP 执行面；Phase 1a 只验证 observation/evidence/artifact 契约，CUA 仍留在 post-MVP adapter 层。
-- Feasibility Critic Agent：指出最大风险是把 TaskSpec、Planner、Capability Runtime、SQLite、Verifier 和 email draft 全塞进第一颗扣；建议先用负例 fixture 证明 verifier 能拒绝错误结论。
-- Research Strategy Agent：支持把 Phase 1a 定位为可复现、可录屏、可 CI 化的 evidence-first demo 基座，而不是最终产品形态。
-
-本轮修改：
-
-- 在 Phase 1 中新增 `Phase 1a: Static Fixture Contract`，明确固定输入、输出 artifact、验收标准和 Build vs Integrate。
-- 把本地 read-only runner 后移为 Phase 1b，只有 fixture schema 和 verifier 通过后才进入 SQLite / real log adapter。
-- 在 `MVP Verification Contract` 中新增 `events.jsonl`、`verifier_report.json`、负例 fixture 和邮件草稿引用一致性要求。
-- 更新 Research Backlog、Decision Log 和 Open Questions，使下一步聚焦 schema、fixture corpus 和 verifier verdict 边界。
-
-修改后预期评分：
+本轮评分（修改前）：
 
 - Vision 清晰度：5/5
 - MVP 可执行性：4/5
 - Open Source Mapping 完整度：4/5
-- Build vs Integrate 清晰度：5/5
+- Build vs Integrate 清晰度：4/5
 - Evidence Graph 设计成熟度：3/5
 - Verifier Runtime 设计成熟度：3/5
 - CUA Adapter 边界清晰度：4/5
 - 风险控制和范围收敛度：4/5
 
-Build vs Integrate 决策：
+最低分维度：
 
-- Build：fixture harness、Run/Event/Evidence/Artifact schema、rule-based verifier、`verifier_report.json` verdict contract。
-- Integrate：schema validation 使用成熟 JSON Schema 或等价库。
-- Defer：SQLite daemon、真实 log adapter、LLM TaskSpec 生成、CUA、Browser-use、E2B、Temporal、LangGraph。
+- Evidence Graph 设计成熟度
+- Verifier Runtime 设计成熟度
+
+自动选择的 sprint 类型：
+
+```text
+Evidence Graph / Verifier Runtime
+```
+
+多视角评审结论：
+
+- Open Source Mapping Agent：现有项目多覆盖 trace、sandbox、coding loop，但不提供工程结论、evidence 和 artifact 的 OS 语义绑定，本层应自研。
+- Architecture Agent：计划已有 read-only demo，但缺少可机器验收的 schema、verdict 规则和 fixture gate。
+- CUA Adapter Agent：CUA 必须继续停留在 post-MVP adapter；Phase 1 evidence 只接受 log/file/human approval 等明确来源。
+- Feasibility Critic Agent：如果不冻结默认决策，Open Questions 会阻塞实现；需要把 TaskSpec、unknown、email grounding 写成硬约束。
+- Research Strategy Agent：下一步演示路线应该能用 fixture 复现 verdict，而不是继续扩写 OS 叙事。
+
+本轮写回：
+
+- 新增 `13.2 Evidence / Verifier v1 Contract`。
+- 固化 `RegressionTaskSpecV1`、`LogEvidenceV1`、`RegressionResultArtifactV1`。
+- 增加 verifier 规则表和 `unknown` / `needs_human_check` 默认触发条件。
+- 增加 5 类 fixture gate，作为 Phase 1 扩展前的硬性验收。
+- 更新 Research Backlog、Decision Log 和 Open Questions，把已收敛问题移入默认决策。
+
+本轮后评分：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：4/5
+- Open Source Mapping 完整度：4/5
+- Build vs Integrate 清晰度：4/5
+- Evidence Graph 设计成熟度：4/5
+- Verifier Runtime 设计成熟度：4/5
+- CUA Adapter 边界清晰度：4/5
+- 风险控制和范围收敛度：4/5
 
 下一轮建议：
 
 ```text
-执行 Local Workflow Daemon MVP Sprint：
-只定义 Phase 1a fixture 目录结构、schema 文件路径、golden artifact 命名、verifier_report 字段和最小负例集合，不写产品代码。
+执行 Feasibility Critic Review：
+基于 `13.2 Evidence / Verifier v1 Contract` 严格删减字段、规则和 fixture gate，确认它是最小可验收 MVP，而不是隐含的新平台范围。
 ```
 
 ## 22. Parking Lot
