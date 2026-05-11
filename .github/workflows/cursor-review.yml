@@ -3,63 +3,65 @@ name: Cursor Code Review
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
-  pull-requests: read
+  pull-requests: write
   issues: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   cursor-review:
+    if: >
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       contains(github.event.comment.body, '/cursor-review') &&
+       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout PR
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-
-      - name: Install Cursor CLI
-        run: |
-          curl https://cursor.com/install -fsS | bash
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: Run Cursor review
-        env:
-          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          agent --version
-
-          {
-            echo "Please review this pull request."
-            echo
-            echo "Focus on correctness bugs, security risks, performance regressions, missing tests, and risky edge cases."
-            echo "Be concise. Report only actionable findings. If there are no major issues, say so clearly."
-            echo
-            echo "PR diff stat:"
-            git diff --stat "$BASE_SHA...$HEAD_SHA" || true
-            echo
-            echo "PR diff:"
-            git diff "$BASE_SHA...$HEAD_SHA" || true
-          } > /tmp/cursor_review_prompt.txt
-
-          agent -p --trust --model auto --output-format text "$(cat /tmp/cursor_review_prompt.txt)" > cursor_review.md
-
-      - name: Comment review result on PR
+      - name: Resolve PR information
+        id: pr
         uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs');
-            const body = fs.existsSync('cursor_review.md')
-              ? fs.readFileSync('cursor_review.md', 'utf8')
-              : 'Cursor review produced no output.';
+            if (context.eventName === 'pull_request') {
+              core.setOutput('number', context.payload.pull_request.number);
+              core.setOutput('base_sha', context.payload.pull_request.base.sha);
+              core.setOutput('head_sha', context.payload.pull_request.head.sha);
+              return;
+            }
 
-            await github.rest.issues.createComment({
+            const pr = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `## Cursor Review\n\n${body}`
+              pull_number: context.issue.number
             });
+
+            core.setOutput('number', pr.data.number);
+            core.setOutput('base_sha', pr.data.base.sha);
+            core.setOutput('head_sha', pr.data.head.sha);
+
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.head_sha }}
+          fetch-depth: 0
+
+      - name: Cursor review
+        uses: nanyang12138/cursor-review-action@main
+        with:
+          cursor-api-key: ${{ secrets.CURSOR_API_KEY }}
+          github-token: ${{ github.token }}
+          base-sha: ${{ steps.pr.outputs.base_sha }}
+          head-sha: ${{ steps.pr.outputs.head_sha }}
+          pr-number: ${{ steps.pr.outputs.number }}
+          event-name: ${{ github.event_name }}
+          comment-body: ${{ github.event_name == 'issue_comment' && github.event.comment.body || '' }}
+          model: auto
+          language: zh-CN
