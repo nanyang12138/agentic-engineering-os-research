@@ -1313,6 +1313,7 @@ fixtures/regression/* -> artifacts/runs/* -> verifier_report.json summary
 7. Local Read-only Runner：仅在 fixture gate 通过后，再决定是否引入 capability registry、真实 log adapter、SQLite event store、极简 step runner 和更完整的 run state。
 8. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
 9. Phase 1a Evidence Intake Review：在 fixture runner 输出完整 artifact packet 前，后续优化只允许维护评分、Decision Log、Open Questions 和 Research Sprint Log；只有 `verifier_report.json` 失败、grounded email 问题、真实脱敏日志差异或 Build vs Integrate 运行证据出现后，才修改正式设计章节。
+10. No-new-evidence Plan Maintenance：当前自动化优化轮没有新的 Phase 1a artifact packet、verifier failure、email grounding failure 或真实脱敏日志差异；下一步不是补 OS 愿景或 adapter mapping，而是先产出 5 个 synthetic fixture 的 `artifacts/runs/*` 和 `verifier_report.json` summary。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -1586,6 +1587,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-11：本轮 Plan Optimizer 继续选择 `Plan Maintenance`，材料性改进限定为消除 Phase 1a contract 歧义，而不是新增产品范围。
 - 2026-05-11：`verifier_report.json` 被固定为 Phase 1a fixture gate 的唯一验收事实源；`regression_result.json` 只是业务候选结论，`run.json` 和 `events.jsonl` 只承担生命周期索引与审计职责。
 - 2026-05-11：Phase 1a 的 `read_log`、`extract_regression_result`、`write_artifact` 只作为 fixture runner 内部 deterministic functions；capability registry、adapter plugin、daemon、HTTP API 和 workspace registry 均延后到 Phase 1b 证据成立后再评估。
+- 2026-05-11：本轮 Plan Optimizer 选择 `Plan Maintenance`，但未发现足以修改正式设计章节的新证据；在 Phase 1a artifact packet 出现前，计划维护只记录缺口并继续冻结 Open Source Mapping、CUA adapter 和 workflow backend 扩写。
 
 ## 20. Open Questions
 
@@ -1618,6 +1620,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 真实脱敏日志出现前，是否有必要继续补 Open Source Mapping，还是应冻结集成研究，等待 fixture gate 证明哪些 adapter/provider 真的影响 MVP？
 - 第一份完整 artifact packet 中，`verifier_report.json` 与 `regression_result.json` 是否会出现状态表达冲突？如果会，是否需要把业务 verdict 与 verification status 在 schema 中更强地分离？
 - Phase 1a 内部 deterministic functions 是否足够表达 evidence provenance，还是实际实现会证明需要提前引入最小 capability call envelope？
+- 当前最低分维度只剩 Open Source Mapping 完整度；如果没有 fixture runner 运行证据指出具体 adapter/provider 缺口，是否应保持 4/5 而不是继续扩写项目清单？
 
 ## 21. Research Sprint Log
 
@@ -2016,6 +2019,55 @@ Plan Maintenance
 ```text
 执行 Fixture Runner Evidence Review：
 先收集 Phase 1a 的 5 个 synthetic fixture artifact packet 和 verifier_report.json summary；只根据实际失败模式调整 schema、规则、evidence locator 或 Build vs Integrate 决策。若没有新 artifact evidence，只追加短 Research Sprint Log，不修改正式设计章节。
+```
+
+### 2026-05-11: Plan Optimizer Sprint - No New Evidence Maintenance
+
+本轮目标：按 agentic-plan-optimizer skill 执行一轮 bounded loop，确认当前计划是否有新的材料性改进空间，并避免在没有运行证据时扩写通用 OS 愿景。
+
+本轮评分：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：5/5
+- Open Source Mapping 完整度：4/5
+- Build vs Integrate 清晰度：5/5
+- Evidence Graph 设计成熟度：5/5
+- Verifier Runtime 设计成熟度：5/5
+- CUA Adapter 边界清晰度：5/5
+- 风险控制和范围收敛度：5/5
+
+最低分维度：
+
+- Open Source Mapping 完整度
+
+自动选择的 sprint 类型：
+
+```text
+Plan Maintenance
+```
+
+选择理由：Open Source Mapping 的 4/5 不是因为缺少更多通用项目列表，而是缺少 Phase 1a fixture runner 运行结果来证明是否需要新增 adapter/provider 对比。当前没有新的 artifact packet、`verifier_report.json` failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据，因此不修改正式设计章节。
+
+多视角评审结论：
+
+- Open Source Mapping Agent：现有 mapping 已足够支撑 Phase 1a；下一次补充应由 fixture evidence 指向具体 provider 缺口。
+- Architecture Agent：Phase 1a 的 contract 已足够进入实现/验证；继续加 schema 或 backend 文字会降低收敛度。
+- CUA Adapter Agent：CUA 仍是 post-MVP adapter；没有 trajectory/screenshot 进入当前 evidence intake。
+- Feasibility Critic Agent：本轮最重要动作是拒绝无证据扩写，只记录缺口。
+- Research Strategy Agent：下一轮有价值输入必须来自 5 个 synthetic fixture 的完整 artifact packet 或真实脱敏日志校准。
+
+本轮写回：
+
+- Research Backlog 增加 no-new-evidence maintenance gate。
+- Decision Log 记录本轮选择 `Plan Maintenance` 且不改正式设计章节的决策。
+- Open Questions 记录 Open Source Mapping 4/5 是否应保持冻结，直到 fixture evidence 指出具体缺口。
+- 本 Research Sprint Log 记录当前评分、最低维度、唯一 sprint 类型和缺失证据。
+
+下一轮建议：
+
+```text
+执行 Fixture Runner Evidence Review：
+先产出或收集 Phase 1a 的 5 个 synthetic fixture artifact packet、`verifier_report.json` summary 和 grounded email 检查结果；若仍没有这些证据，只追加短 Research Sprint Log，不修改正式设计章节。
 ```
 
 ## 22. Parking Lot
