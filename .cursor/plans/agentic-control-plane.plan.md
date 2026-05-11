@@ -1317,6 +1317,7 @@ Phase 1a capability 边界：
 8. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
 9. Phase 1a Evidence Packet Review：下一步有价值输入必须是 5 个 synthetic fixture 的 evidence packet，尤其是每个 case 的 `verifier_report.json`、`evidence.json`、`regression_result.json` 和 `email_draft.md`。
 10. Plan Maintenance Evidence Gate：在 fixture runner 输出、5 个合成 fixture 结果或真实脱敏日志证据出现前，后续优化只允许记录评分和证据缺口，不继续扩写 OS 愿景、adapter 设计或通用 workflow backend。
+11. Phase 1a Scope Alignment Check：后续维护轮必须检查正式章节是否又把 capability registry、adapter、SQLite、daemon、RPC、CLI 扩展或 workflow backend 混入 Phase 1a；若发现冲突，优先修正文档边界，而不是新增抽象。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -1511,18 +1512,17 @@ Phase 1a capability 边界：
 第一版应该做一个薄但有差异化的 OS kernel：
 
 ```text
-Template TaskSpec generator
+Template RegressionTaskSpecV1 generator
 run.json + events.jsonl file event record
-Run/Step/ToolCall/Observation/Evidence/Artifact JSON schema
-Minimal capability registry
-read_log / extract_regression_result / write_artifact adapters
-Policy gate
+LogEvidenceV1 / RegressionResultArtifactV1 / VerifierReportV1 JSON schemas
+deterministic read_log / extract_regression_result / write_artifact functions inside fixture runner
+email grounding and negative-fixture policy checks
 Rule verifier
 Static fixture runner
-Regression log -> evidence -> email artifact demo
+Regression log -> evidence -> verifier_report -> email artifact demo
 ```
 
-SQLite event store、minimal capability registry、`read_log` / `extract_regression_result` / `write_artifact` adapters 属于 Phase 1b；只有 Phase 1a fixture contract 通过后才进入实现。
+SQLite event store、minimal capability registry、adapter boundary、RPC/daemon 化 capability runtime 属于 Phase 1b 或更晚；Phase 1a 只允许 fixture runner 内部 deterministic functions。只有 5 个 synthetic fixture evidence packet 全部通过后，才重新评估这些集成点。
 
 ### 18.5 Evidence Log
 
@@ -1590,6 +1590,7 @@ SQLite event store、minimal capability registry、`read_log` / `extract_regress
 - 2026-05-11：本轮 Plan Maintenance 决定新增 `13.5 Phase 1a Evidence Packet Acceptance Gate`；后续计划变更必须引用实际 fixture evidence packet 或真实脱敏日志证据。
 - 2026-05-11：`verifier_report.json` 是 Phase 1a 唯一 acceptance source of truth；`regression_result.json` 是业务候选结果，`email_draft.md` 是交付物，`run.json` / `events.jsonl` 是生命周期和审计记录。
 - 2026-05-11：Phase 1a 的 `read_log`、`extract_regression_result`、`write_artifact` 仍是 fixture runner 内部 deterministic same-process functions，不升级为 capability registry、adapter discovery、daemon 或 RPC boundary。
+- 2026-05-11：本轮 Plan Maintenance 修正 `18.4 MVP Implication` 中残留的 `Minimal capability registry` / adapter 表述；Phase 1a 的薄内核只包含 fixture runner 内部 deterministic functions、file artifacts、schema 和 verifier，不包含 registry、RPC、daemon 或 adapter boundary。
 
 ## 20. Open Questions
 
@@ -1620,6 +1621,7 @@ SQLite event store、minimal capability registry、`read_log` / `extract_regress
 - 如果 fixture evidence packet 失败，如何区分 contract bug、fixture bug、parser marker bug 和 email grounding bug，并确保下一轮只改最小相关面？
 - 真实脱敏日志出现后，是否需要把 `verifier_report.status` 与业务 `regression_result.verdict` 拆成更明确的二层模型？
 - 真实脱敏日志出现前，是否有必要继续补 Open Source Mapping，还是应冻结集成研究，等待 fixture gate 证明哪些 adapter/provider 真的影响 MVP？
+- Phase 1a fixture runner 的实际实现是否会再次暴露 capability registry / adapter boundary 的需要，还是 deterministic same-process functions 足够覆盖 5 个 synthetic fixture？只有 evidence packet 证明不足时才重开该问题。
 
 ## 21. Research Sprint Log
 
@@ -2001,6 +2003,67 @@ Plan Maintenance
 - 明确 `regression_result.json`、`email_draft.md`、`run.json`、`events.jsonl` 和 `evidence.json` 的职责边界。
 - 明确 Phase 1a 的 `read_log`、`extract_regression_result`、`write_artifact` 只是 fixture runner 内部 deterministic functions。
 - 更新 Research Backlog、Decision Log 和 Open Questions，把下一轮研究输入收敛为 fixture evidence packet。
+
+本轮后评分：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：5/5
+- Open Source Mapping 完整度：4/5
+- Build vs Integrate 清晰度：5/5
+- Evidence Graph 设计成熟度：5/5
+- Verifier Runtime 设计成熟度：5/5
+- CUA Adapter 边界清晰度：5/5
+- 风险控制和范围收敛度：5/5
+
+下一轮建议：
+
+```text
+执行 Local Workflow Daemon MVP 中的 Fixture Runner Evidence Review：
+先产出或收集 5 个 synthetic fixture 的 evidence packet，再基于 verifier_report.json / evidence.json / regression_result.json / email_draft.md 的实际失败模式，只修改被证据证明不足的 schema、规则或 Build vs Integrate 决策。
+```
+
+### 2026-05-11: Plan Optimizer Sprint - Phase 1a Scope Alignment Maintenance
+
+本轮目标：按 agentic-plan-optimizer skill 执行一轮 bounded loop，检查当前计划是否仍有会削弱 Phase 1a MVP 收敛的残留不一致。
+
+本轮评分（修改前）：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：5/5
+- Open Source Mapping 完整度：4/5
+- Build vs Integrate 清晰度：4/5
+- Evidence Graph 设计成熟度：5/5
+- Verifier Runtime 设计成熟度：5/5
+- CUA Adapter 边界清晰度：5/5
+- 风险控制和范围收敛度：5/5
+
+最低分维度：
+
+- Open Source Mapping 完整度
+- Build vs Integrate 清晰度
+
+自动选择的 sprint 类型：
+
+```text
+Plan Maintenance
+```
+
+选择理由：Open Source Mapping 的 4/5 不是 Phase 1a 当前阻塞点；真正可材料性改进的是 `18.4 MVP Implication` 仍残留 `Minimal capability registry` 和 adapter 表述，和 `13.5 Phase 1a Evidence Packet Acceptance Gate` 的 deterministic same-process function 边界不一致。
+
+多视角评审结论：
+
+- Open Source Mapping Agent：现有开源映射已经足够支撑 Phase 1a；不需要为尚未出现的 adapter/provider 缺口继续扩表。
+- Architecture Agent：Phase 1a 必须只保留 fixture runner 内部函数、file artifacts、schema 和 verifier；registry / RPC / daemon 边界属于 Phase 1b 之后。
+- CUA Adapter Agent：CUA 仍为 post-MVP computer runtime adapter；本轮没有任何 screenshot、trajectory 或 sandbox evidence 可以进入 Phase 1a。
+- Feasibility Critic Agent：最小修正是删除 Phase 1a 中暗示 registry/adapter 的文字，防止实现时从 fixture contract 滑向平台内核。
+- Research Strategy Agent：下一轮仍应由 5 个 fixture evidence packet 驱动；如果没有运行证据，只记录缺口，不继续扩写愿景。
+
+本轮写回：
+
+- 修正 `18.4 MVP Implication`，把 Phase 1a 薄内核从 `Minimal capability registry` / adapters 收敛为 deterministic same-process functions。
+- Research Backlog 增加 `Phase 1a Scope Alignment Check`，要求后续维护轮继续防止 registry、adapter、SQLite、daemon、RPC 或 workflow backend 混入 Phase 1a。
+- Decision Log 记录 Phase 1a 不包含 registry、RPC、daemon 或 adapter boundary。
+- Open Questions 保留一个 evidence-gated 问题：只有 fixture evidence packet 证明 deterministic functions 不足时，才重新讨论 capability registry / adapter boundary。
 
 本轮后评分：
 
