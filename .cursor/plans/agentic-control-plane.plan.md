@@ -28,7 +28,7 @@ todos:
     status: in_progress
   - id: build-local-mvp
     content: 规划本地 MVP：SQLite event store、shell/git/file/log adapters、approval gate
-    status: pending
+    status: in_progress
   - id: validate-engineering-loop
     content: 用 regression log 分析和英文汇报邮件生成验证端到端工程闭环
     status: pending
@@ -532,11 +532,12 @@ Run Kernel
 - 输入：一个固定 regression summary/log 路径 + 用户目标。
 - 流程：生成 `TaskSpec` -> 读取 log -> 提取 pass/fail/warning/incomplete -> 生成 Evidence list -> 规则验证 -> 生成英文邮件草稿 artifact。
 - 输出：`run.json`、`evidence.json`、`regression_result.json`、`email_draft.md`。
+- 形态：先做一次性 CLI runner，不做常驻 daemon、Web UI、IDE adapter 或后台队列。
 
 建议最小组件：
 
-- SQLite event store
-- 极简 step runner
+- SQLite event store，记录 run、step、tool_call、observation、verifier_result、artifact_created 事件。
+- 极简 step runner，只按固定 5 步 DAG 执行：spec -> read_log -> extract_result -> verify_result -> write_artifacts。
 - `read_log` capability
 - `extract_regression_result` capability
 - `write_artifact` capability
@@ -752,6 +753,128 @@ Read-only Regression Evidence Demo
 - 如果 demo 不能比普通 chat 更可复查、更少幻觉、更容易复用，就暂停扩展 OS 层。
 - MVP 不执行写代码、发邮件、开 PR、控制 IDE、控制桌面或运行危险命令。
 
+### 13.2 Local Read-only Runner Contract
+
+本轮将 `Local Workflow Daemon MVP` 收敛为更小的本地 runner contract。它不是长期 daemon，而是一个可重复执行的一次性 CLI，用来验证 OS 语义是否成立。
+
+建议 CLI 入口：
+
+```text
+aeos-regression-demo run \
+  --log ./fixtures/m2b_lec_regr.summary.log \
+  --goal "Confirm whether m2b_lec_regr passed and draft an English status email" \
+  --run-id local-2026-05-11-m2b \
+  --out ./out/local-2026-05-11-m2b
+```
+
+MVP 输入约束：
+
+- `--log` 必须指向本地只读 summary/log 文件。
+- `--goal` 只允许 regression status + email draft 场景。
+- `--run-id` 可选；缺省时由 runner 生成。
+- 不读取 git remote、不访问网络、不运行测试、不发送邮件。
+
+固定执行 DAG：
+
+```text
+create_task_spec
+  -> read_log
+  -> extract_regression_result
+  -> verify_result
+  -> write_artifacts
+```
+
+最小 `TaskSpec` 采用模板优先，而不是让 LLM 自由生成：
+
+```json
+{
+  "goal": "Confirm whether m2b_lec_regr passed and draft an English status email",
+  "scenario": "regression_status_email",
+  "inputs": {
+    "log_path": "./fixtures/m2b_lec_regr.summary.log",
+    "run_id": "local-2026-05-11-m2b"
+  },
+  "allowed_actions": ["read_log", "extract_regression_result", "write_artifact"],
+  "forbidden_actions": ["modify_source", "run_tests", "send_email", "git_push", "desktop_control"],
+  "success_criteria": [
+    "classification is one of passed, failed, incomplete, warning, unknown, needs_human_check",
+    "every conclusion references at least one evidence id",
+    "email draft cites regression_result.json rather than inventing a new status"
+  ],
+  "required_evidence": ["log_excerpt", "source_path", "line_range", "classification_reason"],
+  "approval_points": ["before any external delivery; not exercised in MVP"],
+  "expected_artifacts": ["run.json", "evidence.json", "regression_result.json", "email_draft.md"]
+}
+```
+
+最小 SQLite event store：
+
+```sql
+CREATE TABLE runs (
+  id TEXT PRIMARY KEY,
+  task_spec_json TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  completed_at TEXT
+);
+
+CREATE TABLE run_events (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  sequence INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE artifacts (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  path TEXT NOT NULL,
+  evidence_ids_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+```
+
+第一版只需要 event log，不需要复杂 workflow backend。`run_events.type` 至少包括：
+
+- `run_created`
+- `task_spec_created`
+- `tool_call_started`
+- `tool_call_completed`
+- `observation_recorded`
+- `evidence_created`
+- `verifier_passed`
+- `verifier_failed`
+- `artifact_created`
+- `run_completed`
+- `run_failed`
+
+最小 artifact contract：
+
+```text
+out/<run-id>/
+  run.json
+  events.jsonl
+  evidence.json
+  regression_result.json
+  email_draft.md
+  artifacts_index.json
+```
+
+`regression_result.json` 是 authoritative artifact；`email_draft.md` 只能引用它的结论。邮件生成阶段如果需要 LLM，只能作为措辞生成器，不能改变 status、warning、failure count 或 evidence ids。
+
+MVP 验收 fixture 至少包含五类 log：
+
+1. 明确 all passed。
+2. 明确 failed，并有失败数量或失败 test 名称。
+3. incomplete / still running / missing summary。
+4. passed 但存在 warning 或 waiver。
+5. 信息不足，应输出 `unknown` 或 `needs_human_check`。
+
+如果这五类 fixture 不能稳定产生可追溯 artifact，下一步不应扩展 IDE、CUA、browser、CI 或 coding agent adapter。
+
 ## 14. 第一版不要做什么
 
 - 不要先做多 IDE 控制。
@@ -861,11 +984,13 @@ Read-only Regression Evidence Demo
 
 1. Open Source Coverage Mapping：已完成，结论是自研 OS 语义，集成底层 runtime 和 coding agent。
 2. MVP Verification Contract：已启动，把第一版压缩成 read-only regression evidence demo。
-3. Intent-to-Spec MVP：定义 regression 场景的 `TaskSpec` schema、成功标准、证据要求和审批点。
-4. Evidence List + Verifier Runtime：定义 `LogEvidence`、`RegressionResultArtifact`、`EmailDraftArtifact` 和 rule verifier。
-5. Local Read-only Runner：设计 SQLite event store、极简 step runner、`read_log`、`extract_regression_result`、`write_artifact`。
-6. Feasibility Critic Review：在 MVP schema 明确后，再用反方视角砍掉不必要字段和流程。
-7. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
+3. Local Read-only Runner Contract：已完成本轮设计，把 MVP 收敛为一次性 CLI runner、SQLite event store、固定 DAG 和 JSON artifact contract。
+4. Fixture Corpus + Parser Rules：下一轮优先补五类 regression log fixture 和 `extract_regression_result` 判定优先级。
+5. Intent-to-Spec MVP：定义 regression 场景的 `TaskSpec` 模板字段、用户可配置字段、成功标准、证据要求和审批点。
+6. Evidence List + Verifier Runtime：定义 `LogEvidence`、`RegressionResultArtifact`、`EmailDraftArtifact`、schema verifier 和 log rule verifier。
+7. Local Read-only Runner Implementation Plan：把 `read_log`、`extract_regression_result`、`write_artifact` 映射到可执行模块边界，但仍不接 IDE/CUA/CI。
+8. Feasibility Critic Review：在 fixture 和 schema 明确后，再用反方视角砍掉不必要字段和流程。
+9. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -1120,15 +1245,18 @@ Regression log -> evidence -> email artifact demo
 - 2026-05-11：MVP 收敛为 `Read-only Regression Evidence Demo`，只做 regression log -> TaskSpec -> Evidence list -> rule verifier -> email draft artifact。
 - 2026-05-11：第一版不实际集成 CUA、Browser-use、E2B、Modal、Dagger、Temporal、LangGraph；只预留 adapter contract。
 - 2026-05-11：第一版不实现完整 Evidence Graph，先实现 Evidence list；不实现完整 Capability Runtime，先实现 `read_log`、`extract_regression_result`、`write_artifact`。
+- 2026-05-11：Plan Optimizer 本轮最低分维度是 MVP 可执行性和 Verifier Runtime 到本地 runner 的落地清晰度，因此选择 `Local Workflow Daemon MVP` sprint。
+- 2026-05-11：Local Workflow Daemon MVP 进一步降级为一次性 read-only CLI runner；不做常驻 daemon、后台队列、Web UI、IDE adapter、CUA adapter 或外部副作用。
+- 2026-05-11：MVP `TaskSpec` 采用模板优先和结构化输入，LLM 不进入 verifier-critical path；如用于生成邮件措辞，只能引用 `regression_result.json` 的 authoritative status 和 evidence ids。
 
 ## 20. Open Questions
 
-- `TaskSpec` 应该先由 LLM 生成再由规则校验，还是先用模板/表单约束生成？
-- `LogEvidence` 的最小字段应该包括哪些：source path、line range、excerpt、timestamp、classification、confidence 是否足够？
-- `extract_regression_result` 应该先用规则解析，还是允许 LLM 提取后再由规则校验？
+- regression `TaskSpec` 模板是否需要支持 project、block、run owner、expected completion window，还是先只保留 log path / run id / goal？
+- `LogEvidence` 的最小字段是否应固定为 source path、line range、excerpt、timestamp、classification、confidence、parser rule id？
+- `extract_regression_result` 的规则优先级如何定义：failure 是否永远覆盖 all passed，warning/waiver 是否把 passed 降级为 warning？
 - `unknown / needs_human_check` 的触发条件应该如何定义，才能避免虚假 `all passed`？
-- `email_draft.md` 如何强制引用 `regression_result.json`，避免邮件生成阶段重新幻觉？
-- 本地 MVP 应该用 CLI 启动，还是先用 Cursor 手动驱动一轮流程来验证 schema？
+- 五类 fixture 是否足够覆盖第一版 verifier，还是还需要 corrupted log、duplicated summary、multi-run summary 等负例？
+- `email_draft.md` 的引用格式如何设计，才能让人工审阅者快速追溯到 `regression_result.json` 和 evidence ids？
 
 ## 21. Research Sprint Log
 
@@ -1224,6 +1352,60 @@ Evidence Graph / Verifier Runtime Sprint
 ```text
 执行 Intent-to-Spec MVP Sprint：
 只为 regression log 场景定义 TaskSpec schema、字段约束、成功标准、证据要求、unknown/needs_human_check 触发条件。
+```
+
+### 2026-05-11: Local Workflow Daemon MVP Sprint
+
+本轮目标：按 Plan Optimizer 流程重新评分主计划，选择最低分方向，并把 MVP 从“概念上的本地 daemon”压缩成可执行的 read-only runner contract。
+
+当前质量评分：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：3/5
+- Open Source Mapping 完整度：4/5
+- Build vs Integrate 清晰度：4/5
+- Evidence Graph 设计成熟度：3/5
+- Verifier Runtime 设计成熟度：3/5
+- CUA Adapter 边界清晰度：4/5
+- 风险控制和范围收敛度：4/5
+
+最低分维度：
+
+- MVP 可执行性
+- Verifier Runtime 设计成熟度
+
+自动选择的 sprint 类型：
+
+```text
+Local Workflow Daemon MVP
+```
+
+五类评审视角结论：
+
+- Open Source Mapping Agent：不引入 LangGraph、Temporal、CUA、E2B 或 Dagger；MVP 只需要 SQLite、固定 DAG 和本地文件 artifact，继续集成而非重造底层 runtime。
+- Architecture Agent：把 daemon 降级为一次性 CLI runner，可以先验证 Run/Event/Evidence/Artifact contract，避免过早设计后台调度和多客户端状态同步。
+- CUA Adapter Agent：CUA 仍然是 post-MVP；本轮只保留 `desktop_control` / `trajectory` 为 forbidden action 和未来 adapter 边界。
+- Feasibility Critic Agent：若没有 fixture corpus 和规则优先级，Verifier 仍容易停留在概念层；下一轮必须用五类 log 负例压实。
+- Research Strategy Agent：最小 demo 的论文/产品价值来自“可复查的工程结论”，不是自动化范围；应先证明 email draft 受 evidence 约束。
+
+本轮新增或修改：
+
+- `13.2 Local Read-only Runner Contract`：定义 CLI 入口、固定 DAG、TaskSpec 模板、SQLite 表、event types、artifact 目录和 fixture 验收。
+- Phase 1 明确先做一次性 CLI runner，不做常驻 daemon、Web UI、IDE adapter 或后台队列。
+- Research Backlog 调整为先补 fixture corpus 和 parser rules，再做更细的 Intent-to-Spec / Evidence List / runner implementation plan。
+- Decision Log 明确本轮 Build vs Integrate 取舍：Build read-only OS contract；Integrate/Defer all external runtimes and workflow engines。
+
+Evidence Log：
+
+- 主计划上一轮已证明开源项目覆盖了底层 orchestration、coding agent、browser、desktop、sandbox 和 CI runtime。
+- 当前计划已有 MVP Verification Contract，但缺少本地 runner 的具体输入输出、事件表、artifact 目录和 fixture 验收。
+- 因此本轮更新聚焦可执行契约，而不是扩展愿景或新增产品功能。
+
+下一轮建议：
+
+```text
+执行 Evidence Graph / Verifier Runtime Sprint：
+围绕五类 regression fixture，定义 `extract_regression_result` 规则优先级、`LogEvidence` 字段、`unknown/needs_human_check` 触发条件和 email artifact 引用格式。
 ```
 
 ## 22. Parking Lot
