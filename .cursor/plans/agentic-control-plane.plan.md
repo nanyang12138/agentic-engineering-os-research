@@ -1299,6 +1299,7 @@ Build vs Integrate：
 8. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
 9. Plan Maintenance Evidence Gate：在 fixture runner 输出、5 个合成 fixture 结果或真实脱敏日志证据出现前，后续优化只允许记录评分、证据缺口和 Phase 1a 契约矛盾，不继续扩写 OS 愿景、adapter 设计或通用 workflow backend。
 10. Evidence-limited Open Source Mapping：当前 Open Source Mapping 保持 4/5 不是因为缺少更多项目清单，而是缺少 Phase 1a artifact / verifier failure 来证明下一步需要补哪类 provider 对比；没有这些证据前，不用为追求 5/5 继续扩大 mapping。
+11. Optimizer Evidence Intake Preflight：每轮 optimizer 在选择非维护 sprint 前，先检查是否存在 `fixtures/regression/**`、`artifacts/runs/**`、`**/verifier_report.json`、`**/evidence.json` 或 `**/regression_result.json`。若全部缺失，默认只执行 `Plan Maintenance`，记录评分和证据缺口，不修改正式架构章节或新增开源 mapping。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -1572,6 +1573,7 @@ Phase 1b 才评估 minimal capability registry、`read_log` / `extract_regressio
 - 2026-05-11：Phase 1a 的 `read_log`、`extract_regression_result`、`write_artifact` 明确为 fixture harness 内部 deterministic same-process functions；capability registry、真实 adapter、SQLite event store 和 daemon/API 均后移到 fixture gate 之后。
 - 2026-05-11：本轮 Plan Optimizer 选择 `Plan Maintenance`；最低分是 Open Source Mapping 完整度 4/5，但不新增开源项目对比，因为 Phase 1a 的 Build vs Integrate 已足够，真正缺口是 fixture artifact、`verifier_report.json` failure mode 和真实脱敏日志校准证据。
 - 2026-05-11：后续只有当 5 个 synthetic fixture 输出或真实脱敏日志显示 `read_log`、marker 配置、artifact grounding 或 verifier gate 需要外部 provider 支撑时，才解冻新的 Open Source Coverage Mapping 或 adapter/provider 研究。
+- 2026-05-11：Plan Optimizer 后续轮次必须先做 evidence intake preflight；若没有 fixture、run artifact、`verifier_report.json`、`evidence.json` 或 `regression_result.json`，则不得把 Open Source Mapping 4/5 解读为需要继续补项目清单。
 
 ## 20. Open Questions
 
@@ -1603,6 +1605,7 @@ Phase 1b 才评估 minimal capability registry、`read_log` / `extract_regressio
 - 第一批 fixture artifacts 是否证明 `verifier_report.json` 足以作为唯一 gate，还是需要把 business verdict 与 verifier status 拆成两个更明确的 artifact 边界？
 - first evidence packet 是否证明 same-process functions 已足够，还是 `read_log` 需要提前升级为真实 log adapter？该问题只能由 fixture failure 或真实脱敏日志差异触发。
 - 在没有 fixture artifact 和真实日志 evidence 前，Open Source Mapping 的 4/5 是否应保持为 evidence-limited score，而不是通过继续补项目清单追求 5/5？
+- evidence intake preflight 的最小解锁条件应是至少一个完整 run artifact packet，还是必须先有 5 个 synthetic fixture 全部产物？默认保持保守：没有完整 packet 前只允许 Plan Maintenance 记录证据缺口。
 
 ## 21. Research Sprint Log
 
@@ -2061,6 +2064,64 @@ Plan Maintenance
 ```text
 执行 Local Workflow Daemon MVP 中的 Fixture Runner Evidence Review：
 先获得 5 个 synthetic fixture 的实际 artifact 输出，再根据 `verifier_report.json.ruleResults`、`artifactChecks`、email grounding failure 和真实脱敏日志差异，决定是否修改 schema、规则或 Build vs Integrate。
+```
+
+### 2026-05-11 15:06 UTC: Plan Optimizer Sprint - Evidence Intake Preflight
+
+本轮目标：按 agentic-plan-optimizer skill 执行一轮 bounded loop，在不修改产品代码的前提下确认当前计划是否有新的材料性优化空间。
+
+本轮评分（修改前）：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：5/5
+- Open Source Mapping 完整度：4/5
+- Build vs Integrate 清晰度：5/5
+- Evidence Graph 设计成熟度：5/5
+- Verifier Runtime 设计成熟度：5/5
+- CUA Adapter 边界清晰度：5/5
+- 风险控制和范围收敛度：5/5
+
+最低分维度：
+
+- Open Source Mapping 完整度
+
+自动选择的 sprint 类型：
+
+```text
+Plan Maintenance
+```
+
+多视角评审结论：
+
+- Open Source Mapping Agent：当前 4/5 是 evidence-limited 分数；没有 fixture failure 或真实日志差异时，补更多项目清单不会改变 Phase 1a Build vs Integrate。
+- Architecture Agent：主计划已把 MVP 锁定为 same-process fixture runner；下一步缺的是 artifact packet，不是正式架构章节。
+- CUA Adapter Agent：CUA 仍是 post-MVP adapter；本轮没有 screenshot、trajectory 或 sandbox observation 进入 Phase 1a evidence source 的证据。
+- Feasibility Critic Agent：重复 no-op 研究的风险需要用 evidence intake preflight 约束，避免把缺证据误判为缺设计。
+- Research Strategy Agent：下一轮有价值输入仍是 5 个 synthetic fixture 的 `verifier_report.json`、`evidence.json`、`regression_result.json` 和 grounded `email_draft.md`。
+
+本轮写回：
+
+- Research Backlog 新增 optimizer evidence intake preflight。
+- Decision Log 记录没有 evidence packet 时不得继续扩大 Open Source Mapping。
+- Open Questions 记录 evidence intake preflight 的解锁阈值问题。
+- 本 Research Sprint Log 记录评分、最低维度、唯一 sprint 类型和下一轮触发条件。
+
+本轮后评分：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：5/5
+- Open Source Mapping 完整度：4/5
+- Build vs Integrate 清晰度：5/5
+- Evidence Graph 设计成熟度：5/5
+- Verifier Runtime 设计成熟度：5/5
+- CUA Adapter 边界清晰度：5/5
+- 风险控制和范围收敛度：5/5
+
+下一轮建议：
+
+```text
+执行 Local Workflow Daemon MVP 中的 Fixture Runner Evidence Review：
+先获得至少一个完整 Phase 1a run artifact packet，优先目标仍是 5 个 synthetic fixture 全部产物；只根据实际 `verifier_report.json.ruleResults`、`artifactChecks`、email grounding failure 或真实脱敏日志差异修改 schema、规则或 Build vs Integrate。
 ```
 
 ## 22. Parking Lot
