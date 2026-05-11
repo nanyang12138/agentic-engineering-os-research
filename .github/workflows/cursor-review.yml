@@ -22,7 +22,7 @@ jobs:
 
       - name: Run Cursor review
         id: cursor_review
-        uses: PunGrumpy/cursor-action@v0.1.0
+        uses: PunGrumpy/cursor-action@main
         with:
           api-key: ${{ secrets.CURSOR_API_KEY }}
           permissions: read-only
