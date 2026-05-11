@@ -560,6 +560,50 @@ Build vs Integrate：
 - Build：Run/Event/Evidence/Artifact schema、fixture harness、rule-based verifier、`verifier_report.json` 契约。
 - Integrate / Defer：JSON Schema 或等价校验库可直接使用成熟实现；SQLite、真实 adapter、workflow backend、computer runtime 和 LLM TaskSpec 生成全部后移。
 
+#### Phase 1a 范围切线：反方评审后的最小可执行路径
+
+Feasibility Critic 结论：Phase 1a 的第一个可执行切片不是 daemon、SQLite、CLI 产品入口或 LLM workflow，而是一个 deterministic fixture contract gate。它只需要证明同一批固定输入能稳定生成同一类 artifact，并且 verifier 能拒绝负例。
+
+最小执行边界：
+
+- 第一批 fixture 先用合成日志，不等待真实脱敏 regression log；真实脱敏样例只作为 Phase 1a 通过后的校准数据。
+- 入口先是固定脚本或测试命令，不要求正式 CLI UX；CLI 进入 Phase 1b。
+- 不引入 SQLite；`events.jsonl` 和磁盘 JSON artifact 足够证明 event/evidence/artifact 语义。
+- 不引入 LLM；`task_spec.fixture.json` 使用模板化字段，邮件草稿只能从 `regression_result.json` 转述。
+- 不实现 capability registry；Phase 1a 的 `read_log`、`extract_regression_result`、`write_artifact` 可以先作为 fixture harness 内部步骤。
+
+建议的 research fixture layout（本轮只定义契约，不新增产品代码）：
+
+```text
+fixtures/regression/
+  all_passed.log
+  failed_tests.log
+  incomplete_jobs.log
+  passed_with_warning_or_waiver.log
+  ambiguous_summary.log
+  fixture_meta.json
+  task_spec.fixture.json
+  expected/
+    verifier_report.expected.json
+```
+
+验收顺序固定为：
+
+```text
+schema validation
+  -> extraction consistency
+  -> evidence reference check
+  -> verdict precedence rules
+  -> email grounding check
+  -> verifier_report overall_status
+```
+
+停止条件：
+
+- 五类 fixture 中任一负例需要靠人工解释才能避免误判为 `passed`，先收缩规则表或 fixture 表达，不进入 Phase 1b。
+- 如果邮件草稿生成阶段能绕过 `regression_result.json` 产生新结论，先修 verifier，不进入 runner/daemon。
+- 如果 `lineRange` 无法稳定取得，v1 仍不新增复杂 locator；必须用 `fixture_hash` + exact `excerpt` 保证可复查。
+
 #### Phase 1b：Local Read-only Runner
 
 在 Phase 1a schema 和 verifier 绿灯后，再实现一个 read-only 证据闭环 demo：
