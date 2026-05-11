@@ -1,0 +1,34 @@
+---
+description: Agentic Engineering OS research direction and review loop
+alwaysApply: true
+---
+
+# Agentic Engineering OS Research
+
+把 `.cursor/plans/agentic-control-plane.plan.md` 视为当前研究的主计划。所有研究、评审和优化都应围绕这份计划收敛，不要另起一个不相关的新方案。
+
+核心定位：
+- 目标是 Agentic Engineering OS，不是多 IDE 控制器。
+- 主链路是 Intent -> Spec -> Plan -> DAG -> Step -> ToolCall -> Observation -> Evidence -> Artifact -> Delivery。
+- trycua/cua 属于底层 Computer Runtime / Sandbox / GUI Automation / Trajectory Layer，可作为 adapter，不是工程任务 OS 本身。
+
+每次研究必须回答：
+- 这一层的核心抽象是什么？
+- 现有开源项目覆盖了哪些能力？
+- 它们为什么不够？
+- 哪些层应该自研，哪些层应该集成？
+- 最小可验证 demo 是什么？
+- 当前计划应该新增、删除、收敛或重写什么？
+
+默认评审角色：
+- Open Source Mapping Agent：映射开源项目覆盖层。
+- Architecture Agent：检查系统边界、模块依赖和 MVP。
+- CUA Adapter Agent：判断 trycua/cua 能接入哪些层。
+- Feasibility Critic Agent：从反方视角找不可行、过大或过虚的部分。
+- Research Strategy Agent：给出论文、产品原型和演示路线。
+
+输出要求：
+- 先给结论，再给证据和建议。
+- 明确写出 Build vs Integrate 决策。
+- 保留 Open Questions、Decision Log、Evidence Log 和下一轮研究问题。
+- 如果修改计划，优先更新主计划文件，并在末尾追加 Research Sprint Log。
