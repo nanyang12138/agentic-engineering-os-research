@@ -27,7 +27,7 @@ todos:
     content: 设计 Evidence Graph 和 Verifier Runtime，让每个结论都有可追溯证据和验证流程
     status: in_progress
   - id: build-local-mvp
-    content: 规划本地 read-only MVP：固定 log fixture、SQLite event store、三个 capability、rule verifier、artifact writer
+    content: 规划本地 read-only MVP：固定 log fixture、run.json/events.jsonl、三个 capability、rule verifier、artifact writer
     status: pending
   - id: validate-engineering-loop
     content: 用 regression log 分析和英文汇报邮件生成验证端到端工程闭环
@@ -610,11 +610,11 @@ schema validation
 
 - 输入：一个固定 regression summary/log 路径 + 用户目标。
 - 流程：生成 `TaskSpec` -> 读取 log -> 提取 pass/fail/warning/incomplete -> 生成 Evidence list -> 规则验证 -> 生成英文邮件草稿 artifact。
-- 输出：沿用 Phase 1a 的 `run.json`、`events.jsonl`、`evidence.json`、`regression_result.json`、`email_draft.md`、`verifier_report.json`。
+- 输出：`run.json`、`events.jsonl`、`evidence.json`、`regression_result.json`、`email_draft.md`、`verifier_report.json`。
 
 建议最小组件：
 
-- SQLite event store
+- `run.json` + append-only `events.jsonl` 文件输出；SQLite event store 只在 fixture gate 通过后进入下一步
 - 极简 step runner
 - `read_log` capability
 - `extract_regression_result` capability
@@ -809,11 +809,11 @@ Read-only Regression Evidence Demo
 最小输出：
 
 - `run.json`：记录 task、TaskSpec、steps、events、状态。
-- `events.jsonl`：记录 step、tool call、observation、verification 和 artifact 写入事件。
+- `events.jsonl`：append-only 记录每个 step、capability call、verification result。
 - `evidence.json`：记录 log 片段、来源路径、时间戳、提取结论、可信度。
 - `regression_result.json`：结构化结果，包括 passed/failed/incomplete/warning/unknown。
 - `email_draft.md`：英文邮件草稿，必须引用 `regression_result.json` 的结论，而不是重新自由生成。
-- `verifier_report.json`：机器可读验证报告，是 demo 是否通过的唯一权威 verdict。
+- `verifier_report.json`：记录 rule id、status、message 和相关 evidence ids。
 
 最小 capability：
 
@@ -969,7 +969,7 @@ type RegressionResultArtifactV1 = {
 
 #### Fixture Gate
 
-Phase 1 合并前至少需要 5 个脱敏或合成 fixture：
+Phase 1a 合并前至少需要 5 个合成 fixture；真实脱敏 fixture 作为通过 gate 后的扩展验证：
 
 | Fixture | 期望 verdict | 是否允许普通 all-passed 邮件 |
 | --- | --- | --- |
@@ -980,6 +980,182 @@ Phase 1 合并前至少需要 5 个脱敏或合成 fixture：
 | `ambiguous_summary.log` | `unknown` 或 `needs_human_check` | 否 |
 
 如果这些 fixture 不能稳定产出预期 artifact，暂停扩展 Local Workflow Daemon、CUA adapter 或多 agent planner。
+
+### 13.3 MVP Feasibility Cutline
+
+本轮反方评审后的收敛决策：Phase 1a 不是 daemon、不是 IDE/CUA adapter、也不是通用 workflow backend，而是一个可重复运行的静态 fixture runner。
+
+Phase 1a 唯一验收链路：
+
+```text
+synthetic fixture logs
+  -> template RegressionTaskSpecV1
+  -> read_log
+  -> rule-based extract_regression_result
+  -> run.json + events.jsonl
+  -> evidence.json + regression_result.json + email_draft.md
+  -> verifier_report.json
+```
+
+Phase 1a 必须 Build：
+
+- `RegressionTaskSpecV1` 模板和 schema。
+- `LogEvidenceV1` / `RegressionResultArtifactV1` 的 JSON 输出。
+- 规则解析器和 verifier 规则表。
+- email grounding check。
+- 5 个合成 fixture 的 golden verdict。
+
+Phase 1a 明确不 Build：
+
+- SQLite schema、daemon、HTTP API、scheduler、resume/replay UI。
+- repo 修改、测试执行、git 操作、PR 创建或真实邮件发送。
+- CUA、Browser-use、E2B、Dagger、Temporal、LangGraph 的实际集成。
+- LLM 自由判断 pass/fail；如使用 LLM，只能生成候选摘要，最终 verdict 仍由规则 verifier 决定。
+
+Build vs Integrate 决策：
+
+- Build：MVP 的 evidence/artifact 语义、fixture runner、verifier rules 和 grounding contract。
+- Integrate later：SQLite/Temporal/LangGraph durable runtime、CUA/browser/sandbox adapters、coding agents 和 CI providers。
+
+扩展门槛：
+
+- 5 个合成 fixture 全部稳定通过，并能输出可复查 evidence ids。
+- `passed_with_warning_or_waiver.log` 和 `ambiguous_summary.log` 不得生成普通 all-passed 邮件。
+- `email_draft.md` 不得产生任何未由 `regression_result.json` 支持的新结论。
+- fixture gate 未通过前，不启动 Local Workflow Daemon、CUA Adapter 或多 agent planner 研究。
+
+### 13.4 Fixture Runner MVP Operating Contract
+
+本轮收敛决策：`Local Workflow Daemon MVP` 的第一步不做 daemon。Phase 1a 的可执行形态是一个 deterministic、offline、one-shot fixture runner，用最少工程量验证 Evidence/Verifier/Artifact 语义是否成立。
+
+Phase 1a 入口：
+
+```text
+fixture-runner --fixture-dir <fixtures/regression> --out-dir <artifacts/runs>
+```
+
+入口约束：
+
+- 只允许 `--fixture-dir` 和 `--out-dir` 两个必需参数；不做 watch mode、HTTP API、后台进程、配置中心或 workspace registry。
+- 每次运行读取 fixture 目录下的所有 case，并在输出目录中为每个 case 生成独立 run folder。
+- 不访问网络，不调用 GUI / browser / CUA，不修改 repo，不发送邮件，不创建 PR。
+- LLM 不是 Phase 1a 依赖；如未来允许 LLM 生成候选摘要，默认关闭，最终 verdict 仍由规则 verifier 决定。
+
+最小 fixture 目录：
+
+```text
+fixtures/regression/
+  all_passed/
+    input.log
+    fixture.json
+  failed_tests/
+    input.log
+    fixture.json
+  incomplete_jobs/
+    input.log
+    fixture.json
+  passed_with_warning_or_waiver/
+    input.log
+    fixture.json
+  ambiguous_summary/
+    input.log
+    fixture.json
+```
+
+`fixture.json` 只保存验收所需信息：
+
+```typescript
+type RegressionFixtureV1 = {
+  id: string;
+  goal: string;
+  inputLogFile: "input.log";
+  expectedVerdict:
+    | "passed"
+    | "failed"
+    | "incomplete"
+    | "warning_or_waiver"
+    | "unknown"
+    | "needs_human_check";
+  allowAllPassedEmail: boolean;
+};
+```
+
+最小输出目录：
+
+```text
+artifacts/runs/<fixture-id>/
+  run.json
+  events.jsonl
+  evidence.json
+  regression_result.json
+  email_draft.md
+  verifier_report.json
+```
+
+`events.jsonl` v1 只需要支持复查，不需要支持 replay backend。每行最小字段：
+
+```typescript
+type RunEventV1 = {
+  id: string;
+  runId: string;
+  fixtureId: string;
+  type:
+    | "run.created"
+    | "task_spec.generated"
+    | "capability.read_log.completed"
+    | "capability.extract_regression_result.completed"
+    | "artifact.write.completed"
+    | "verifier.completed"
+    | "run.completed"
+    | "run.failed";
+  status: "started" | "completed" | "failed";
+  timestamp: string;
+  inputRef?: string;
+  outputRef?: string;
+  evidenceIds?: string[];
+  error?: string;
+};
+```
+
+`verifier_report.json` v1 最小字段：
+
+```typescript
+type VerifierReportV1 = {
+  id: string;
+  runId: string;
+  fixtureId: string;
+  status: "passed" | "failed";
+  generatedAt: string;
+  ruleResults: {
+    ruleId: string;
+    status: "passed" | "failed" | "not_applicable";
+    message: string;
+    evidenceIds: string[];
+  }[];
+  artifactChecks: {
+    artifactId: string;
+    artifactType: "regression_result" | "email_draft" | "evidence";
+    status: "passed" | "failed";
+    message: string;
+  }[];
+  summary: string;
+};
+```
+
+Golden validation 不做完整 artifact snapshot 对比，避免把邮件措辞和 JSON 字段顺序变成脆弱约束。Phase 1a 只检查：
+
+- `regression_result.json.verdict` 等于 `fixture.json.expectedVerdict`，或在允许集合内安全降级为 `needs_human_check`。
+- 每个非 `unknown` verdict 至少引用一个 matching evidence id。
+- `email_draft.md` 引用 `regression_result.json` 的 artifact id 或 verdict，并且不新增未被 evidence 支持的 pass/fail 结论。
+- 当 `allowAllPassedEmail=false` 时，邮件不得写成普通 all-passed 汇报。
+- `verifier_report.json.status` 能反映规则失败，而不是只记录运行成功。
+
+规则 marker v1 先写成代码常量，不外置 YAML/JSON。只有当 5 个合成 fixture 通过后，且真实脱敏日志暴露出需要按项目配置 marker 的证据时，才设计外置规则表。
+
+Build vs Integrate：
+
+- Build：one-shot fixture runner、fixture schema、file event log、evidence/result/email/verifier artifacts、golden validation。
+- Integrate later：SQLite/Temporal/LangGraph daemon backend、CUA/browser/sandbox adapters、真实 CI/log provider、LLM summarizer、observability UI。
 
 ## 14. 第一版不要做什么
 
@@ -1089,12 +1265,12 @@ Phase 1 合并前至少需要 5 个脱敏或合成 fixture：
 推荐按以下顺序推进：
 
 1. Open Source Coverage Mapping：已完成，结论是自研 OS 语义，集成底层 runtime 和 coding agent。
-2. MVP Verification Contract：已启动，把第一版压缩成 read-only regression evidence demo。
-3. Intent-to-Spec MVP：MVP 默认使用模板/表单化 `RegressionTaskSpecV1`；LLM 只能生成草稿，必须通过 schema/rule verifier。
-4. Evidence List + Verifier Runtime：已固化 `LogEvidenceV1`、`RegressionResultArtifactV1`、email grounding 规则和 fixture gate。
-5. Feasibility Critic Review：已完成本轮收敛，决定 Phase 1a 先做 deterministic fixture contract gate，不做 daemon、SQLite、LLM、CLI UX 或 capability registry。
-6. Phase 1a Fixture Harness Design：下一轮只允许定义 research fixture 文件、schema 文件、golden verifier report 和 normalized comparison 规则；仍不进入产品代码。
-7. Local Read-only Runner：只有 fixture gate 稳定后，才设计 SQLite event store、极简 step runner、`read_log`、`extract_regression_result`、`write_artifact`。
+2. MVP Verification Contract：已完成，把第一版压缩成 read-only regression evidence demo。
+3. Feasibility Critic Review：已完成，把 Phase 1a 冻结为静态 fixture runner；SQLite、daemon、adapter 和 durable workflow 全部延后。
+4. Fixture Runner MVP：已收敛为 one-shot runner，入口只保留 `--fixture-dir` 和 `--out-dir`；读取 5 个合成 fixture，按 `13.4 Fixture Runner MVP Operating Contract` 输出并验证 `run.json`、`events.jsonl`、`evidence.json`、`regression_result.json`、`email_draft.md`、`verifier_report.json`。
+5. Intent-to-Spec MVP：MVP 默认使用模板/表单化 `RegressionTaskSpecV1`；LLM 只能生成草稿，必须通过 schema/rule verifier。
+6. Evidence List + Verifier Runtime：已固化 `LogEvidenceV1`、`RegressionResultArtifactV1`、email grounding 规则和 fixture gate；下一步以 fixture runner 验证规则是否过多或不足。
+7. Local Read-only Runner：仅在 fixture gate 通过后，再决定是否引入 SQLite event store、极简 step runner 和更完整的 run state。
 8. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
@@ -1237,7 +1413,7 @@ Phase 1 合并前至少需要 5 个脱敏或合成 fixture：
 - 成熟度：高。
 - 可借鉴点：durable execution、workflow-as-code、activity retry、event history、resume/replay。
 - 缺口：不是 agent framework，也不理解 engineering artifact/evidence/policy；引入成本对 MVP 可能偏高。
-- 结论：长期可作为 State Plane / Scheduler backend；MVP 先用简单 SQLite event store 验证 OS 语义。
+- 结论：长期可作为 State Plane / Scheduler backend；Phase 1a 先用文件化 `run.json` / `events.jsonl` 验证 OS 语义，SQLite 延后到 fixture gate 之后。
 
 ### 18.2 Build vs Integrate
 
@@ -1254,7 +1430,7 @@ Phase 1 合并前至少需要 5 个脱敏或合成 fixture：
 #### 应该集成或借鉴的层
 
 - Agent orchestration：参考 LangGraph，必要时集成；MVP 可先自研极简 DAG runner。
-- Durable workflow backend：长期考虑 Temporal；MVP 先 SQLite event log。
+- Durable workflow backend：长期考虑 Temporal；Phase 1a 先用文件化 `run.json` / `events.jsonl`，fixture gate 通过后再评估 SQLite event store。
 - Coding agent：集成或调用 Cursor、Claude Code、OpenHands、Aider，不重做。
 - Browser runtime：集成 Browser-use 或 Playwright adapter，不重做。
 - Computer runtime：研究并集成 trycua/cua，不重做桌面控制和 VM。
@@ -1290,11 +1466,14 @@ Phase 1 合并前至少需要 5 个脱敏或合成 fixture：
 第一版应该做一个薄但有差异化的 OS kernel：
 
 ```text
-TaskSpec generator
-Run/Step/ToolCall/Observation/Evidence/Artifact schema
-events.jsonl + disk JSON artifacts for Phase 1a
+Template TaskSpec generator
+run.json + events.jsonl file event record
+Run/Step/ToolCall/Observation/Evidence/Artifact JSON schema
+Minimal capability registry
+read_log / extract_regression_result / write_artifact adapters
+Policy gate
 Rule verifier
-verifier_report.json
+Static fixture runner
 Regression log -> evidence -> email artifact demo
 ```
 
@@ -1321,10 +1500,10 @@ SQLite event store、minimal capability registry、`read_log` / `extract_regress
 
 ### 18.6 下一轮问题
 
-- 五类合成 fixture 的最小文本 marker 应该如何写，才能覆盖规则优先级而不过拟合某一种 regression log 格式？
-- `expected/verifier_report.expected.json` 应该做完整 JSON golden comparison，还是只比较 normalized semantic fields？
-- Phase 1a 通过后，第一批真实脱敏 regression log 需要保留哪些 metadata，才能验证合成 fixture 没有偏离真实工作流？
-- Phase 1b 如果引入 SQLite，是否仍让 evidence 保持 JSON artifact，而只把 run/event/artifact index 入库？
+- 合成 fixture gate 通过后，需要引入哪些真实脱敏日志来验证 parser 没有过拟合？
+- 真实脱敏日志是否需要新增 `contentHash` 或更稳定的 source locator，还是 `sourcePath + excerpt + optional lineRange` 已经足够复查？
+- `needs_human_check` 在真实日志中是否应该继续作为 verdict，还是拆成 verifier status 与业务 verdict 两个字段？
+- 什么时候才有足够证据进入 SQLite event store / Local Read-only Runner，而不是继续完善 fixture runner？
 
 ### 18.7 Prompt 2 Completion Checklist
 
@@ -1343,7 +1522,7 @@ SQLite event store、minimal capability registry、`read_log` / `extract_regress
 - 2026-05-11：在 Cursor 中建立持久规则和 prompt library，用多 agent review 推动计划持续优化。
 - 2026-05-11：第一轮正式研究应优先做 Open Source Coverage Mapping，因为它决定哪些层应该自研，哪些层应该集成。
 - 2026-05-11：Open Source Coverage Mapping 后决定第一版不重做 coding agent、browser automation、desktop runtime、sandbox、CI pipeline 或通用 durable workflow；第一版自研重点收敛到 TaskSpec、Run/Event、Evidence、Policy、Artifact 和最小 Verifier。
-- 2026-05-11：Temporal/LangGraph 暂定为长期可集成后端或参考实现，MVP 先用 SQLite event store 和极简 DAG runner 验证 OS 语义。
+- 2026-05-11：Temporal/LangGraph 暂定为长期可集成后端或参考实现；Phase 1a 先用 `run.json`、`events.jsonl` 和静态 fixture runner 验证 OS 语义，SQLite event store 延后。
 - 2026-05-11：CUA、Browser-use、E2B、Devbox、Dagger 均定位为 adapter/provider，不进入第一版核心内核。
 - 2026-05-11：Plan Optimizer 评审后决定本轮最低分维度是 Evidence Graph / Verifier Runtime 设计成熟度和 MVP 可执行性。
 - 2026-05-11：MVP 收敛为 `Read-only Regression Evidence Demo`，只做 regression log -> TaskSpec -> Evidence list -> rule verifier -> email draft artifact。
@@ -1353,10 +1532,13 @@ SQLite event store、minimal capability registry、`read_log` / `extract_regress
 - 2026-05-11：`TaskSpec` v1 默认采用模板/表单化 schema；LLM 只能生成草稿，不能绕过 schema 和 verifier 直接驱动执行。
 - 2026-05-11：Evidence/Verifier 属于自研 OS 语义；第一版只可集成通用 JSON/schema 校验工具，不集成 CUA、LangGraph、Temporal 或 coding agent 作为核心依赖。
 - 2026-05-11：`unknown` 和 `needs_human_check` 是安全 verdict，不是失败兜底；证据冲突、来源不足、warning/waiver 不可判定时必须优先输出它们，而不是假定 all passed。
-- 2026-05-11：本轮 Plan Optimizer 选择 `Feasibility Critic Review` sprint，因为当前最低可改进维度是 MVP 可执行性和风险控制/范围收敛度。
-- 2026-05-11：Phase 1a 的第一可执行切片收敛为 deterministic fixture contract gate；不做 daemon、SQLite、LLM、CLI UX、capability registry 或真实 adapter。
-- 2026-05-11：第一批 regression fixture 先使用合成日志覆盖 `passed`、`failed`、`incomplete`、`warning_or_waiver`、`ambiguous`；真实脱敏日志延后用于校准而不是阻塞 MVP。
-- 2026-05-11：`lineRange` 缺失时，v1 不新增复杂 locator；用 `fixture_hash` + exact `excerpt` 满足可复查性，除非 fixture gate 证明不够。
+- 2026-05-11：Feasibility Critic Review 后决定 Phase 1a 只做静态 fixture runner；SQLite event store、daemon、HTTP API、scheduler、resume/replay、CUA/browser/sandbox adapter 均延后到 fixture gate 之后。
+- 2026-05-11：第一批 fixture 默认使用合成日志覆盖 passed / failed / incomplete / warning-or-waiver / ambiguous 五类路径；真实脱敏日志只作为下一阶段 evidence robustness 验证，不阻塞 Phase 1a。
+- 2026-05-11：Phase 1a 的状态记录先用 `run.json` 和 append-only `events.jsonl`；只有当 fixture runner 证明 evidence/verifier 语义有效后，才设计 SQLite 表结构。
+- 2026-05-11：本轮 Plan Optimizer 选择 `Local Workflow Daemon MVP` sprint，但将其收敛为 one-shot Fixture Runner Contract；Phase 1a 不做 daemon、HTTP API、watch mode、SQLite、workspace registry 或 adapter 集成。
+- 2026-05-11：Fixture runner v1 入口固定为 `fixture-runner --fixture-dir <fixtures/regression> --out-dir <artifacts/runs>`；只接受这两个必需参数，防止 MVP 变成通用 workflow backend。
+- 2026-05-11：Phase 1a 的规则 marker 先写成代码常量；外置 YAML/JSON 规则表延后到合成 fixture 通过且真实脱敏日志证明需要项目级配置之后。
+- 2026-05-11：`verifier_report.json` v1 最小字段固定为 run/fixture/status/generatedAt、ruleResults、artifactChecks 和 summary；golden validation 检查 verdict/evidence/email grounding，不做完整邮件 snapshot 对比。
 
 ## 20. Open Questions
 
@@ -1367,16 +1549,19 @@ SQLite event store、minimal capability registry、`read_log` / `extract_regress
 - `extract_regression_result` v1 以规则解析为主；如允许 LLM 辅助，只能填充候选 excerpt/classification，最终 verdict 必须由规则 verifier 决定。
 - `unknown / needs_human_check` 的默认触发条件写入 `13.2 Evidence / Verifier v1 Contract`，用于避免虚假 `all passed`。
 - `email_draft.md` 必须引用 `regression_result.json` 的 artifact id 和 evidence ids，且不得在邮件阶段生成新的 pass/fail 结论。
-- 第一批 fixture log 先用合成样例覆盖五类 verdict，真实脱敏样例延后用于校准。
-- `lineRange` 取不到时，v1 使用 `fixture_hash` + exact `excerpt` 复查来源，不引入额外 locator abstraction。
-- Phase 1a 先用固定脚本或测试命令跑通 fixture gate；CLI UX、SQLite event store 和真实 log adapter 全部进入 Phase 1b 或之后。
+- 第一批 fixture log 先用合成日志覆盖 all passed / failed / incomplete / warning-or-waiver / ambiguous；真实脱敏日志作为 fixture gate 通过后的扩展证据。
+- Phase 1a 不引入 SQLite event store；`run.json` 和 append-only `events.jsonl` 足够验证 event/evidence/artifact 语义。
+- `lineRange` 在 Phase 1a 仍是可选字段；只有当 `sourcePath + excerpt` 无法稳定复查时，才新增 content hash 或更复杂定位机制。
+- Fixture runner v1 入口固定为 `fixture-runner --fixture-dir <fixtures/regression> --out-dir <artifacts/runs>`；不提供 watch mode、HTTP API、后台 daemon、workspace registry 或额外配置参数。
+- `events.jsonl` v1 只记录 `run.created`、`task_spec.generated`、`read_log` / `extract_regression_result` 完成事件、artifact 写入、verifier 完成和 run 完成/失败；它服务复查，不承担 replay backend。
+- 规则 marker v1 使用代码常量；外置 YAML/JSON 规则表延后。
+- `verifier_report.json` v1 只需要 run/fixture/status/generatedAt、ruleResults、artifactChecks 和 summary；golden validation 不做完整 artifact snapshot，只检查 verdict、evidence 引用、email grounding 和负向 fixture 不得生成普通 all-passed 邮件。
 
 ### 20.2 仍开放的问题
 
-- 五类合成 fixture 的最小 marker taxonomy 应该如何定义，才能覆盖真实 regression 常见表达？
-- golden artifact 比对应比较完整 JSON，还是只比较 normalized semantic fields 以减少 timestamp/id 噪声？
-- Phase 1a 通过后，真实脱敏日志的采样标准是什么，如何避免把公司私有格式写死进 verifier？
-- Phase 1b 是否需要单独 `evidence` 表，还是继续让 evidence 作为 artifact 并只索引 run/event/artifact metadata？
+- 合成 fixture 通过后，最少需要多少真实脱敏日志才能证明 evidence extraction 没有过拟合？
+- 真实脱敏日志是否需要新增 `contentHash` 或更稳定的 source locator，还是 `sourcePath + excerpt + optional lineRange` 已经足够复查？
+- `needs_human_check` 在真实日志中是否应该继续作为 verdict，还是拆成 verifier status 与业务 verdict 两个字段？
 
 ## 21. Research Sprint Log
 
@@ -1534,9 +1719,69 @@ Evidence Graph / Verifier Runtime
 基于 `13.2 Evidence / Verifier v1 Contract` 严格删减字段、规则和 fixture gate，确认它是最小可验收 MVP，而不是隐含的新平台范围。
 ```
 
-### 2026-05-11: Plan Optimizer Sprint - Feasibility Critic Review
+### 2026-05-11: Plan Optimizer Sprint - Feasibility Critic Cutline
 
-本轮目标：执行一轮 bounded Agentic Engineering OS Plan Optimizer Loop，只从反方视角压缩 Phase 1a，不修改产品代码，不扩展通用平台愿景。
+本轮目标：执行一轮 bounded Plan Optimizer Loop，只针对当前最低分维度收敛 MVP 范围，不扩写通用 OS 愿景。
+
+本轮评分（修改前）：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：4/5
+- Open Source Mapping 完整度：4/5
+- Build vs Integrate 清晰度：4/5
+- Evidence Graph 设计成熟度：4/5
+- Verifier Runtime 设计成熟度：4/5
+- CUA Adapter 边界清晰度：4/5
+- 风险控制和范围收敛度：3/5
+
+最低分维度：
+
+- 风险控制和范围收敛度
+- MVP 可执行性
+
+自动选择的 sprint 类型：
+
+```text
+Feasibility Critic Review
+```
+
+多视角评审结论：
+
+- Open Source Mapping Agent：现有 runtime / coding / workflow 项目已足够多，Phase 1a 不应引入 LangGraph、Temporal、CUA、Browser-use、E2B、Dagger 或 coding agent 依赖。
+- Architecture Agent：当前 contract 已可验收，但如果一开始设计 SQLite daemon 和完整 runner，会把验证 evidence 语义的问题变成平台工程问题。
+- CUA Adapter Agent：CUA 继续保持 post-MVP adapter；Phase 1a 的 observation 只来自本地 fixture log，不接受 screenshot、trajectory 或 GUI 操作作为证据来源。
+- Feasibility Critic Agent：把第一步冻结为静态 fixture runner，才能判断 Evidence/Verifier 是否真的比普通 chat 更可靠。
+- Research Strategy Agent：演示路线应优先展示 5 个 fixture 的 golden verdict 和 grounded email，而不是展示 UI、daemon 或多 agent 协作。
+
+本轮写回：
+
+- 新增 `13.3 MVP Feasibility Cutline`，把 Phase 1a 定义为静态 fixture runner。
+- 将 Phase 1 最小组件从 SQLite event store 收敛为 `run.json` + append-only `events.jsonl`；SQLite 延后到 fixture gate 之后。
+- 更新 Research Backlog，把下一步改为 Fixture Runner MVP，并把 Local Read-only Runner 后移。
+- 更新 Decision Log：合成 fixture 先行、真实脱敏日志后置、SQLite/daemon/adapter 延后。
+- 更新 Open Questions：关闭 fixture 来源、SQLite 起步和 lineRange/hash 的 Phase 1a 默认决策，保留 runner 入口、规则配置和 verifier report 字段问题。
+
+本轮后评分：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：4/5
+- Open Source Mapping 完整度：4/5
+- Build vs Integrate 清晰度：4/5
+- Evidence Graph 设计成熟度：4/5
+- Verifier Runtime 设计成熟度：4/5
+- CUA Adapter 边界清晰度：4/5
+- 风险控制和范围收敛度：4/5
+
+下一轮建议：
+
+```text
+执行 Local Workflow Daemon MVP 中的 Fixture Runner 子 sprint：
+只定义最薄入口、fixture 目录结构、golden artifact 结构和 verifier_report.json 字段；不要引入 SQLite、daemon、CUA 或多 agent。
+```
+
+### 2026-05-11: Plan Optimizer Sprint - Fixture Runner MVP Contract
+
+本轮目标：执行一轮 bounded Plan Optimizer Loop，在不修改产品代码的前提下，把下一步 Fixture Runner 的实现路径从开放问题收敛成可验收契约。
 
 本轮评分（修改前）：
 
@@ -1549,7 +1794,7 @@ Evidence Graph / Verifier Runtime
 - CUA Adapter 边界清晰度：4/5
 - 风险控制和范围收敛度：4/5
 
-最低分维度：
+最低可改进维度：
 
 - MVP 可执行性
 - 风险控制和范围收敛度
@@ -1557,41 +1802,41 @@ Evidence Graph / Verifier Runtime
 自动选择的 sprint 类型：
 
 ```text
-Feasibility Critic Review
+Local Workflow Daemon MVP
 ```
 
 多视角评审结论：
 
-- Open Source Mapping Agent：开源生态已经覆盖 workflow backend、sandbox、coding agent 和 browser/computer runtime；Phase 1a 不应因集成选型阻塞 OS 语义验证。
-- Architecture Agent：当前 contract 已足够表达 evidence/verifier 语义，但还需要固定第一个可执行切片的输入、输出和停止条件。
-- CUA Adapter Agent：CUA 继续保持 post-MVP；Phase 1a evidence 只能来自 fixture log、structured artifact 和 verifier report。
-- Feasibility Critic Agent：最大风险是把 fixture contract 悄悄膨胀成 daemon/SQLite/CLI/LLM 项目；必须明确这些全部后移。
-- Research Strategy Agent：下一轮研究应围绕 fixture harness 和 golden report，而不是继续增加 OS 概念。
+- Open Source Mapping Agent：Temporal/LangGraph/SQLite 等 durable backend 仍应后置；本轮只需要文件化 fixture runner，不引入 workflow engine。
+- Architecture Agent：实现路径最缺的是 runner 入口、fixture 目录、事件字段和 verifier report 字段；这些应成为 Phase 1a contract。
+- CUA Adapter Agent：CUA 继续保持 post-MVP；Phase 1a 不接受 screenshot、trajectory、GUI observation 或 sandbox output 作为 evidence。
+- Feasibility Critic Agent：如果把 Local Workflow Daemon 名称直接落成 daemon，会重新扩大范围；必须把第一步限定为 one-shot offline runner。
+- Research Strategy Agent：演示重点应该是 5 个 fixture 的 golden verdict、grounded email 和 verifier failure 可复查，而不是 UI、后台服务或多 agent 协作。
 
 本轮写回：
 
-- 新增 `Phase 1a 范围切线：反方评审后的最小可执行路径`。
-- 决定第一批 regression fixture 先使用合成日志，真实脱敏日志延后校准。
-- 决定 Phase 1a 先使用固定脚本或测试命令，不做 CLI UX、SQLite、LLM、daemon 或 capability registry。
-- 决定 `lineRange` 缺失时用 `fixture_hash` + exact `excerpt` 保持可复查性。
-- 更新 Research Backlog、Decision Log、Open Questions 和下一轮研究问题。
+- 新增 `13.4 Fixture Runner MVP Operating Contract`。
+- 固定 runner 入口为 `fixture-runner --fixture-dir <fixtures/regression> --out-dir <artifacts/runs>`。
+- 固定最小 fixture 目录、输出目录、`RunEventV1` 和 `VerifierReportV1` 字段。
+- 决定 Phase 1a marker 先用代码常量，外置规则表延后。
+- 更新 Research Backlog、Decision Log、Open Questions，把 runner 入口、规则配置和 verifier report 字段从开放问题移入默认决策。
 
 本轮后评分：
 
 - Vision 清晰度：5/5
 - MVP 可执行性：5/5
 - Open Source Mapping 完整度：4/5
-- Build vs Integrate 清晰度：4/5
+- Build vs Integrate 清晰度：5/5
 - Evidence Graph 设计成熟度：4/5
-- Verifier Runtime 设计成熟度：4/5
+- Verifier Runtime 设计成熟度：5/5
 - CUA Adapter 边界清晰度：4/5
 - 风险控制和范围收敛度：5/5
 
 下一轮建议：
 
 ```text
-执行 Local Workflow Daemon MVP：
-但只允许落到 Phase 1a Fixture Harness Design，定义 research fixture 文件、schema 文件、golden verifier report 和 normalized comparison 规则；仍不要进入 daemon、SQLite、真实 adapter 或产品代码。
+执行 Plan Maintenance：
+只有在 fixture runner 实现结果、5 个 fixture 输出或真实脱敏日志证据出现后，再整理 Decision Log / Open Questions；没有新证据前不要继续扩写 OS 愿景。
 ```
 
 ## 22. Parking Lot
