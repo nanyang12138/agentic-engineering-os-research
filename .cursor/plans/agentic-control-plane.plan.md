@@ -527,7 +527,42 @@ Run Kernel
 
 ### Phase 1：Read-only Regression Evidence Demo
 
-第一版不要先实现完整 `Local Workflow Daemon`，而是实现一个 read-only 证据闭环 demo：
+第一版不要先实现完整 `Local Workflow Daemon`，而是分成两个 gate：先用 deterministic static fixture runner 验证 Evidence / Verifier / Artifact 契约，再把同一套 schema 迁入本地 read-only runner。
+
+#### Phase 1a：Static Fixture Contract
+
+目标：在零 IDE、零 CUA、零 CI、零 SQLite daemon 的条件下，先证明系统能把固定 regression observation 变成可复查的 evidence、artifact 和 verifier verdict。
+
+最小输入：
+
+- 一个提交到仓库或研究 fixtures 目录中的固定 regression log fixture。
+- 可选 `fixture_meta.json`：记录 fixture id、来源说明、hash、run id、时间戳和人工标注期望。
+- 可选 `task_spec.fixture.json`：用模板化 TaskSpec 代替 LLM 生成，避免第一步被 Intent-to-Spec 不确定性拖住。
+
+固定输出：
+
+- `run.json`：记录 task、模板 TaskSpec、steps 和最终状态。
+- `events.jsonl`：append-only 事件视图，每条至少包含 event id、step id、type、timestamp、causal refs。
+- `evidence.json`：记录 log 片段、来源、line range、classification、confidence 和 evidence id。
+- `regression_result.json`：只保存提取器的结构化候选结论，包括 passed/failed/incomplete/warning/unknown。
+- `email_draft.md`：只允许引用 `regression_result.json` 和 evidence ids，不允许重新自由断言结果。
+- `verifier_report.json`：唯一权威 verdict，记录 overall_status、checks、blocking failures、触发规则 id、引用的 evidence ids 和 fixture hash。
+
+Phase 1a 验收：
+
+- 所有 JSON artifact 通过版本化 schema validation。
+- `verifier_report.json` 至少包含 `schema_validation`、`evidence_refs`、`classification_consistency`、`email_draft_uses_structured_facts` 四类 check。
+- 至少覆盖 `all passed`、`failed`、`incomplete`、`warning/waiver`、`ambiguous` 五类 fixture；负例必须输出 `unknown`、`needs_human_check` 或 FAIL，不能伪造通过。
+- Phase 1a 不引入 SQLite、daemon、真实 log adapter、Capability registry、CUA、Browser-use、E2B、Temporal 或 LangGraph。
+
+Build vs Integrate：
+
+- Build：Run/Event/Evidence/Artifact schema、fixture harness、rule-based verifier、`verifier_report.json` 契约。
+- Integrate / Defer：JSON Schema 或等价校验库可直接使用成熟实现；SQLite、真实 adapter、workflow backend、computer runtime 和 LLM TaskSpec 生成全部后移。
+
+#### Phase 1b：Local Read-only Runner
+
+在 Phase 1a schema 和 verifier 绿灯后，再实现一个 read-only 证据闭环 demo：
 
 - 输入：一个固定 regression summary/log 路径 + 用户目标。
 - 流程：生成 `TaskSpec` -> 读取 log -> 提取 pass/fail/warning/incomplete -> 生成 Evidence list -> 规则验证 -> 生成英文邮件草稿 artifact。
@@ -748,11 +783,14 @@ Read-only Regression Evidence Demo
 - 能区分 `all passed`、`failed`、`incomplete`、`warning/waiver`、`unknown`。
 - 证据不足时必须输出 `unknown` 或 `needs_human_check`，不能编造结论。
 - artifact 必须引用 evidence ids。
+- `verifier_report.json` 必须包含 `overall_status`、`checks[]`、`blocking_failures[]`、`rule_id`、`evidence_ids` 和 `fixture_hash`。
+- 邮件草稿如果出现未被 `regression_result.json` 或 evidence ids 支撑的新结论，verifier 必须失败。
 
 硬性验收：
 
 - 如果 demo 不能比普通 chat 更可复查、更少幻觉、更容易复用，就暂停扩展 OS 层。
 - MVP 不执行写代码、发邮件、开 PR、控制 IDE、控制桌面或运行危险命令。
+- Phase 1a 必须先用 fixture 负例证明 verifier 能拒绝 `ambiguous`、`incomplete` 或证据不足的结论，然后才能进入 SQLite 或真实 log adapter。
 
 ### 13.2 Evidence / Verifier v1 Contract
 
@@ -1395,6 +1433,8 @@ Static fixture runner
 Regression log -> evidence -> email artifact demo
 ```
 
+SQLite event store、minimal capability registry、`read_log` / `extract_regression_result` / `write_artifact` adapters 属于 Phase 1b；只有 Phase 1a fixture contract 通过后才进入实现。
+
 ### 18.5 Evidence Log
 
 - LangGraph：公开文档和项目介绍强调 stateful agents、durable execution、checkpoint、human-in-the-loop 和 graph execution。
@@ -1524,7 +1564,7 @@ regression log -> TaskSpec -> evidence -> verifier -> email artifact。
 
 本轮目标：按 Plan Optimizer 流程评估主计划质量，自动选择最低分方向，并做最小范围修改。
 
-当前质量评分：
+本轮开始质量评分：
 
 - Vision 清晰度：5/5
 - MVP 可执行性：3/5
