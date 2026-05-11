@@ -1254,6 +1254,7 @@ Phase 1a 的执行边界：
 7. Evidence List + Verifier Runtime：已固化 `LogEvidenceV1`、`RegressionResultArtifactV1`、email grounding 规则和 fixture gate；下一步必须用 fixture runner artifact 验证规则是否过多或不足。
 8. Local Read-only Runner：仅在 fixture gate 和 evidence intake gate 通过后，再决定是否引入 SQLite event store、极简 step runner 和更完整的 run state。
 9. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
+10. Plan Maintenance Evidence Wait Gate：没有 5 个 synthetic fixture 的实际 artifact bundle、负向 fixture 的 verifier failure 例子或真实脱敏日志 evidence packet 前，后续 optimizer loop 只允许记录 no-op evidence gap，不继续扩写 OS 愿景、daemon/API、adapter 或外部 runtime 范围。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -1522,6 +1523,7 @@ Phase 1a 不需要 minimal capability registry 或 adapter framework；这些属
 - 2026-05-11：本轮 Plan Optimizer 选择 `Plan Maintenance`；在没有 fixture runner evidence packet 前，不继续扩展 OS 愿景、daemon/API、adapter 或外部 runtime 集成。
 - 2026-05-11：Phase 1a 验收真相源固定为 `verifier_report.json`；`run.json.status` 只表示流程完成，`regression_result.json` 只表示业务 verdict artifact，`email_draft.md` 不得成为判断来源。
 - 2026-05-11：`read_log`、`extract_regression_result`、`write_artifact` 在 Phase 1a 只是同进程确定性函数；capability registry、adapter framework、真实 log provider 和 CUA/browser/sandbox observation 全部后移。
+- 2026-05-11：本轮 Plan Optimizer 再次选择 `Plan Maintenance`，结论是当前计划已经足够收敛；没有 fixture artifact evidence packet 前，不应为了提高评分而新增抽象或重新打开开源集成讨论。
 
 ## 20. Open Questions
 
@@ -1550,6 +1552,7 @@ Phase 1a 不需要 minimal capability registry 或 adapter framework；这些属
 - `needs_human_check` 在真实日志中是否应该继续作为 verdict，还是拆成 verifier status 与业务 verdict 两个字段？
 - Phase 1a 实际 artifact 生成后，哪些 verifier rule 产生误报或漏报，需要删减、合并或拆分？
 - 第一批真实脱敏日志的 evidence packet 应该如何记录来源和人工标注，才能既可复查又不泄露敏感信息？
+- 下一轮如果只拿到合成 fixture artifact 而没有真实脱敏日志，是否已经足够进入 Phase 1b，还是仍需先补一个真实日志 intake review？
 
 ## 21. Research Sprint Log
 
@@ -1885,6 +1888,71 @@ Plan Maintenance
 ```text
 执行 Local Workflow Daemon MVP 的 Fixture Runner Evidence Packet sprint：
 不要继续改计划，除非已经有 5 个 synthetic fixture 的实际 artifact 输出；下一轮应检查 `verifier_report.json`、负向 fixture、email grounding 和真实脱敏日志 intake 是否暴露新的规则缺口。
+```
+
+### 2026-05-11: Plan Optimizer Sprint - Evidence Wait No-op
+
+本轮目标：执行一轮 bounded Plan Optimizer Loop，检查当前计划是否仍有不依赖新证据的实质优化空间。
+
+本轮评分：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：5/5
+- Open Source Mapping 完整度：4/5
+- Build vs Integrate 清晰度：5/5
+- Evidence Graph 设计成熟度：5/5
+- Verifier Runtime 设计成熟度：5/5
+- CUA Adapter 边界清晰度：5/5
+- 风险控制和范围收敛度：5/5
+
+最低可改进维度：
+
+- Open Source Mapping 完整度
+
+自动选择的 sprint 类型：
+
+```text
+Plan Maintenance
+```
+
+多视角评审结论：
+
+- Open Source Mapping Agent：开源覆盖仍可继续补引用，但当前缺口不会改变 Phase 1a 的 Build vs Integrate；没有 fixture artifact 前不应重新打开 LangGraph、Temporal、CUA、Browser-use 或 sandbox provider 讨论。
+- Architecture Agent：正式设计已经把 Phase 1a 收敛到 one-shot fixture runner；继续增加 schema 或 CLI/API 细节需要实际 runner 输出支撑。
+- CUA Adapter Agent：CUA 边界已经足够清楚，仍是 post-MVP adapter；本轮无理由引入 screenshot、trajectory 或 GUI observation。
+- Feasibility Critic Agent：没有 5-fixture evidence packet 时，任何新抽象都更可能扩大范围而不是提高可执行性。
+- Research Strategy Agent：下一轮有价值输入应是 artifact bundle、verifier failure 例子和真实脱敏日志 intake 观察，而不是更多愿景文本。
+
+本轮写回：
+
+- Research Backlog 增加 `Plan Maintenance Evidence Wait Gate`，明确没有 evidence packet 前只记录 no-op evidence gap。
+- Decision Log 记录本轮不新增正式抽象的取舍。
+- Open Questions 增加 Phase 1b 进入门槛问题：只有合成 fixture artifact 是否足够，还是必须先补真实日志 intake review。
+- Research Sprint Log 记录本轮 no-op 原因和缺失证据。
+
+缺失证据：
+
+- 5 个 synthetic fixture 的实际 artifact bundle。
+- 至少一个负向 fixture 的 `verifier_report.json.status="failed"` 或安全降级例子。
+- `email_draft.md` 在 warning/waiver、ambiguous、incomplete 场景下拒绝普通 all-passed 汇报的输出。
+- 真实脱敏日志是否暴露新的 marker、source locator、hash 或人工标注问题。
+
+本轮后评分：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：5/5
+- Open Source Mapping 完整度：4/5
+- Build vs Integrate 清晰度：5/5
+- Evidence Graph 设计成熟度：5/5
+- Verifier Runtime 设计成熟度：5/5
+- CUA Adapter 边界清晰度：5/5
+- 风险控制和范围收敛度：5/5
+
+下一轮建议：
+
+```text
+执行 Local Workflow Daemon MVP 的 Fixture Runner Evidence Packet sprint：
+先收集或实现 5 个 synthetic fixture 的 artifact bundle，再根据 verifier_report、email grounding 和负向 fixture 结果决定是否更新 schema、rules 或 Phase 1b gate。
 ```
 
 ## 22. Parking Lot
