@@ -1164,6 +1164,7 @@ Build vs Integrate：
 - 不要先做多个 agent 互相聊天。
 - 不要先自动改大量代码。
 - 不要先追求通用平台。
+- 不要把 Phase 1a 直接扩展成常驻 daemon、后台队列、SQLite 依赖或真实外部 adapter。
 - 不要实际集成 CUA、Browser-use、E2B、Modal、Dagger、Temporal 或 LangGraph。
 - 不要实现完整 Evidence Graph，先做 Evidence list。
 - 不要实现完整 Capability Runtime，先做三个 read-only capability。
