@@ -27,7 +27,7 @@ todos:
     content: 设计 Evidence Graph 和 Verifier Runtime，让每个结论都有可追溯证据和验证流程
     status: in_progress
   - id: build-local-mvp
-    content: 规划本地 MVP：SQLite event store、shell/git/file/log adapters、approval gate
+    content: 规划本地 MVP：先用 static fixture runner 验证契约，再进入 SQLite event store、log adapter、approval gate
     status: pending
   - id: validate-engineering-loop
     content: 用 regression log 分析和英文汇报邮件生成验证端到端工程闭环
@@ -527,11 +527,46 @@ Run Kernel
 
 ### Phase 1：Read-only Regression Evidence Demo
 
-第一版不要先实现完整 `Local Workflow Daemon`，而是实现一个 read-only 证据闭环 demo：
+第一版不要先实现完整 `Local Workflow Daemon`，而是分成两个 gate：先用 deterministic static fixture runner 验证 Evidence / Verifier / Artifact 契约，再把同一套 schema 迁入本地 read-only runner。
+
+#### Phase 1a：Static Fixture Contract
+
+目标：在零 IDE、零 CUA、零 CI、零 SQLite daemon 的条件下，先证明系统能把固定 regression observation 变成可复查的 evidence、artifact 和 verifier verdict。
+
+最小输入：
+
+- 一个提交到仓库或研究 fixtures 目录中的固定 regression log fixture。
+- 可选 `fixture_meta.json`：记录 fixture id、来源说明、hash、run id、时间戳和人工标注期望。
+- 可选 `task_spec.fixture.json`：用模板化 TaskSpec 代替 LLM 生成，避免第一步被 Intent-to-Spec 不确定性拖住。
+
+固定输出：
+
+- `run.json`：记录 task、模板 TaskSpec、steps 和最终状态。
+- `events.jsonl`：append-only 事件视图，每条至少包含 event id、step id、type、timestamp、causal refs。
+- `evidence.json`：记录 log 片段、来源、line range、classification、confidence 和 evidence id。
+- `regression_result.json`：只保存提取器的结构化候选结论，包括 passed/failed/incomplete/warning/unknown。
+- `email_draft.md`：只允许引用 `regression_result.json` 和 evidence ids，不允许重新自由断言结果。
+- `verifier_report.json`：唯一权威 verdict，记录 overall_status、checks、blocking failures、触发规则 id、引用的 evidence ids 和 fixture hash。
+
+Phase 1a 验收：
+
+- 所有 JSON artifact 通过版本化 schema validation。
+- `verifier_report.json` 至少包含 `schema_validation`、`evidence_refs`、`classification_consistency`、`email_draft_uses_structured_facts` 四类 check。
+- 至少覆盖 `all passed`、`failed`、`incomplete`、`warning/waiver`、`ambiguous` 五类 fixture；负例必须输出 `unknown`、`needs_human_check` 或 FAIL，不能伪造通过。
+- Phase 1a 不引入 SQLite、daemon、真实 log adapter、Capability registry、CUA、Browser-use、E2B、Temporal 或 LangGraph。
+
+Build vs Integrate：
+
+- Build：Run/Event/Evidence/Artifact schema、fixture harness、rule-based verifier、`verifier_report.json` 契约。
+- Integrate / Defer：JSON Schema 或等价校验库可直接使用成熟实现；SQLite、真实 adapter、workflow backend、computer runtime 和 LLM TaskSpec 生成全部后移。
+
+#### Phase 1b：Local Read-only Runner
+
+在 Phase 1a schema 和 verifier 绿灯后，再实现一个 read-only 证据闭环 demo：
 
 - 输入：一个固定 regression summary/log 路径 + 用户目标。
 - 流程：生成 `TaskSpec` -> 读取 log -> 提取 pass/fail/warning/incomplete -> 生成 Evidence list -> 规则验证 -> 生成英文邮件草稿 artifact。
-- 输出：`run.json`、`evidence.json`、`regression_result.json`、`email_draft.md`。
+- 输出：沿用 Phase 1a 的 `run.json`、`events.jsonl`、`evidence.json`、`regression_result.json`、`email_draft.md`、`verifier_report.json`。
 
 建议最小组件：
 
@@ -730,9 +765,11 @@ Read-only Regression Evidence Demo
 最小输出：
 
 - `run.json`：记录 task、TaskSpec、steps、events、状态。
+- `events.jsonl`：记录 step、tool call、observation、verification 和 artifact 写入事件。
 - `evidence.json`：记录 log 片段、来源路径、时间戳、提取结论、可信度。
 - `regression_result.json`：结构化结果，包括 passed/failed/incomplete/warning/unknown。
 - `email_draft.md`：英文邮件草稿，必须引用 `regression_result.json` 的结论，而不是重新自由生成。
+- `verifier_report.json`：机器可读验证报告，是 demo 是否通过的唯一权威 verdict。
 
 最小 capability：
 
@@ -746,11 +783,14 @@ Read-only Regression Evidence Demo
 - 能区分 `all passed`、`failed`、`incomplete`、`warning/waiver`、`unknown`。
 - 证据不足时必须输出 `unknown` 或 `needs_human_check`，不能编造结论。
 - artifact 必须引用 evidence ids。
+- `verifier_report.json` 必须包含 `overall_status`、`checks[]`、`blocking_failures[]`、`rule_id`、`evidence_ids` 和 `fixture_hash`。
+- 邮件草稿如果出现未被 `regression_result.json` 或 evidence ids 支撑的新结论，verifier 必须失败。
 
 硬性验收：
 
 - 如果 demo 不能比普通 chat 更可复查、更少幻觉、更容易复用，就暂停扩展 OS 层。
 - MVP 不执行写代码、发邮件、开 PR、控制 IDE、控制桌面或运行危险命令。
+- Phase 1a 必须先用 fixture 负例证明 verifier 能拒绝 `ambiguous`、`incomplete` 或证据不足的结论，然后才能进入 SQLite 或真实 log adapter。
 
 ## 14. 第一版不要做什么
 
@@ -860,12 +900,13 @@ Read-only Regression Evidence Demo
 推荐按以下顺序推进：
 
 1. Open Source Coverage Mapping：已完成，结论是自研 OS 语义，集成底层 runtime 和 coding agent。
-2. MVP Verification Contract：已启动，把第一版压缩成 read-only regression evidence demo。
-3. Intent-to-Spec MVP：定义 regression 场景的 `TaskSpec` schema、成功标准、证据要求和审批点。
-4. Evidence List + Verifier Runtime：定义 `LogEvidence`、`RegressionResultArtifact`、`EmailDraftArtifact` 和 rule verifier。
-5. Local Read-only Runner：设计 SQLite event store、极简 step runner、`read_log`、`extract_regression_result`、`write_artifact`。
-6. Feasibility Critic Review：在 MVP schema 明确后，再用反方视角砍掉不必要字段和流程。
-7. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
+2. Static Fixture Contract：先定义固定 regression fixtures、golden outputs、`events.jsonl` 和 `verifier_report.json`，用负例验证 verifier 能拒绝证据不足。
+3. MVP Verification Contract：已启动，把第一版压缩成 read-only regression evidence demo，并以 Phase 1a 作为进入本地 runner 的门禁。
+4. Intent-to-Spec MVP：定义 regression 场景的 `TaskSpec` schema、成功标准、证据要求和审批点；Phase 1a 先用模板 fixture，LLM 生成后移。
+5. Evidence List + Verifier Runtime：定义 `LogEvidence`、`RegressionResultArtifact`、`EmailDraftArtifact`、`VerifierReportArtifact` 和 rule verifier。
+6. Local Read-only Runner：在 Phase 1a 通过后，再设计 SQLite event store、极简 step runner、`read_log`、`extract_regression_result`、`write_artifact`。
+7. Feasibility Critic Review：在 MVP schema 明确后，再用反方视角砍掉不必要字段和流程。
+8. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -1061,14 +1102,14 @@ Read-only Regression Evidence Demo
 
 ```text
 TaskSpec generator
-SQLite event store
 Run/Step/ToolCall/Observation/Evidence/Artifact schema
-Minimal capability registry
-read_log / extract_regression_result / write_artifact adapters
-Policy gate
+events.jsonl + disk JSON artifacts for Phase 1a
 Rule verifier
+verifier_report.json
 Regression log -> evidence -> email artifact demo
 ```
+
+SQLite event store、minimal capability registry、`read_log` / `extract_regression_result` / `write_artifact` adapters 属于 Phase 1b；只有 Phase 1a fixture contract 通过后才进入实现。
 
 ### 18.5 Evidence Log
 
@@ -1091,11 +1132,11 @@ Regression log -> evidence -> email artifact demo
 
 ### 18.6 下一轮问题
 
-- 如果 MVP 不引入 LangGraph/Temporal，极简 DAG runner 和 SQLite event store 的 schema 应该怎么设计？
+- Phase 1a 的 fixture 目录结构、schema 文件路径、golden artifact 命名和 `verifier_report.json` 字段应该如何冻结？
+- Phase 1a 通过后，SQLite event store 应该如何复用同一套 Run/Event/Evidence/Artifact schema，避免另起一套格式？
 - `TaskSpec` 是否应该先由 LLM 生成，再由规则 verifier 检查，还是直接用表单/模板约束？
 - Evidence Graph 的最小节点类型是否只需要 `CommandEvidence`、`FileEvidence`、`LogEvidence`、`HumanApprovalEvidence`？
 - Regression demo 是否应该完全避开代码修改，只聚焦 read-only evidence 和 email artifact？
-- CUA/E2B/Browser-use 是否都推迟到第二阶段，只先设计 adapter contract？
 
 ### 18.7 Prompt 2 Completion Checklist
 
@@ -1120,6 +1161,7 @@ Regression log -> evidence -> email artifact demo
 - 2026-05-11：MVP 收敛为 `Read-only Regression Evidence Demo`，只做 regression log -> TaskSpec -> Evidence list -> rule verifier -> email draft artifact。
 - 2026-05-11：第一版不实际集成 CUA、Browser-use、E2B、Modal、Dagger、Temporal、LangGraph；只预留 adapter contract。
 - 2026-05-11：第一版不实现完整 Evidence Graph，先实现 Evidence list；不实现完整 Capability Runtime，先实现 `read_log`、`extract_regression_result`、`write_artifact`。
+- 2026-05-11：新增 Phase 1a `Static Fixture Contract` 作为进入 SQLite / local runner 前的门禁；Build 固定 fixture harness、schema、rule verifier 和 `verifier_report.json`，Defer SQLite daemon、真实 adapter、LLM TaskSpec、CUA 和 workflow backend。
 
 ## 20. Open Questions
 
@@ -1129,6 +1171,9 @@ Regression log -> evidence -> email artifact demo
 - `unknown / needs_human_check` 的触发条件应该如何定义，才能避免虚假 `all passed`？
 - `email_draft.md` 如何强制引用 `regression_result.json`，避免邮件生成阶段重新幻觉？
 - 本地 MVP 应该用 CLI 启动，还是先用 Cursor 手动驱动一轮流程来验证 schema？
+- `verifier_report.json` 与 `regression_result.json` 的职责边界如何切分：谁拥有最终 verdict，谁只是候选提取结果？
+- 第一批脱敏 regression fixture 是否足以覆盖 `all passed`、`failed`、`incomplete`、`warning/waiver`、`ambiguous` 五类判定？
+- schema 文件应该如何版本化，才能避免 Phase 1a golden artifacts 和 Phase 1b SQLite runner 分叉？
 
 ## 21. Research Sprint Log
 
@@ -1175,7 +1220,7 @@ regression log -> TaskSpec -> evidence -> verifier -> email artifact。
 
 本轮目标：按 Plan Optimizer 流程评估主计划质量，自动选择最低分方向，并做最小范围修改。
 
-当前质量评分：
+本轮开始质量评分：
 
 - Vision 清晰度：5/5
 - MVP 可执行性：3/5
@@ -1224,6 +1269,71 @@ Evidence Graph / Verifier Runtime Sprint
 ```text
 执行 Intent-to-Spec MVP Sprint：
 只为 regression log 场景定义 TaskSpec schema、字段约束、成功标准、证据要求、unknown/needs_human_check 触发条件。
+```
+
+### 2026-05-11: Evidence Graph / Verifier Runtime Sprint
+
+本轮目标：按 Plan Optimizer 流程重新评分主计划，选择一个最低分方向，并只做能让 MVP 更可执行的收敛修改。
+
+本轮开始质量评分：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：3/5
+- Open Source Mapping 完整度：4/5
+- Build vs Integrate 清晰度：4/5
+- Evidence Graph 设计成熟度：3/5
+- Verifier Runtime 设计成熟度：2/5
+- CUA Adapter 边界清晰度：4/5
+- 风险控制和范围收敛度：3/5
+
+最低分维度：
+
+- Verifier Runtime 设计成熟度
+- MVP 可执行性
+
+选择的 sprint 类型：
+
+```text
+Evidence Graph / Verifier Runtime
+```
+
+五视角评审结论：
+
+- Open Source Mapping Agent：支持先用 fixture harness 验证 OS 语义，schema validation 可集成成熟 JSON Schema 或等价库，不自研 schema DSL。
+- Architecture Agent：支持把 Phase 1 拆为 1a fixture contract 和 1b local read-only runner；SQLite、daemon、adapter 应消费同一套 schema，而不是先定义运行时。
+- CUA Adapter Agent：确认 CUA 不进入 MVP 执行面；Phase 1a 只验证 observation/evidence/artifact 契约，CUA 仍留在 post-MVP adapter 层。
+- Feasibility Critic Agent：指出最大风险是把 TaskSpec、Planner、Capability Runtime、SQLite、Verifier 和 email draft 全塞进第一颗扣；建议先用负例 fixture 证明 verifier 能拒绝错误结论。
+- Research Strategy Agent：支持把 Phase 1a 定位为可复现、可录屏、可 CI 化的 evidence-first demo 基座，而不是最终产品形态。
+
+本轮修改：
+
+- 在 Phase 1 中新增 `Phase 1a: Static Fixture Contract`，明确固定输入、输出 artifact、验收标准和 Build vs Integrate。
+- 把本地 read-only runner 后移为 Phase 1b，只有 fixture schema 和 verifier 通过后才进入 SQLite / real log adapter。
+- 在 `MVP Verification Contract` 中新增 `events.jsonl`、`verifier_report.json`、负例 fixture 和邮件草稿引用一致性要求。
+- 更新 Research Backlog、Decision Log 和 Open Questions，使下一步聚焦 schema、fixture corpus 和 verifier verdict 边界。
+
+修改后预期评分：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：4/5
+- Open Source Mapping 完整度：4/5
+- Build vs Integrate 清晰度：5/5
+- Evidence Graph 设计成熟度：3/5
+- Verifier Runtime 设计成熟度：3/5
+- CUA Adapter 边界清晰度：4/5
+- 风险控制和范围收敛度：4/5
+
+Build vs Integrate 决策：
+
+- Build：fixture harness、Run/Event/Evidence/Artifact schema、rule-based verifier、`verifier_report.json` verdict contract。
+- Integrate：schema validation 使用成熟 JSON Schema 或等价库。
+- Defer：SQLite daemon、真实 log adapter、LLM TaskSpec 生成、CUA、Browser-use、E2B、Temporal、LangGraph。
+
+下一轮建议：
+
+```text
+执行 Local Workflow Daemon MVP Sprint：
+只定义 Phase 1a fixture 目录结构、schema 文件路径、golden artifact 命名、verifier_report 字段和最小负例集合，不写产品代码。
 ```
 
 ## 22. Parking Lot
