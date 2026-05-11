@@ -3,7 +3,6 @@ name: Cursor Code Review
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-  workflow_dispatch:
   issue_comment:
     types: [created]
 
@@ -16,7 +15,6 @@ jobs:
   cursor-review:
     if: >
       github.event_name == 'pull_request' ||
-      github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issue_comment' &&
        github.event.issue.pull_request &&
        contains(github.event.comment.body, '/cursor-review'))
@@ -53,12 +51,6 @@ jobs:
           ref: ${{ steps.pr_info.outputs.head_sha }}
           fetch-depth: 0
 
-      - name: Checkout repo for manual trigger
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: Install Cursor CLI
         run: |
           curl https://cursor.com/install -fsS | bash
@@ -72,25 +64,15 @@ jobs:
         run: |
           git diff --stat "$BASE_SHA...$HEAD_SHA" > pr_diff_stat.txt || true
           git diff "$BASE_SHA...$HEAD_SHA" > pr_diff.txt || true
-          echo "${{ github.event.pull_request.number }}" > pr_number.txt
 
       - name: Prepare PR diff for comment trigger
         if: github.event_name == 'issue_comment'
         env:
           BASE_SHA: ${{ steps.pr_info.outputs.base_sha }}
           HEAD_SHA: ${{ steps.pr_info.outputs.head_sha }}
-          PR_NUMBER: ${{ steps.pr_info.outputs.pr_number }}
         run: |
           git diff --stat "$BASE_SHA...$HEAD_SHA" > pr_diff_stat.txt || true
           git diff "$BASE_SHA...$HEAD_SHA" > pr_diff.txt || true
-          echo "$PR_NUMBER" > pr_number.txt
-
-      - name: Prepare diff for manual trigger
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          git diff --stat HEAD~1...HEAD > pr_diff_stat.txt || true
-          git diff HEAD~1...HEAD > pr_diff.txt || true
-          echo "" > pr_number.txt
 
       - name: Run Cursor review
         env:
@@ -99,7 +81,7 @@ jobs:
           agent --version
 
           {
-            echo "Please review the following changes."
+            echo "Please review the following PR changes."
             echo
             echo "Focus on:"
             echo "- correctness bugs"
@@ -121,7 +103,6 @@ jobs:
           agent -p --trust --model auto --output-format text "$(cat cursor_review_prompt.txt)" > cursor_review.md
 
       - name: Comment review result on PR
-        if: github.event_name == 'pull_request' || github.event_name == 'issue_comment'
         uses: actions/github-script@v7
         with:
           script: |
@@ -141,8 +122,3 @@ jobs:
               issue_number: prNumber,
               body: `## Cursor Review\n\n${body}`
             });
-
-      - name: Print review result for manual trigger
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          cat cursor_review.md
