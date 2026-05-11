@@ -1255,6 +1255,7 @@ Phase 1a 的执行边界：
 8. Local Read-only Runner：仅在 fixture gate 和 evidence intake gate 通过后，再决定是否引入 SQLite event store、极简 step runner 和更完整的 run state。
 9. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
 10. Plan Maintenance Evidence Wait Gate：没有 5 个 synthetic fixture 的实际 artifact bundle、负向 fixture 的 verifier failure 例子或真实脱敏日志 evidence packet 前，后续 optimizer loop 只允许记录 no-op evidence gap，不继续扩写 OS 愿景、daemon/API、adapter 或外部 runtime 范围。
+11. Evidence Wait Recheck：本轮复查仍未发现 `fixtures/regression`、`artifacts/runs`、`verifier_report.json`、`evidence.json` 或 `regression_result.json`；下一步仍应先产出 Phase 1a evidence packet，而不是补充开源 mapping 或 adapter 设计。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -1524,6 +1525,7 @@ Phase 1a 不需要 minimal capability registry 或 adapter framework；这些属
 - 2026-05-11：Phase 1a 验收真相源固定为 `verifier_report.json`；`run.json.status` 只表示流程完成，`regression_result.json` 只表示业务 verdict artifact，`email_draft.md` 不得成为判断来源。
 - 2026-05-11：`read_log`、`extract_regression_result`、`write_artifact` 在 Phase 1a 只是同进程确定性函数；capability registry、adapter framework、真实 log provider 和 CUA/browser/sandbox observation 全部后移。
 - 2026-05-11：本轮 Plan Optimizer 再次选择 `Plan Maintenance`，结论是当前计划已经足够收敛；没有 fixture artifact evidence packet 前，不应为了提高评分而新增抽象或重新打开开源集成讨论。
+- 2026-05-11：本轮 Evidence Wait Recheck 再次选择 `Plan Maintenance`；Open Source Mapping 完整度虽仍为 4/5，但当前缺口不会改变 Phase 1a Build vs Integrate，必须等待 fixture/verifier/email grounding evidence 后再调整计划。
 
 ## 20. Open Questions
 
@@ -1553,6 +1555,7 @@ Phase 1a 不需要 minimal capability registry 或 adapter framework；这些属
 - Phase 1a 实际 artifact 生成后，哪些 verifier rule 产生误报或漏报，需要删减、合并或拆分？
 - 第一批真实脱敏日志的 evidence packet 应该如何记录来源和人工标注，才能既可复查又不泄露敏感信息？
 - 下一轮如果只拿到合成 fixture artifact 而没有真实脱敏日志，是否已经足够进入 Phase 1b，还是仍需先补一个真实日志 intake review？
+- 如果连续 optimizer loop 都没有发现 Phase 1a artifact evidence，是否应暂停计划优化自动化，改为优先触发 fixture runner 实现或 evidence packet 采集任务？
 
 ## 21. Research Sprint Log
 
@@ -1953,6 +1956,60 @@ Plan Maintenance
 ```text
 执行 Local Workflow Daemon MVP 的 Fixture Runner Evidence Packet sprint：
 先收集或实现 5 个 synthetic fixture 的 artifact bundle，再根据 verifier_report、email grounding 和负向 fixture 结果决定是否更新 schema、rules 或 Phase 1b gate。
+```
+
+### 2026-05-11 15:06 UTC: Plan Optimizer Sprint - Evidence Wait Recheck
+
+本轮目标：执行一轮 bounded Plan Optimizer Loop，并确认当前计划是否存在不依赖新 Phase 1a evidence 的实质改进。
+
+本轮评分：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：5/5
+- Open Source Mapping 完整度：4/5
+- Build vs Integrate 清晰度：5/5
+- Evidence Graph 设计成熟度：5/5
+- Verifier Runtime 设计成熟度：5/5
+- CUA Adapter 边界清晰度：5/5
+- 风险控制和范围收敛度：5/5
+
+最低可改进维度：
+
+- Open Source Mapping 完整度
+
+自动选择的 sprint 类型：
+
+```text
+Plan Maintenance
+```
+
+多视角评审结论：
+
+- Open Source Mapping Agent：缺少的不是更多项目列表，而是 Phase 1a artifact evidence 是否会改变 Build vs Integrate。
+- Architecture Agent：计划已经把 MVP 收敛到 one-shot fixture runner；没有实际输出前继续细化 schema 或 runner API 会扩大范围。
+- CUA Adapter Agent：CUA 仍是 post-MVP adapter；本轮没有证据支持引入 screenshot、trajectory、GUI observation 或 sandbox output。
+- Feasibility Critic Agent：当前最安全动作是记录 evidence gap，避免为了提高 Open Source Mapping 分数而重开外部 runtime 讨论。
+- Research Strategy Agent：下一轮有效输入应是 5 个 synthetic fixture artifact bundle、负向 verifier 例子或真实脱敏日志 evidence packet。
+
+本轮写回：
+
+- Research Backlog 增加 Evidence Wait Recheck，明确未发现 Phase 1a artifact evidence。
+- Decision Log 记录本轮不扩展 Open Source Mapping 或 adapter 设计的取舍。
+- Open Questions 增加是否暂停计划优化自动化、转向 evidence packet 采集的问题。
+- Research Sprint Log 记录本轮 no-op 原因和缺失证据。
+
+缺失证据：
+
+- 5 个 synthetic fixture 的实际 artifact bundle。
+- 至少一个负向 fixture 的 verifier failure 或安全降级输出。
+- `email_draft.md` 在 warning/waiver、ambiguous、incomplete 场景下拒绝普通 all-passed 汇报的输出。
+- 真实脱敏日志是否暴露新的 marker、source locator、hash 或人工标注问题。
+
+下一轮建议：
+
+```text
+执行 Local Workflow Daemon MVP 的 Fixture Runner Evidence Packet sprint：
+先产出 5 个 synthetic fixture 的 artifact bundle；只有 verifier_report、email grounding 或真实脱敏日志 intake 暴露新缺口时，才继续更新主计划。
 ```
 
 ## 22. Parking Lot
