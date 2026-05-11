@@ -1272,6 +1272,7 @@ Build vs Integrate：
 6. Evidence List + Verifier Runtime：已固化 `LogEvidenceV1`、`RegressionResultArtifactV1`、email grounding 规则和 fixture gate；下一步以 fixture runner 验证规则是否过多或不足。
 7. Local Read-only Runner：仅在 fixture gate 通过后，再决定是否引入 SQLite event store、极简 step runner 和更完整的 run state。
 8. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
+9. Plan Maintenance Evidence Gate：在 fixture runner 输出、5 个合成 fixture 结果或真实脱敏日志证据出现前，后续优化只允许记录评分和证据缺口，不继续扩写 OS 愿景、adapter 设计或通用 workflow backend。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -1539,6 +1540,9 @@ SQLite event store、minimal capability registry、`read_log` / `extract_regress
 - 2026-05-11：Fixture runner v1 入口固定为 `fixture-runner --fixture-dir <fixtures/regression> --out-dir <artifacts/runs>`；只接受这两个必需参数，防止 MVP 变成通用 workflow backend。
 - 2026-05-11：Phase 1a 的规则 marker 先写成代码常量；外置 YAML/JSON 规则表延后到合成 fixture 通过且真实脱敏日志证明需要项目级配置之后。
 - 2026-05-11：`verifier_report.json` v1 最小字段固定为 run/fixture/status/generatedAt、ruleResults、artifactChecks 和 summary；golden validation 检查 verdict/evidence/email grounding，不做完整邮件 snapshot 对比。
+- 2026-05-11：Plan Optimizer 维护轮评分后确认当前最低维度并非缺少更多愿景，而是缺少 fixture runner 运行证据；本轮选择 `Plan Maintenance`，将下一步研究改为证据门控。
+- 2026-05-11：在 Phase 1a 产物出现前，不再新增 CUA、workflow backend、adapter 或多 agent 设计；所有新增研究问题必须绑定到 fixture artifact、verifier failure、真实脱敏日志或 Build vs Integrate 决策。
+- 2026-05-11：如果后续 Plan Optimizer 没有新的 fixture 或真实日志证据，只追加短 Research Sprint Log 说明缺口，不重复修改正式设计章节。
 
 ## 20. Open Questions
 
@@ -1562,6 +1566,9 @@ SQLite event store、minimal capability registry、`read_log` / `extract_regress
 - 合成 fixture 通过后，最少需要多少真实脱敏日志才能证明 evidence extraction 没有过拟合？
 - 真实脱敏日志是否需要新增 `contentHash` 或更稳定的 source locator，还是 `sourcePath + excerpt + optional lineRange` 已经足够复查？
 - `needs_human_check` 在真实日志中是否应该继续作为 verdict，还是拆成 verifier status 与业务 verdict 两个字段？
+- 第一轮 fixture runner 输出中，最容易失败的是 schema validation、verdict precedence、evidence reference 还是 email grounding？失败项应反向决定下一轮只修改哪一条规则或字段。
+- 5 个合成 fixture 的 `verifier_report.json` 是否暴露规则过强或过弱的问题，例如 false `passed`、过度 `needs_human_check`、warning/waiver 被误分类？
+- 真实脱敏日志出现前，是否有必要继续补 Open Source Mapping，还是应冻结集成研究，等待 fixture gate 证明哪些 adapter/provider 真的影响 MVP？
 
 ## 21. Research Sprint Log
 
@@ -1837,6 +1844,67 @@ Local Workflow Daemon MVP
 ```text
 执行 Plan Maintenance：
 只有在 fixture runner 实现结果、5 个 fixture 输出或真实脱敏日志证据出现后，再整理 Decision Log / Open Questions；没有新证据前不要继续扩写 OS 愿景。
+```
+
+### 2026-05-11: Plan Optimizer Sprint - Plan Maintenance Evidence Gate
+
+本轮目标：按 agentic-plan-optimizer skill 执行一轮 bounded loop，在不修改产品代码、不扩写通用愿景的前提下，判断当前计划是否还有材料性改进。
+
+本轮评分（修改前）：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：5/5
+- Open Source Mapping 完整度：4/5
+- Build vs Integrate 清晰度：5/5
+- Evidence Graph 设计成熟度：4/5
+- Verifier Runtime 设计成熟度：5/5
+- CUA Adapter 边界清晰度：4/5
+- 风险控制和范围收敛度：5/5
+
+最低分维度：
+
+- Open Source Mapping 完整度
+- Evidence Graph 设计成熟度
+
+自动选择的 sprint 类型：
+
+```text
+Plan Maintenance
+```
+
+选择理由：剩余 4/5 分不是因为缺少更多架构文字，而是缺少 Phase 1a fixture runner 的实际 artifact、verifier failure 和真实脱敏日志校准证据。继续扩写 OS 愿景、CUA adapter 或 workflow backend 会降低收敛度。
+
+多视角评审结论：
+
+- Open Source Mapping Agent：现有 mapping 已足够支持 Phase 1a 的 Build vs Integrate；下一次补 mapping 应由 fixture runner 暴露的具体 adapter/provider 需求触发。
+- Architecture Agent：主计划已经把 Phase 1a 压缩成 one-shot fixture runner；下一步应验证产物，而不是新增 daemon、SQLite 或 HTTP API 设计。
+- CUA Adapter Agent：CUA 边界仍清楚，且实际集成继续 post-MVP；没有 screenshot/trajectory 证据前不新增 `computer.*` contract 细节。
+- Feasibility Critic Agent：当前最大风险是研究循环继续制造文档增量；需要明确没有新运行证据时只记录缺口。
+- Research Strategy Agent：下一轮有价值的材料来自 5 个 fixture 的 `verifier_report.json`、grounded email 和真实脱敏日志差异，而不是更完整的产品叙事。
+
+本轮写回：
+
+- Research Backlog 新增 `Plan Maintenance Evidence Gate`，冻结无证据的计划扩写。
+- Decision Log 记录当前选择 `Plan Maintenance`、证据门控和无新证据时的最小记录策略。
+- Open Questions 新增 fixture runner 输出、verifier 规则强弱和是否继续补 Open Source Mapping 的证据问题。
+- 本 Research Sprint Log 记录当前评分、最低维度、唯一 sprint 类型和下一轮触发条件。
+
+本轮后评分：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：5/5
+- Open Source Mapping 完整度：4/5
+- Build vs Integrate 清晰度：5/5
+- Evidence Graph 设计成熟度：4/5
+- Verifier Runtime 设计成熟度：5/5
+- CUA Adapter 边界清晰度：4/5
+- 风险控制和范围收敛度：5/5
+
+下一轮建议：
+
+```text
+执行 Fixture Runner Evidence Review：
+先收集或实现 Phase 1a fixture runner 的 5 个 synthetic fixture 输出，基于实际 verifier_report.json / evidence.json / email_draft.md 失败模式，只修改被运行证据证明不足的 schema、规则或 Build vs Integrate 决策。
 ```
 
 ## 22. Parking Lot
