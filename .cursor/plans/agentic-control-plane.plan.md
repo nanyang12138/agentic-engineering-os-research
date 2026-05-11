@@ -1157,6 +1157,30 @@ Build vs Integrate：
 - Build：one-shot fixture runner、fixture schema、file event log、evidence/result/email/verifier artifacts、golden validation。
 - Integrate later：SQLite/Temporal/LangGraph daemon backend、CUA/browser/sandbox adapters、真实 CI/log provider、LLM summarizer、observability UI。
 
+### 13.5 Phase 1a Contract Alignment And Evidence Intake Gate
+
+本轮维护决策：当前计划已经足够约束到 fixture runner，材料性改进不应继续增加 OS 愿景，而是消除 Phase 1a 产物职责和 capability 边界的歧义。
+
+Phase 1a 的验收真相：
+
+- `verifier_report.json` 是唯一 acceptance source of truth；是否通过 gate 由它的 `status`、`ruleResults` 和 `artifactChecks` 决定。
+- `regression_result.json` 是业务候选结论，不是验收权威；它必须被 verifier 检查后才能进入邮件草稿。
+- `run.json` 是 run lifecycle index，不承载业务 verdict 的最终裁决。
+- `events.jsonl` 是 append-only audit trail，不承担 replay backend、scheduler 或 durable workflow 语义。
+- `evidence.json` 是可复查证据列表；artifact 只能引用其中已有 evidence ids，不能在生成阶段创造新事实。
+
+Phase 1a 的 capability 边界：
+
+- `read_log`、`extract_regression_result`、`write_artifact` 只是 fixture harness 内部的 deterministic same-process functions。
+- Phase 1a 不实现 capability registry、adapter lifecycle、远程 worker、权限协商或插件加载。
+- 这些函数仍按 capability 名称记录到 `events.jsonl`，用于保留未来迁移到 Phase 1b Capability Runtime 的 event 兼容性。
+- 只有当 5 个合成 fixture 的 `verifier_report.json` 暴露出需要真实 log provider、项目级规则配置或跨进程执行的证据后，才进入 Phase 1b capability registry / adapter 设计。
+
+Build vs Integrate：
+
+- Build now：artifact ownership contract、same-process fixture harness functions、verifier-as-gate semantics、evidence intake checklist。
+- Integrate / Build later：capability registry、real log adapter、SQLite event store、daemon/API、workflow backend、CUA/browser/sandbox adapter。
+
 ## 14. 第一版不要做什么
 
 - 不要先做多 IDE 控制。
@@ -1167,7 +1191,7 @@ Build vs Integrate：
 - 不要把 Phase 1a 直接扩展成常驻 daemon、后台队列、SQLite 依赖或真实外部 adapter。
 - 不要实际集成 CUA、Browser-use、E2B、Modal、Dagger、Temporal 或 LangGraph。
 - 不要实现完整 Evidence Graph，先做 Evidence list。
-- 不要实现完整 Capability Runtime，先做三个 read-only capability。
+- 不要实现完整 Capability Runtime；Phase 1a 只把 `read_log`、`extract_regression_result`、`write_artifact` 作为 fixture harness 内部函数。
 - 不要发送邮件，只生成邮件草稿 artifact。
 
 第一版真正要证明的是：一个工程任务可以被结构化执行，而不是被一次 chat 临时完成。
@@ -1268,12 +1292,12 @@ Build vs Integrate：
 1. Open Source Coverage Mapping：已完成，结论是自研 OS 语义，集成底层 runtime 和 coding agent。
 2. MVP Verification Contract：已完成，把第一版压缩成 read-only regression evidence demo。
 3. Feasibility Critic Review：已完成，把 Phase 1a 冻结为静态 fixture runner；SQLite、daemon、adapter 和 durable workflow 全部延后。
-4. Fixture Runner MVP：已收敛为 one-shot runner，入口只保留 `--fixture-dir` 和 `--out-dir`；读取 5 个合成 fixture，按 `13.4 Fixture Runner MVP Operating Contract` 输出并验证 `run.json`、`events.jsonl`、`evidence.json`、`regression_result.json`、`email_draft.md`、`verifier_report.json`。
+4. Fixture Runner MVP：已收敛为 one-shot runner，入口只保留 `--fixture-dir` 和 `--out-dir`；读取 5 个合成 fixture，按 `13.4 Fixture Runner MVP Operating Contract` 和 `13.5 Phase 1a Contract Alignment And Evidence Intake Gate` 输出并验证 `run.json`、`events.jsonl`、`evidence.json`、`regression_result.json`、`email_draft.md`、`verifier_report.json`，其中 `verifier_report.json` 是唯一验收真相。
 5. Intent-to-Spec MVP：MVP 默认使用模板/表单化 `RegressionTaskSpecV1`；LLM 只能生成草稿，必须通过 schema/rule verifier。
 6. Evidence List + Verifier Runtime：已固化 `LogEvidenceV1`、`RegressionResultArtifactV1`、email grounding 规则和 fixture gate；下一步以 fixture runner 验证规则是否过多或不足。
-7. Local Read-only Runner：仅在 fixture gate 通过后，再决定是否引入 SQLite event store、极简 step runner 和更完整的 run state。
+7. Local Read-only Runner：仅在 fixture gate 通过后，再决定是否引入 capability registry、真实 log adapter、SQLite event store、极简 step runner 和更完整的 run state。
 8. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
-9. Plan Maintenance Evidence Gate：在 fixture runner 输出、5 个合成 fixture 结果或真实脱敏日志证据出现前，后续优化只允许记录评分和证据缺口，不继续扩写 OS 愿景、adapter 设计或通用 workflow backend。
+9. Plan Maintenance Evidence Gate：在 fixture runner 输出、5 个合成 fixture 结果或真实脱敏日志证据出现前，后续优化只允许记录评分、证据缺口和 Phase 1a 契约矛盾，不继续扩写 OS 愿景、adapter 设计或通用 workflow backend。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -1465,21 +1489,19 @@ Build vs Integrate：
 - 不做 CI/CD pipeline 引擎：Dagger、现有 CI 已经覆盖。
 - 不做商业云 IDE/app builder：Replit 已经覆盖。
 
-第一版应该做一个薄但有差异化的 OS kernel：
+Phase 1a 应该做一个薄但有差异化的 fixture contract gate：
 
 ```text
 Template TaskSpec generator
 run.json + events.jsonl file event record
-Run/Step/ToolCall/Observation/Evidence/Artifact JSON schema
-Minimal capability registry
-read_log / extract_regression_result / write_artifact adapters
-Policy gate
+Evidence / RegressionResult / EmailDraft / VerifierReport JSON artifacts
+read_log / extract_regression_result / write_artifact same-process functions
 Rule verifier
 Static fixture runner
 Regression log -> evidence -> email artifact demo
 ```
 
-SQLite event store、minimal capability registry、`read_log` / `extract_regression_result` / `write_artifact` adapters 属于 Phase 1b；只有 Phase 1a fixture contract 通过后才进入实现。
+Phase 1b 才评估 minimal capability registry、`read_log` / `extract_regression_result` / `write_artifact` adapters、SQLite event store 和更完整的 run state；只有 Phase 1a fixture contract 通过后才进入实现。
 
 ### 18.5 Evidence Log
 
@@ -1544,6 +1566,9 @@ SQLite event store、minimal capability registry、`read_log` / `extract_regress
 - 2026-05-11：Plan Optimizer 维护轮评分后确认当前最低维度并非缺少更多愿景，而是缺少 fixture runner 运行证据；本轮选择 `Plan Maintenance`，将下一步研究改为证据门控。
 - 2026-05-11：在 Phase 1a 产物出现前，不再新增 CUA、workflow backend、adapter 或多 agent 设计；所有新增研究问题必须绑定到 fixture artifact、verifier failure、真实脱敏日志或 Build vs Integrate 决策。
 - 2026-05-11：如果后续 Plan Optimizer 没有新的 fixture 或真实日志证据，只追加短 Research Sprint Log 说明缺口，不重复修改正式设计章节。
+- 2026-05-11：本轮 Plan Optimizer 继续选择 `Plan Maintenance`，但发现 Phase 1a 仍有材料性契约矛盾：`verifier_report.json` 的验收权威、`regression_result.json` 的候选身份、`run.json` / `events.jsonl` 的职责，以及 capability registry 的后置边界需要写入正式章节。
+- 2026-05-11：Phase 1a 明确以 `verifier_report.json` 作为唯一 acceptance source of truth；`regression_result.json` 只能作为业务候选结论，必须被 verifier 检查后才能支撑 `email_draft.md`。
+- 2026-05-11：Phase 1a 的 `read_log`、`extract_regression_result`、`write_artifact` 明确为 fixture harness 内部 deterministic same-process functions；capability registry、真实 adapter、SQLite event store 和 daemon/API 均后移到 fixture gate 之后。
 
 ## 20. Open Questions
 
@@ -1561,6 +1586,8 @@ SQLite event store、minimal capability registry、`read_log` / `extract_regress
 - `events.jsonl` v1 只记录 `run.created`、`task_spec.generated`、`read_log` / `extract_regression_result` 完成事件、artifact 写入、verifier 完成和 run 完成/失败；它服务复查，不承担 replay backend。
 - 规则 marker v1 使用代码常量；外置 YAML/JSON 规则表延后。
 - `verifier_report.json` v1 只需要 run/fixture/status/generatedAt、ruleResults、artifactChecks 和 summary；golden validation 不做完整 artifact snapshot，只检查 verdict、evidence 引用、email grounding 和负向 fixture 不得生成普通 all-passed 邮件。
+- `verifier_report.json` 是 Phase 1a 唯一验收真相；`regression_result.json` 是业务候选结论，`run.json` 是 lifecycle index，`events.jsonl` 是 audit trail。
+- Phase 1a 的 `read_log`、`extract_regression_result`、`write_artifact` 是 same-process fixture harness functions，不是 capability registry 或 adapter framework。
 
 ### 20.2 仍开放的问题
 
@@ -1570,6 +1597,8 @@ SQLite event store、minimal capability registry、`read_log` / `extract_regress
 - 第一轮 fixture runner 输出中，最容易失败的是 schema validation、verdict precedence、evidence reference 还是 email grounding？失败项应反向决定下一轮只修改哪一条规则或字段。
 - 5 个合成 fixture 的 `verifier_report.json` 是否暴露规则过强或过弱的问题，例如 false `passed`、过度 `needs_human_check`、warning/waiver 被误分类？
 - 真实脱敏日志出现前，是否有必要继续补 Open Source Mapping，还是应冻结集成研究，等待 fixture gate 证明哪些 adapter/provider 真的影响 MVP？
+- 第一批 fixture artifacts 是否证明 `verifier_report.json` 足以作为唯一 gate，还是需要把 business verdict 与 verifier status 拆成两个更明确的 artifact 边界？
+- first evidence packet 是否证明 same-process functions 已足够，还是 `read_log` 需要提前升级为真实 log adapter？该问题只能由 fixture failure 或真实脱敏日志差异触发。
 
 ## 21. Research Sprint Log
 
@@ -1906,6 +1935,68 @@ Plan Maintenance
 ```text
 执行 Fixture Runner Evidence Review：
 先收集或实现 Phase 1a fixture runner 的 5 个 synthetic fixture 输出，基于实际 verifier_report.json / evidence.json / email_draft.md 失败模式，只修改被运行证据证明不足的 schema、规则或 Build vs Integrate 决策。
+```
+
+### 2026-05-11: Plan Optimizer Sprint - Phase 1a Contract Alignment
+
+本轮目标：按 agentic-plan-optimizer skill 执行一轮 bounded loop，在不修改产品代码、不扩写通用愿景的前提下，修正 Phase 1a fixture contract 中仍会影响实现的职责歧义。
+
+本轮评分（修改前）：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：5/5
+- Open Source Mapping 完整度：4/5
+- Build vs Integrate 清晰度：5/5
+- Evidence Graph 设计成熟度：4/5
+- Verifier Runtime 设计成熟度：5/5
+- CUA Adapter 边界清晰度：4/5
+- 风险控制和范围收敛度：5/5
+
+最低可改进维度：
+
+- Evidence Graph 设计成熟度
+- CUA Adapter 边界清晰度
+
+自动选择的 sprint 类型：
+
+```text
+Plan Maintenance
+```
+
+选择理由：当前缺口不是更多开源 mapping 或更完整 adapter 设计，而是主计划内部还同时出现了 Phase 1a fixture runner、candidate result、verifier gate 和未来 capability registry 的边界混用。若不修正，实现时容易把 Phase 1a 误扩展成 adapter framework 或 daemon。
+
+多视角评审结论：
+
+- Open Source Mapping Agent：现有开源 mapping 已足够支撑 Phase 1a；不应因为 `read_log` / `extract_regression_result` 名称像 capability，就提前引入 LangGraph、Temporal、CUA 或真实 provider。
+- Architecture Agent：`verifier_report.json` 必须成为唯一 acceptance source of truth；`regression_result.json`、`run.json`、`events.jsonl` 分别只承担候选结论、生命周期索引和审计轨迹职责。
+- CUA Adapter Agent：CUA 继续是 post-MVP computer runtime；Phase 1a 的 same-process functions 只保留未来 capability event 命名，不代表实际 adapter 集成。
+- Feasibility Critic Agent：把 capability registry、adapter lifecycle、SQLite、daemon/API 全部后置，才能保证 fixture gate 先验证 evidence/verifier 语义。
+- Research Strategy Agent：下一轮有价值证据仍是 5 个 synthetic fixture artifacts 和 `verifier_report.json` failure mode；没有这些证据前不继续扩写 OS 愿景。
+
+本轮写回：
+
+- 新增 `13.5 Phase 1a Contract Alignment And Evidence Intake Gate`。
+- 更新 `14. 第一版不要做什么`，明确 Phase 1a 不实现完整 Capability Runtime。
+- 更新 `17. Research Backlog`，把 fixture runner 验收绑定到 `13.5`，并把 capability registry / real adapter 后移到 fixture gate 后。
+- 更新 `18.4 MVP Implication`，把 Phase 1a 从 “minimal capability registry / adapters” 改为 same-process fixture functions。
+- 更新 Decision Log 和 Open Questions，记录 artifact ownership、verifier gate 和 capability 后置边界。
+
+本轮后评分：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：5/5
+- Open Source Mapping 完整度：4/5
+- Build vs Integrate 清晰度：5/5
+- Evidence Graph 设计成熟度：5/5
+- Verifier Runtime 设计成熟度：5/5
+- CUA Adapter 边界清晰度：5/5
+- 风险控制和范围收敛度：5/5
+
+下一轮建议：
+
+```text
+执行 Fixture Runner Evidence Review：
+先收集或实现 Phase 1a fixture runner 的 5 个 synthetic fixture 输出，基于 verifier_report.json 的实际 ruleResults / artifactChecks，只修改被运行证据证明不足的 schema、规则或 Build vs Integrate 决策。
 ```
 
 ## 22. Parking Lot
