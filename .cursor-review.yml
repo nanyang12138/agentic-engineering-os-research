@@ -12,6 +12,9 @@ filter_mode: added
 persistent_comment: true
 enabled_commands:
   - review
+  - ask
+  - improve
+  - describe
 include_patterns: []
 exclude_patterns:
   - "*.lock"
