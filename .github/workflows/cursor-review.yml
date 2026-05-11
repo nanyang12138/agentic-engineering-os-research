@@ -1,0 +1,56 @@
+name: Cursor Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+
+jobs:
+  cursor-review:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Cursor review
+        id: cursor_review
+        uses: PunGrumpy/cursor-action@v0.1.0
+        with:
+          api-key: ${{ secrets.CURSOR_API_KEY }}
+          permissions: read-only
+          model: auto
+          timeout: 600
+          prompt: |
+            Review this pull request.
+
+            Focus on:
+            - correctness bugs
+            - security risks
+            - performance regressions
+            - missing tests
+            - risky edge cases
+
+            Please be concise. Report only actionable findings.
+            If there are no major issues, say so clearly.
+
+      - name: Comment review result on PR
+        uses: actions/github-script@v7
+        env:
+          REVIEW_BODY: ${{ steps.cursor_review.outputs.summary }}
+        with:
+          script: |
+            const body = process.env.REVIEW_BODY || 'Cursor review produced no output.';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## Cursor Review\n\n${body}`
+            });
