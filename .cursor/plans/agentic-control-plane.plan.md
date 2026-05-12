@@ -2571,7 +2571,10 @@ python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /t
 
 验证结果：
 
-- 待本轮 PR 本地验证和 GitHub Actions 记录。
+- `python scripts/validate_repo.py`：本机缺少 `python` 命令，返回 command not found；GitHub Actions 的 `actions/setup-python` 环境预期提供 `python`。
+- `python3 scripts/validate_repo.py`：通过。
+- `python3 -m py_compile scripts/fixture_runner.py scripts/validate_repo.py`：通过。
+- fixture runner smoke test：通过，处理 5 个 fixtures。
 
 剩余风险：
 
