@@ -1,6 +1,6 @@
 # Agentic Engineering OS Research
 
-This repository stores the research plan, Cursor rule, skill, and prompt templates used by Cursor Cloud Automations to continuously improve the Agentic Engineering OS plan.
+This repository stores the research plan, Cursor rule, skill, prompt templates, and implementation artifacts used by Cursor Cloud Automations to build the Agentic Engineering OS plan phase by phase.
 
 ## Source Of Truth
 
@@ -17,10 +17,10 @@ This repository stores the research plan, Cursor rule, skill, and prompt templat
 
 ## Automation Goal
 
-Each automation run should do one bounded improvement:
+Each automation run should do one bounded, verified implementation slice:
 
 ```text
-read plan -> score plan -> select one sprint -> update plan -> append logs -> open PR
+read plan -> determine active phase -> select one slice -> implement -> verify -> update plan -> open PR
 ```
 
-The automation should optimize for convergence, feasibility, evidence density, and MVP clarity.
+The automation should optimize for working code, deterministic verification, convergence, feasibility, evidence density, and MVP clarity.
