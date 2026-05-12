@@ -2318,6 +2318,58 @@ Plan Maintenance
 产出 5 个 synthetic fixture 的 `artifacts/runs/*`、`evidence.json`、`regression_result.json`、`email_draft.md` 和 `verifier_report.json` summary；只有这些证据出现后，才继续修改 schema、rules、Build vs Integrate 或 Phase 1b gate。
 ```
 
+### 2026-05-12 12:02 UTC: Plan Optimizer Sprint - Evidence Wait No-op
+
+本轮目标：按 agentic-plan-optimizer skill 执行一轮 bounded loop，检查当前计划是否存在可材料性提升 MVP 清晰度或 Build vs Integrate 决策的新证据。
+
+本轮评分：
+
+- Vision 清晰度：5/5
+- MVP 可执行性：5/5
+- Open Source Mapping 完整度：5/5
+- Build vs Integrate 清晰度：5/5
+- Evidence Graph 设计成熟度：5/5
+- Verifier Runtime 设计成熟度：5/5
+- CUA Adapter 边界清晰度：5/5
+- 风险控制和范围收敛度：5/5
+
+最低可改进维度：
+
+- 无低于 5/5 的维度；当前瓶颈不是计划文字，而是缺少 Phase 1a fixture runner 运行证据。
+
+自动选择的 sprint 类型：
+
+```text
+Plan Maintenance
+```
+
+多视角评审结论：
+
+- Open Source Mapping Agent：现有 mapping 已足够支撑 Phase 1a；没有 fixture failure 指向具体 provider 前，不新增项目清单。
+- Architecture Agent：Phase 1a 契约已足够进入 fixture evidence packet 生产；没有 `artifacts/runs/*` 前不修改 schema、daemon 或 runner 边界。
+- CUA Adapter Agent：CUA 仍是 post-MVP adapter；本轮没有 trajectory、screenshot 或 sandbox evidence 进入 Phase 1a。
+- Feasibility Critic Agent：继续扩写计划会降低收敛度；本轮只记录缺失证据。
+- Research Strategy Agent：下一轮有效输入必须是 5 个 synthetic fixture 的完整 artifact packet，尤其是 verifier_report 和 email grounding 输出。
+
+本轮写回：
+
+- 未修改正式设计章节、Research Backlog、Decision Log 或 Open Questions；已有 `Evidence Packet Stop Rule` 已覆盖本轮无证据状态。
+- 仅追加本 Research Sprint Log，说明未发现有用改进和仍缺失的证据。
+
+缺失证据：
+
+- 5 个 synthetic fixture 的 `artifacts/runs/*` 输出。
+- `verifier_report.json` 的 ruleResults、artifactChecks、blockingFailures 或安全降级样例。
+- `email_draft.md` 在 warning/waiver、ambiguous、incomplete 场景下不生成普通 all-passed 邮件的实际输出。
+- 真实脱敏日志与 synthetic fixture 的差异证据。
+
+下一轮建议：
+
+```text
+执行 Local Workflow Daemon MVP 的 Fixture Runner Evidence Packet sprint：
+先产出 5 个 synthetic fixture artifact packet；只有 verifier_report、evidence ids、email grounding 或真实脱敏日志差异暴露具体问题后，才修改 schema、rules、Build vs Integrate 或 Phase 1b gate。
+```
+
 ## 22. Parking Lot
 
 以下内容仍然重要，但不进入第一版 MVP：
