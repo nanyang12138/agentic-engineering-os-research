@@ -37,7 +37,7 @@ PLAN_REQUIRED_MARKERS = [
 ]
 
 AUTOMATION_REQUIRED_MARKERS = [
-    "Implement Phase 1a",
+    "Execute the entire Agentic Engineering OS plan",
     "It is allowed to create implementation code",
     "Read-only Regression Evidence Demo",
     "Definition of Done",

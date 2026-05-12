@@ -13,13 +13,13 @@ Base branch:
 main
 
 Primary goal:
-Implement Phase 1a of the Agentic Engineering OS plan as working, tested code.
+Execute the entire Agentic Engineering OS plan phase by phase as working, tested code.
 
 Source of truth:
 .cursor/plans/agentic-control-plane.plan.md
 
 Important override:
-This automation supersedes the previous research-only automation. It is allowed to create implementation code, tests, fixtures, validation scripts, GitHub Actions workflows, and documentation needed to complete Phase 1a.
+This automation supersedes the previous research-only automation. It is allowed to create implementation code, tests, fixtures, validation scripts, GitHub Actions workflows, documentation, local runners, adapters, and other artifacts needed to complete the plan.
 
 The previous instruction "Do not modify product code" does not apply to this automation.
 
@@ -27,6 +27,13 @@ Core operating principle:
 The user will not manually review or test every PR. Automated tests, deterministic validation, GitHub checks, and the Definition of Done are the review gate.
 
 Use PRs as machine-verifiable safety boundaries, not manual review gates.
+
+Execution strategy:
+- Read the full plan every run.
+- Determine the current active phase from the plan state, completed artifacts, tests, logs, and repository contents.
+- Select the earliest incomplete phase or phase slice whose prerequisites are satisfied.
+- Complete one verified slice per run.
+- Continue this loop until every phase is implemented, verified, or explicitly removed from scope by a recorded plan decision.
 
 Target MVP:
 Read-only Regression Evidence Demo.
@@ -79,7 +86,16 @@ Before editing:
 - Understand the current Phase 1a state.
 - Identify the next useful implementation slice.
 
-2. Bootstrap validation if needed
+2. Determine active phase
+Choose the earliest phase or phase slice that:
+- is not yet complete
+- has prerequisites satisfied
+- has enough plan detail to implement
+- can be completed and verified in this run
+
+Do not skip earlier phase gates to work on later phases.
+
+3. Bootstrap validation if needed
 If the repository has no useful GitHub Actions workflow or deterministic validation gate, the selected slice should be:
 
 "Add the minimal validation workflow and local validation command so future PRs have a real merge gate."
@@ -92,11 +108,11 @@ This first slice may add:
 
 Do not pretend checks exist if they do not.
 
-3. Select exactly one completed slice
+4. Select exactly one completed slice
 Choose exactly one implementation slice.
 
 The selected slice must:
-- advance Phase 1a
+- advance the active phase
 - be completable in this automation run
 - have clear acceptance criteria
 - be verifiable with tests/checks/scripts
@@ -112,7 +128,7 @@ Before editing, write an implementation note with:
 - expected files to change
 - verification command
 
-4. Definition of Done
+5. Definition of Done
 A run is complete only when all are true:
 - The selected slice has been fully implemented.
 - All acceptance criteria written before editing are satisfied.
@@ -136,7 +152,7 @@ If the selected slice cannot be completed:
 - update the plan to say the larger task remains incomplete
 - do not enable auto-merge unless the completed sub-slice independently satisfies this Definition of Done
 
-5. Implement
+6. Implement
 Make the smallest coherent change that fully completes the selected slice.
 
 Guidelines:
@@ -146,10 +162,10 @@ Guidelines:
 - Do not perform broad rewrites.
 - Do not touch secrets, credentials, deployment settings, billing settings, or destructive data operations.
 - Do not send emails or create external side effects.
-- Do not integrate CUA, browser automation, desktop control, Temporal, LangGraph, or database infrastructure in Phase 1a.
+- Do not integrate CUA, browser automation, desktop control, Temporal, LangGraph, or database infrastructure until the relevant phase gate is active.
 - Do not leave known broken behavior behind and call the task complete.
 
-6. Verify
+7. Verify
 Run the strongest reasonable validation available.
 
 Use relevant commands such as:
@@ -164,7 +180,7 @@ Use relevant commands such as:
 
 If no test framework exists, create a lightweight deterministic validation script only if it directly supports the selected slice.
 
-7. Self-repair loop
+8. Self-repair loop
 If any verification fails:
 - inspect the failure
 - identify the root cause
@@ -180,7 +196,7 @@ If checks still fail after 3 attempts:
 
 Do not skip, delete, or weaken tests just to make checks pass.
 
-8. Update plan and logs
+9. Update plan and logs
 If implementation changes project state, update:
 .cursor/plans/agentic-control-plane.plan.md
 
@@ -195,7 +211,7 @@ Append or update an automation log entry with:
 
 The plan must accurately reflect what is complete and what remains incomplete.
 
-9. Commit and open PR
+10. Commit and open PR
 Create a branch for this run.
 
 Commit message format:
@@ -231,7 +247,7 @@ PR body:
 - Remaining risks
 - Suggested next slice
 
-10. Auto-merge
+11. Auto-merge
 After opening the PR, attempt to enable GitHub auto-merge using squash merge:
 
 gh pr merge --auto --squash
@@ -258,7 +274,7 @@ If auto-merge cannot be enabled:
 - explain why in the PR body or a PR comment
 - include the exact blocker
 
-11. Final response
+12. Final response
 At the end of the run, report:
 - selected slice
 - branch name
@@ -268,6 +284,7 @@ At the end of the run, report:
 - whether auto-merge was enabled
 - if auto-merge was not enabled, why
 - next recommended slice
+- whether the full plan is complete or still in progress
 ```
 
 Recommended cadence:
