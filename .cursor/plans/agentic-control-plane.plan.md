@@ -1313,7 +1313,7 @@ fixtures/regression/* -> artifacts/runs/* -> verifier_report.json summary
 7. Local Read-only Runner：仅在 fixture gate 通过后，再决定是否引入 capability registry、真实 log adapter、SQLite event store、极简 step runner 和更完整的 run state。
 8. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
 9. Phase 1a Evidence Intake Review：在 fixture runner 输出完整 artifact packet 前，后续优化只允许维护评分、Decision Log、Open Questions 和 Research Sprint Log；只有 `verifier_report.json` 失败、grounded email 问题、真实脱敏日志差异或 Build vs Integrate 运行证据出现后，才修改正式设计章节。
-10. Evidence Packet Stop Rule：如果一轮自动化没有新的 `artifacts/runs/*`、`verifier_report.json` failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据，不再新增 backlog 项、adapter mapping 或正式设计章节；只追加一条短 Research Sprint Log，直到 5 个 synthetic fixture 的 artifact packet 出现。
+10. Evidence Packet Stop Rule：如果一轮自动化没有新的 `artifacts/runs/*`、`verifier_report.json` failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据，不再新增 backlog 项、adapter mapping 或正式设计章节；只追加一条短 Research Sprint Log，直到 5 个 synthetic fixture 的 artifact packet 出现。最新预检：2026-05-12 13:00 UTC 仍未发现 `fixtures/regression`、`artifacts/runs` 或 `verifier_report.json`，因此本轮不解锁 schema、rules、Open Source Mapping 或 adapter 决策修改。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -1589,6 +1589,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-11：Phase 1a 的 `read_log`、`extract_regression_result`、`write_artifact` 只作为 fixture runner 内部 deterministic functions；capability registry、adapter plugin、daemon、HTTP API 和 workspace registry 均延后到 Phase 1b 证据成立后再评估。
 - 2026-05-11：本轮 Plan Optimizer 选择 `Plan Maintenance`，但未发现足以修改正式设计章节的新证据；在 Phase 1a artifact packet 出现前，计划维护只记录缺口并继续冻结 Open Source Mapping、CUA adapter 和 workflow backend 扩写。
 - 2026-05-12：本轮 Plan Optimizer 继续选择 `Plan Maintenance`；当前计划已足够进入 Phase 1a fixture runner 证据生产，材料性改进是把重复的 no-new-evidence backlog 收敛为 `Evidence Packet Stop Rule`，避免后续自动化在没有运行证据时继续扩写计划。
+- 2026-05-12 13:00 UTC：本轮 Plan Optimizer 选择 `Plan Maintenance`；证据预检未发现 `fixtures/regression`、`artifacts/runs` 或 `verifier_report.json`，因此不修改正式设计章节、不新增开源 mapping 或 adapter 决策，只记录缺失证据并维持 fixture artifact packet 作为下一步唯一解锁条件。
 
 ## 20. Open Questions
 
@@ -1625,7 +1626,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 第一份完整 artifact packet 中，`verifier_report.json` 与 `regression_result.json` 是否会出现状态表达冲突？如果会，是否需要把业务 verdict 与 verification status 在 schema 中更强地分离？
 - Phase 1a 内部 deterministic functions 是否足够表达 evidence provenance，还是实际实现会证明需要提前引入最小 capability call envelope？
 - 当前最低分维度只剩 Open Source Mapping 完整度；如果没有 fixture runner 运行证据指出具体 adapter/provider 缺口，是否应保持 4/5 而不是继续扩写项目清单？
-- 如果下一轮仍没有 5 个 synthetic fixture 的 artifact packet，是否应该暂停计划优化自动化或改为只报告状态，直到 fixture runner evidence 出现？
+- 如果下一轮仍没有 5 个 synthetic fixture 的 artifact packet，是否应该暂停计划优化自动化或改为只报告状态，直到 fixture runner evidence 出现？最新预检（2026-05-12 13:00 UTC）仍为无证据状态；这个问题继续开放。
 
 ## 21. Research Sprint Log
 
@@ -2316,6 +2317,34 @@ Plan Maintenance
 ```text
 执行 Local Workflow Daemon MVP 的 Fixture Runner Evidence Packet sprint：
 产出 5 个 synthetic fixture 的 `artifacts/runs/*`、`evidence.json`、`regression_result.json`、`email_draft.md` 和 `verifier_report.json` summary；只有这些证据出现后，才继续修改 schema、rules、Build vs Integrate 或 Phase 1b gate。
+```
+
+### 2026-05-12 13:00 UTC: Plan Optimizer Sprint - Evidence Wait No-op
+
+本轮目标：检查主计划是否已有新的 Phase 1a 运行证据可以支持材料性修改。预检未发现 `fixtures/regression`、`artifacts/runs` 或 `verifier_report.json`，因此本轮只记录证据缺口。
+
+- Vision 清晰度：5/5
+- MVP 可执行性：5/5
+- Open Source Mapping 完整度：5/5
+- Build vs Integrate 清晰度：5/5
+- Evidence Graph 设计成熟度：5/5
+- Verifier Runtime 设计成熟度：5/5
+- CUA Adapter 边界清晰度：5/5
+- 风险控制和范围收敛度：5/5
+
+- 最低 1-2 个维度：Open Source Mapping 完整度和 Evidence Graph 设计成熟度在本轮并列 5/5；它们已足够支撑 Phase 1a，下一次有效修改必须由 fixture evidence 指向具体 provider 或 evidence contract 摩擦点。
+- 自动选择的 sprint 类型：`Plan Maintenance`。
+- 五个评审视角一致结论：不要补开源清单、CUA adapter、schema、rules 或 workflow backend；下一步只需要 Phase 1a fixture artifact packet。
+- 本轮写回：Research Backlog、Decision Log、Open Questions 和 Research Sprint Log 记录 2026-05-12 13:00 UTC 无证据状态。
+
+- `fixtures/regression/*/fixture.json`。
+- `artifacts/runs/*/verifier_report.json`。
+- 5 个 synthetic fixture 的 `evidence.json`、`regression_result.json` 和 `email_draft.md`。
+- 任何真实脱敏日志差异、email grounding failure 或 Build vs Integrate 运行证据。
+
+```text
+执行 Local Workflow Daemon MVP 的 Fixture Runner Evidence Packet sprint：
+先产出 5 个 synthetic fixture 的完整 artifact packet；如果下一轮仍没有这些证据，只追加短 Research Sprint Log，不修改正式设计章节、Open Source Mapping、CUA adapter 或 workflow backend。
 ```
 
 ## 22. Parking Lot
