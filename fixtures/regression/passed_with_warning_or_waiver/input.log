@@ -1,0 +1,10 @@
+REGRESSION: m2b_lec_regr
+RUN_ID: synth-warning-waiver-001
+WORKSPACE: /synthetic/orion/lsc
+STATUS: PASSED
+TESTS_TOTAL: 128
+failed_tests: 0
+incomplete_jobs: 0
+WARNING: compare job m2b_lec_case_077 used a timing waiver
+waived_errors: 1
+END_OF_SUMMARY

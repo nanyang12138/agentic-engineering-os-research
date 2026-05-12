@@ -1,0 +1,9 @@
+REGRESSION: m2b_lec_regr
+RUN_ID: synth-all-passed-001
+WORKSPACE: /synthetic/orion/lsc
+STATUS: PASSED
+TESTS_TOTAL: 128
+failed_tests: 0
+incomplete_jobs: 0
+ALL TESTS PASSED
+END_OF_SUMMARY
