@@ -11,129 +11,63 @@ permissions:
   pull-requests: write
   issues: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   cursor-review:
     if: >
       github.event_name == 'pull_request' ||
       (github.event_name == 'issue_comment' &&
        github.event.issue.pull_request &&
-       contains(github.event.comment.body, '/cursor-review') &&
+       (
+         contains(github.event.comment.body, '/cursor-review') ||
+         contains(github.event.comment.body, '/cursor-ask') ||
+         contains(github.event.comment.body, '/cursor-improve') ||
+         contains(github.event.comment.body, '/cursor-describe')
+       ) &&
        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout PR for pull_request
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-
-      - name: Get PR info for comment trigger
-        if: github.event_name == 'issue_comment'
-        id: pr_info
+      - name: Resolve PR information
+        id: pr
         uses: actions/github-script@v7
         with:
           script: |
+            if (context.eventName === 'pull_request') {
+              core.setOutput('number', context.payload.pull_request.number);
+              core.setOutput('base_sha', context.payload.pull_request.base.sha);
+              core.setOutput('head_sha', context.payload.pull_request.head.sha);
+              return;
+            }
+
             const pr = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.issue.number
             });
 
-            core.setOutput('head_sha', pr.data.head.sha);
+            core.setOutput('number', pr.data.number);
             core.setOutput('base_sha', pr.data.base.sha);
-            core.setOutput('pr_number', pr.data.number);
+            core.setOutput('head_sha', pr.data.head.sha);
 
-      - name: Checkout PR for comment trigger
-        if: github.event_name == 'issue_comment'
+      - name: Checkout PR
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.pr_info.outputs.head_sha }}
+          ref: ${{ steps.pr.outputs.head_sha }}
           fetch-depth: 0
 
-      - name: Install Cursor CLI
-        run: |
-          curl https://cursor.com/install -fsS | bash
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: Prepare PR diff for pull_request
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          git diff --stat "$BASE_SHA...$HEAD_SHA" > pr_diff_stat.txt || true
-          git diff "$BASE_SHA...$HEAD_SHA" > pr_diff.txt || true
-          echo "" > user_prompt.txt
-
-      - name: Prepare PR diff for comment trigger
-        if: github.event_name == 'issue_comment'
-        env:
-          BASE_SHA: ${{ steps.pr_info.outputs.base_sha }}
-          HEAD_SHA: ${{ steps.pr_info.outputs.head_sha }}
-          COMMENT_BODY: ${{ github.event.comment.body }}
-        run: |
-          git diff --stat "$BASE_SHA...$HEAD_SHA" > pr_diff_stat.txt || true
-          git diff "$BASE_SHA...$HEAD_SHA" > pr_diff.txt || true
-
-          printf "%s" "$COMMENT_BODY" \
-            | sed 's#/cursor-review##' \
-            | sed '/^[[:space:]]*$/d' > user_prompt.txt
-
-      - name: Run Cursor review
-        env:
-          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
-        run: |
-          agent --version
-
-          {
-            echo "You are reviewing a GitHub pull request."
-            echo
-            echo "Default review focus:"
-            echo "- correctness bugs"
-            echo "- security risks"
-            echo "- performance regressions"
-            echo "- missing tests"
-            echo "- risky edge cases"
-            echo
-            if [ -s user_prompt.txt ]; then
-              echo "Additional user instructions from PR comment:"
-              cat user_prompt.txt
-              echo
-            fi
-            echo "Rules:"
-            echo "- Be concise."
-            echo "- Report only actionable findings."
-            echo "- If there are no major issues, say so clearly."
-            echo "- Use Simplified Chinese."
-            echo
-            echo "Diff stat:"
-            cat pr_diff_stat.txt
-            echo
-            echo "Diff:"
-            cat pr_diff.txt
-          } > cursor_review_prompt.txt
-
-          agent -p --trust --model auto --output-format text "$(cat cursor_review_prompt.txt)" > cursor_review.md
-
-      - name: Comment review result on PR
-        uses: actions/github-script@v7
+      - name: Cursor review
+        uses: nanyang12138/cursor-review-action@main
         with:
-          script: |
-            const fs = require('fs');
-
-            const body = fs.existsSync('cursor_review.md')
-              ? fs.readFileSync('cursor_review.md', 'utf8')
-              : 'Cursor review produced no output.';
-
-            const prNumber = context.eventName === 'pull_request'
-              ? context.payload.pull_request.number
-              : context.issue.number;
-
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-              body: `## Cursor Review\n\n${body}`
-            });
+          cursor-api-key: ${{ secrets.CURSOR_API_KEY }}
+          github-token: ${{ github.token }}
+          base-sha: ${{ steps.pr.outputs.base_sha }}
+          head-sha: ${{ steps.pr.outputs.head_sha }}
+          pr-number: ${{ steps.pr.outputs.number }}
+          event-name: ${{ github.event_name }}
+          comment-body: ${{ github.event_name == 'issue_comment' && github.event.comment.body || '' }}
+          enabled-commands: review,ask,improve,describe
+          model: auto
+          language: zh-CN
