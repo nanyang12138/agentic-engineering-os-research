@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import copy
 import filecmp
 import json
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from fixture_runner import build_verifier_report, load_fixture, stable_hash
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -213,6 +216,67 @@ def compare_artifact_packets(expected_dir: Path, actual_dir: Path) -> None:
                 )
 
 
+def verifier_report_for_mutation(base_dir: Path, fixture_id: str, mutation: str) -> dict:
+    fixture = load_fixture(FIXTURE_DIR / fixture_id)
+    run_dir = base_dir / fixture_id
+    run = load_json(run_dir / "run.json")
+    evidence = load_json(run_dir / "evidence.json")["items"]
+    result = copy.deepcopy(load_json(run_dir / "regression_result.json"))
+    email = (run_dir / "email_draft.md").read_text(encoding="utf-8")
+
+    if mutation == "missing_evidence_ref":
+        result["evidenceIds"] = ["ev-missing-forced-failure"]
+    elif mutation == "failed_marker_overridden":
+        result["verdict"] = "passed"
+        result["summary"] = "Tampered result incorrectly claims a clean pass."
+    elif mutation == "pass_style_email_injection":
+        email = email + "\nTampered claim: all passed with no failures.\n"
+    else:
+        raise AssertionError(f"Unknown forced-failure mutation: {mutation}")
+
+    fixture_hash = stable_hash([fixture.directory / "fixture.json", fixture.log_path])
+    report, _ = build_verifier_report(
+        fixture=fixture,
+        run_id=run["id"],
+        fixture_hash=fixture_hash,
+        task_spec=run["taskSpec"],
+        evidence=evidence,
+        result=result,
+        email=email,
+    )
+    return report
+
+
+def require_forced_failure(base_dir: Path, fixture_id: str, mutation: str, expected_rule_ids: set[str]) -> None:
+    report = verifier_report_for_mutation(base_dir, fixture_id, mutation)
+    if report["status"] != "failed":
+        raise AssertionError(f"Forced-failure mutation {mutation} for {fixture_id} unexpectedly passed")
+
+    blocking_rule_ids = {failure["ruleId"] for failure in report["blockingFailures"]}
+    missing = expected_rule_ids - blocking_rule_ids
+    if missing:
+        raise AssertionError(
+            f"Forced-failure mutation {mutation} for {fixture_id} did not report expected blocking rules "
+            f"{sorted(missing)}; got {sorted(blocking_rule_ids)}"
+        )
+
+
+def validate_forced_failure_cases(base_dir: Path) -> None:
+    require_forced_failure(base_dir, "all_passed", "missing_evidence_ref", {"evidence_refs"})
+    require_forced_failure(
+        base_dir,
+        "failed_tests",
+        "failed_marker_overridden",
+        {"classification_consistency", "verdict.failed_precedence"},
+    )
+    require_forced_failure(
+        base_dir,
+        "incomplete_jobs",
+        "pass_style_email_injection",
+        {"email_draft_uses_structured_facts", "artifact.email_draft"},
+    )
+
+
 def main() -> None:
     for path in REQUIRED_FILES:
         require_file(path)
@@ -228,10 +292,12 @@ def main() -> None:
         generated_artifacts = Path(temp_dir) / "runs"
         run_fixture_runner(generated_artifacts)
         validate_artifact_packet(generated_artifacts)
+        validate_forced_failure_cases(generated_artifacts)
 
         if not ARTIFACT_DIR.is_dir():
             raise AssertionError("Missing committed Phase 1a artifact packet directory: artifacts/runs")
         validate_artifact_packet(ARTIFACT_DIR)
+        validate_forced_failure_cases(ARTIFACT_DIR)
         compare_artifact_packets(ARTIFACT_DIR, generated_artifacts)
 
     print("Repository validation passed.")
