@@ -2549,7 +2549,9 @@ python3 -m py_compile scripts/fixture_runner.py scripts/validate_repo.py
 
 验证结果：
 
-- 待本 PR 本地验证和 GitHub checks 确认。
+- `python3 scripts/validate_repo.py`：通过。
+- `python3 -m py_compile scripts/fixture_runner.py scripts/validate_repo.py`：通过。
+- GitHub checks：待 PR 运行确认。
 
 剩余风险：
 
