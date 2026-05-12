@@ -2542,6 +2542,7 @@ Add Phase 1a forced-failure artifact validation so that python3 scripts/validate
 
 ```text
 python3 scripts/validate_repo.py
+python scripts/validate_repo.py
 python3 -m py_compile scripts/fixture_runner.py scripts/validate_repo.py
 python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase1a-forced-failure-smoke
 ```
@@ -2549,6 +2550,7 @@ python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /t
 验证结果：
 
 - `python3 scripts/validate_repo.py`：通过。
+- `python scripts/validate_repo.py`：本地环境缺少 `python` 命令，返回 command not found；GitHub Actions 的 `actions/setup-python` 环境预期提供 `python`。
 - `python3 -m py_compile scripts/fixture_runner.py scripts/validate_repo.py`：通过。
 - fixture runner smoke test：通过，处理 5 个 fixtures。
 
