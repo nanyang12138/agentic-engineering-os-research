@@ -1,0 +1,106 @@
+{
+  "artifactChecks": [
+    {
+      "artifactId": "evidence.json",
+      "artifactType": "evidence",
+      "message": "Evidence artifact contains at least one item.",
+      "status": "passed"
+    },
+    {
+      "artifactId": "regression-result-all_passed",
+      "artifactType": "regression_result",
+      "message": "Regression result has a valid verdict and evidence ids.",
+      "status": "passed"
+    },
+    {
+      "artifactId": "email_draft.md",
+      "artifactType": "email_draft",
+      "message": "Email draft is grounded in regression_result.json and evidence ids.",
+      "status": "passed"
+    }
+  ],
+  "blockingFailures": [],
+  "fixtureHash": "988940c2ac2945e2e0ae9bd4522f5fadc42f69cb0763eb6121ff1ced240d05c2",
+  "fixtureId": "all_passed",
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "verifier-report-all_passed",
+  "ruleResults": [
+    {
+      "evidenceIds": [
+        "ev-all_passed-001",
+        "ev-all_passed-002",
+        "ev-all_passed-003",
+        "ev-all_passed-004"
+      ],
+      "message": "TaskSpec, evidence, and regression result required fields are present.",
+      "ruleId": "schema_validation",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [
+        "ev-all_passed-001",
+        "ev-all_passed-002",
+        "ev-all_passed-003",
+        "ev-all_passed-004"
+      ],
+      "message": "Verdict evidence ids resolve to evidence.json items.",
+      "ruleId": "evidence_refs",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [
+        "ev-all_passed-001",
+        "ev-all_passed-002",
+        "ev-all_passed-003",
+        "ev-all_passed-004"
+      ],
+      "message": "Verdict is consistent with marker precedence rules.",
+      "ruleId": "classification_consistency",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [],
+      "message": "Failure markers are not overridden by a passed verdict.",
+      "ruleId": "verdict.failed_precedence",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [],
+      "message": "Incomplete markers are not converted into a passed verdict.",
+      "ruleId": "verdict.incomplete_precedence",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [],
+      "message": "Warning or waiver markers require review-oriented verdicts.",
+      "ruleId": "verdict.warning_guard",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [
+        "ev-all_passed-001",
+        "ev-all_passed-002",
+        "ev-all_passed-003",
+        "ev-all_passed-004"
+      ],
+      "message": "Passed verdict is only allowed for explicit all-pass evidence with no conflicts.",
+      "ruleId": "verdict.passed_sufficiency",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [
+        "ev-all_passed-001",
+        "ev-all_passed-002",
+        "ev-all_passed-003",
+        "ev-all_passed-004"
+      ],
+      "message": "Email draft is grounded in regression_result.json and evidence ids.",
+      "ruleId": "email_draft_uses_structured_facts",
+      "status": "passed"
+    }
+  ],
+  "runId": "run-all_passed-988940c2",
+  "schemaVersion": "verifier-report-v1",
+  "status": "passed",
+  "summary": "Fixture all_passed produced verdict passed; verifier status passed."
+}

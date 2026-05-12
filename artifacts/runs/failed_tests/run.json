@@ -1,0 +1,84 @@
+{
+  "artifacts": [
+    "evidence.json",
+    "regression_result.json",
+    "email_draft.md",
+    "run.json",
+    "events.jsonl",
+    "verifier_report.json"
+  ],
+  "events": [
+    "event-failed_tests-001",
+    "event-failed_tests-002",
+    "event-failed_tests-003",
+    "event-failed_tests-004",
+    "event-failed_tests-005",
+    "event-failed_tests-006",
+    "event-failed_tests-007"
+  ],
+  "fixtureId": "failed_tests",
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "run-failed_tests-854a9947",
+  "schemaVersion": "run-v1",
+  "status": "completed",
+  "steps": [
+    {
+      "capability": "read_log",
+      "id": "step-read-log",
+      "status": "completed"
+    },
+    {
+      "capability": "extract_regression_result",
+      "id": "step-extract-regression-result",
+      "status": "completed"
+    },
+    {
+      "capability": "write_artifact",
+      "id": "step-write-artifact",
+      "status": "completed"
+    },
+    {
+      "capability": "rule_verifier",
+      "id": "step-verify",
+      "status": "passed"
+    }
+  ],
+  "task": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",
+  "taskSpec": {
+    "allowedActions": [
+      "read_log",
+      "extract_regression_result",
+      "write_artifact"
+    ],
+    "approvalPoints": [
+      "send_email_requires_human_approval"
+    ],
+    "expectedArtifacts": [
+      "evidence.json",
+      "regression_result.json",
+      "email_draft.md"
+    ],
+    "forbiddenActions": [
+      "modify_repo_or_log",
+      "execute_external_side_effect",
+      "send_email",
+      "call_gui_desktop_cua_or_browser_capability",
+      "claim_all_passed_without_sufficient_evidence"
+    ],
+    "goal": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",
+    "id": "task-spec-failed_tests",
+    "inputLogPath": "fixtures/regression/failed_tests/input.log",
+    "requiredEvidence": [
+      "sourcePath",
+      "exact log excerpt",
+      "classification",
+      "evidence id referenced by artifacts"
+    ],
+    "successCriteria": [
+      "Read the fixed regression log fixture.",
+      "Extract a safe structured verdict from log markers.",
+      "Write evidence-linked artifacts without external side effects.",
+      "Verify schema, evidence references, classification precedence, and email grounding."
+    ]
+  }
+}

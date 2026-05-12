@@ -1,0 +1,7 @@
+{
+  "allowAllPassedEmail": false,
+  "expectedVerdict": "incomplete",
+  "goal": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",
+  "id": "incomplete_jobs",
+  "inputLogFile": "input.log"
+}

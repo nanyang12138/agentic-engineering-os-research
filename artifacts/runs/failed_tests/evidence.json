@@ -1,0 +1,58 @@
+{
+  "fixtureId": "failed_tests",
+  "items": [
+    {
+      "classification": "failure_marker",
+      "confidence": "high",
+      "excerpt": "STATUS: FAILED",
+      "id": "ev-failed_tests-001",
+      "lineRange": [
+        4,
+        4
+      ],
+      "observedAt": "2026-05-12T14:39:00Z",
+      "sourcePath": "fixtures/regression/failed_tests/input.log",
+      "type": "log"
+    },
+    {
+      "classification": "failure_marker",
+      "confidence": "high",
+      "excerpt": "failed_tests: 2",
+      "id": "ev-failed_tests-002",
+      "lineRange": [
+        6,
+        6
+      ],
+      "observedAt": "2026-05-12T14:39:00Z",
+      "sourcePath": "fixtures/regression/failed_tests/input.log",
+      "type": "log"
+    },
+    {
+      "classification": "failure_marker",
+      "confidence": "high",
+      "excerpt": "ERROR: test m2b_lec_case_017 failed with compare mismatch",
+      "id": "ev-failed_tests-003",
+      "lineRange": [
+        7,
+        7
+      ],
+      "observedAt": "2026-05-12T14:39:00Z",
+      "sourcePath": "fixtures/regression/failed_tests/input.log",
+      "type": "log"
+    },
+    {
+      "classification": "failure_marker",
+      "confidence": "high",
+      "excerpt": "ERROR: test m2b_lec_case_042 failed with unexpected X propagation",
+      "id": "ev-failed_tests-004",
+      "lineRange": [
+        8,
+        8
+      ],
+      "observedAt": "2026-05-12T14:39:00Z",
+      "sourcePath": "fixtures/regression/failed_tests/input.log",
+      "type": "log"
+    }
+  ],
+  "schemaVersion": "evidence-list-v1"
+}

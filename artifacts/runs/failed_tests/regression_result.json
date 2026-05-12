@@ -1,0 +1,94 @@
+{
+  "evidenceIds": [
+    "ev-failed_tests-001",
+    "ev-failed_tests-002",
+    "ev-failed_tests-003",
+    "ev-failed_tests-004"
+  ],
+  "fixtureId": "failed_tests",
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "regression-result-failed_tests",
+  "ruleResults": [
+    {
+      "evidenceIds": [
+        "ev-failed_tests-001",
+        "ev-failed_tests-002",
+        "ev-failed_tests-003",
+        "ev-failed_tests-004"
+      ],
+      "message": "TaskSpec, evidence, and regression result required fields are present.",
+      "ruleId": "schema_validation",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [
+        "ev-failed_tests-001",
+        "ev-failed_tests-002",
+        "ev-failed_tests-003",
+        "ev-failed_tests-004"
+      ],
+      "message": "Verdict evidence ids resolve to evidence.json items.",
+      "ruleId": "evidence_refs",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [
+        "ev-failed_tests-001",
+        "ev-failed_tests-002",
+        "ev-failed_tests-003",
+        "ev-failed_tests-004"
+      ],
+      "message": "Verdict is consistent with marker precedence rules.",
+      "ruleId": "classification_consistency",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [
+        "ev-failed_tests-001",
+        "ev-failed_tests-002",
+        "ev-failed_tests-003",
+        "ev-failed_tests-004"
+      ],
+      "message": "Failure markers are not overridden by a passed verdict.",
+      "ruleId": "verdict.failed_precedence",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [],
+      "message": "Incomplete markers are not converted into a passed verdict.",
+      "ruleId": "verdict.incomplete_precedence",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [],
+      "message": "Warning or waiver markers require review-oriented verdicts.",
+      "ruleId": "verdict.warning_guard",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [
+        "ev-failed_tests-001",
+        "ev-failed_tests-002",
+        "ev-failed_tests-003",
+        "ev-failed_tests-004"
+      ],
+      "message": "Passed verdict is only allowed for explicit all-pass evidence with no conflicts.",
+      "ruleId": "verdict.passed_sufficiency",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [
+        "ev-failed_tests-001",
+        "ev-failed_tests-002",
+        "ev-failed_tests-003",
+        "ev-failed_tests-004"
+      ],
+      "message": "Email draft is grounded in regression_result.json and evidence ids.",
+      "ruleId": "email_draft_uses_structured_facts",
+      "status": "passed"
+    }
+  ],
+  "schemaVersion": "regression-result-v1",
+  "summary": "Failure markers were found in the regression log.",
+  "verdict": "failed"
+}

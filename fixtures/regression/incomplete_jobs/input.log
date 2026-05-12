@@ -1,0 +1,9 @@
+REGRESSION: m2b_lec_regr
+RUN_ID: synth-incomplete-jobs-001
+WORKSPACE: /synthetic/orion/lsc
+STATUS: INCOMPLETE
+TESTS_TOTAL: 128
+completed_tests: 119
+still_running: 9
+incomplete_jobs: 9
+missing final summary

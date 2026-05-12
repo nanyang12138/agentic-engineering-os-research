@@ -1,0 +1,6 @@
+REGRESSION: m2b_lec_regr
+RUN_ID: synth-ambiguous-summary-001
+WORKSPACE: /synthetic/orion/lsc
+SUMMARY unavailable
+No final verdict was emitted by the regression wrapper.
+Operator note: ambiguous handoff state after infrastructure maintenance.
