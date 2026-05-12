@@ -1,0 +1,119 @@
+[
+  {
+    "classification": "metadata",
+    "confidence": "high",
+    "excerpt": "RUN_ID=m2b_lec_regr_20260512_004",
+    "id": "ev:passed_with_warning_or_waiver:001",
+    "lineRange": [
+      1,
+      1
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/passed_with_warning_or_waiver/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "metadata",
+    "confidence": "high",
+    "excerpt": "STARTED_AT=2026-05-12T04:00:00Z",
+    "id": "ev:passed_with_warning_or_waiver:002",
+    "lineRange": [
+      2,
+      2
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/passed_with_warning_or_waiver/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "metadata",
+    "confidence": "high",
+    "excerpt": "OWNER=orion-lsc",
+    "id": "ev:passed_with_warning_or_waiver:003",
+    "lineRange": [
+      3,
+      3
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/passed_with_warning_or_waiver/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "all_passed_marker",
+    "confidence": "high",
+    "excerpt": "REGRESSION_RESULT=PASSED",
+    "id": "ev:passed_with_warning_or_waiver:004",
+    "lineRange": [
+      4,
+      4
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/passed_with_warning_or_waiver/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "all_passed_marker",
+    "confidence": "high",
+    "excerpt": "ALL_TESTS_PASSED",
+    "id": "ev:passed_with_warning_or_waiver:005",
+    "lineRange": [
+      5,
+      5
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/passed_with_warning_or_waiver/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "warning_marker",
+    "confidence": "medium",
+    "excerpt": "WARNING_COUNT=1",
+    "id": "ev:passed_with_warning_or_waiver:006",
+    "lineRange": [
+      9,
+      9
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/passed_with_warning_or_waiver/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "warning_marker",
+    "confidence": "medium",
+    "excerpt": "WARNING: waived compare tolerance exceeded in lec_case_072",
+    "id": "ev:passed_with_warning_or_waiver:007",
+    "lineRange": [
+      10,
+      10
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/passed_with_warning_or_waiver/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "waiver_marker",
+    "confidence": "medium",
+    "excerpt": "WAIVER_COUNT=1",
+    "id": "ev:passed_with_warning_or_waiver:008",
+    "lineRange": [
+      11,
+      11
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/passed_with_warning_or_waiver/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "waiver_marker",
+    "confidence": "medium",
+    "excerpt": "WAIVER: lec_case_072 waiver WVR-217 is active",
+    "id": "ev:passed_with_warning_or_waiver:009",
+    "lineRange": [
+      12,
+      12
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/passed_with_warning_or_waiver/input.log",
+    "type": "log"
+  }
+]

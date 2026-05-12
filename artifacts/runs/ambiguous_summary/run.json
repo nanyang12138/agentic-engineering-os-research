@@ -1,0 +1,85 @@
+{
+  "artifacts": [
+    {
+      "path": "evidence.json",
+      "type": "evidence"
+    },
+    {
+      "id": "regression_result:ambiguous_summary",
+      "path": "regression_result.json",
+      "type": "regression_result"
+    },
+    {
+      "path": "email_draft.md",
+      "type": "email_draft"
+    },
+    {
+      "id": "verifier_report:ambiguous_summary",
+      "path": "verifier_report.json",
+      "type": "verifier_report"
+    }
+  ],
+  "completedAt": "2026-05-12T00:00:00Z",
+  "createdAt": "2026-05-12T00:00:00Z",
+  "fixtureId": "ambiguous_summary",
+  "id": "run:ambiguous_summary",
+  "status": "completed",
+  "steps": [
+    {
+      "capability": "read_log",
+      "id": "step:read_log",
+      "status": "completed"
+    },
+    {
+      "capability": "extract_regression_result",
+      "id": "step:extract_regression_result",
+      "status": "completed"
+    },
+    {
+      "capability": "write_artifact",
+      "id": "step:write_artifact",
+      "status": "completed"
+    },
+    {
+      "capability": "rule_verifier",
+      "id": "step:verify",
+      "status": "passed"
+    }
+  ],
+  "task": "Confirm whether m2b_lec_regr passed and draft an English status email.",
+  "taskSpec": {
+    "allowedActions": [
+      "read_log",
+      "extract_regression_result",
+      "write_artifact"
+    ],
+    "approvalPoints": [
+      "send_email_requires_human_approval"
+    ],
+    "expectedArtifacts": [
+      "evidence.json",
+      "regression_result.json",
+      "email_draft.md"
+    ],
+    "forbiddenActions": [
+      "modify_repo_or_log",
+      "execute_external_side_effects",
+      "send_email",
+      "call_gui_desktop_cua_or_browser_capability",
+      "assert_all_passed_without_sufficient_evidence"
+    ],
+    "goal": "Confirm whether m2b_lec_regr passed and draft an English status email.",
+    "id": "task_spec:ambiguous_summary",
+    "inputLogPath": "fixtures/regression/ambiguous_summary/input.log",
+    "requiredEvidence": [
+      "log excerpt for each non-unknown verdict",
+      "fixture hash",
+      "evidence id references in generated artifacts"
+    ],
+    "successCriteria": [
+      "read the fixed regression log",
+      "extract a structured regression verdict",
+      "write evidence, result, email draft, and verifier artifacts"
+    ]
+  }
+}

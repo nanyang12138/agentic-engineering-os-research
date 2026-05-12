@@ -1,0 +1,9 @@
+RUN_ID=m2b_lec_regr_20260512_002
+STARTED_AT=2026-05-12T02:00:00Z
+OWNER=orion-lsc
+REGRESSION_RESULT=FAILED
+PASSED_TESTS=126
+FAILED_TESTS=2
+TEST_FAILURE: lec_case_017 mismatch at compare point cp_42
+TEST_FAILURE: lec_case_091 timeout waiting for solver
+INCOMPLETE_JOBS=0

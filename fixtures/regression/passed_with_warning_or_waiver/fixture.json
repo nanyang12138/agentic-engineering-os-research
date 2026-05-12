@@ -1,0 +1,7 @@
+{
+  "allowAllPassedEmail": false,
+  "expectedVerdict": "warning_or_waiver",
+  "goal": "Confirm whether m2b_lec_regr passed and draft an English status email.",
+  "id": "passed_with_warning_or_waiver",
+  "inputLogFile": "input.log"
+}

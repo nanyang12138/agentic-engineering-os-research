@@ -1,0 +1,93 @@
+[
+  {
+    "classification": "metadata",
+    "confidence": "high",
+    "excerpt": "RUN_ID=m2b_lec_regr_20260512_002",
+    "id": "ev:failed_tests:001",
+    "lineRange": [
+      1,
+      1
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/failed_tests/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "metadata",
+    "confidence": "high",
+    "excerpt": "STARTED_AT=2026-05-12T02:00:00Z",
+    "id": "ev:failed_tests:002",
+    "lineRange": [
+      2,
+      2
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/failed_tests/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "metadata",
+    "confidence": "high",
+    "excerpt": "OWNER=orion-lsc",
+    "id": "ev:failed_tests:003",
+    "lineRange": [
+      3,
+      3
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/failed_tests/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "failure_marker",
+    "confidence": "high",
+    "excerpt": "REGRESSION_RESULT=FAILED",
+    "id": "ev:failed_tests:004",
+    "lineRange": [
+      4,
+      4
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/failed_tests/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "failure_marker",
+    "confidence": "high",
+    "excerpt": "FAILED_TESTS=2",
+    "id": "ev:failed_tests:005",
+    "lineRange": [
+      6,
+      6
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/failed_tests/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "failure_marker",
+    "confidence": "high",
+    "excerpt": "TEST_FAILURE: lec_case_017 mismatch at compare point cp_42",
+    "id": "ev:failed_tests:006",
+    "lineRange": [
+      7,
+      7
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/failed_tests/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "failure_marker",
+    "confidence": "high",
+    "excerpt": "TEST_FAILURE: lec_case_091 timeout waiting for solver",
+    "id": "ev:failed_tests:007",
+    "lineRange": [
+      8,
+      8
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/failed_tests/input.log",
+    "type": "log"
+  }
+]

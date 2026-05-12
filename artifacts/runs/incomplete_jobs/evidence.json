@@ -1,0 +1,106 @@
+[
+  {
+    "classification": "metadata",
+    "confidence": "high",
+    "excerpt": "RUN_ID=m2b_lec_regr_20260512_003",
+    "id": "ev:incomplete_jobs:001",
+    "lineRange": [
+      1,
+      1
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/incomplete_jobs/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "metadata",
+    "confidence": "high",
+    "excerpt": "STARTED_AT=2026-05-12T03:00:00Z",
+    "id": "ev:incomplete_jobs:002",
+    "lineRange": [
+      2,
+      2
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/incomplete_jobs/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "metadata",
+    "confidence": "high",
+    "excerpt": "OWNER=orion-lsc",
+    "id": "ev:incomplete_jobs:003",
+    "lineRange": [
+      3,
+      3
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/incomplete_jobs/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "incomplete_marker",
+    "confidence": "high",
+    "excerpt": "RUN_STATUS=INCOMPLETE",
+    "id": "ev:incomplete_jobs:004",
+    "lineRange": [
+      4,
+      4
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/incomplete_jobs/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "incomplete_marker",
+    "confidence": "high",
+    "excerpt": "INCOMPLETE_JOBS=3",
+    "id": "ev:incomplete_jobs:005",
+    "lineRange": [
+      7,
+      7
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/incomplete_jobs/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "incomplete_marker",
+    "confidence": "high",
+    "excerpt": "JOB_STATE=RUNNING lec_case_045",
+    "id": "ev:incomplete_jobs:006",
+    "lineRange": [
+      8,
+      8
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/incomplete_jobs/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "incomplete_marker",
+    "confidence": "high",
+    "excerpt": "JOB_STATE=RUNNING lec_case_046",
+    "id": "ev:incomplete_jobs:007",
+    "lineRange": [
+      9,
+      9
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/incomplete_jobs/input.log",
+    "type": "log"
+  },
+  {
+    "classification": "incomplete_marker",
+    "confidence": "high",
+    "excerpt": "JOB_STATE=RUNNING lec_case_047",
+    "id": "ev:incomplete_jobs:008",
+    "lineRange": [
+      10,
+      10
+    ],
+    "observedAt": "2026-05-12T00:00:00Z",
+    "sourcePath": "fixtures/regression/incomplete_jobs/input.log",
+    "type": "log"
+  }
+]

@@ -1,0 +1,82 @@
+{
+  "artifactChecks": [
+    {
+      "artifactId": "evidence.json",
+      "artifactType": "evidence",
+      "message": "Evidence artifact has required fields.",
+      "status": "passed"
+    },
+    {
+      "artifactId": "regression_result:ambiguous_summary",
+      "artifactType": "regression_result",
+      "message": "Regression result artifact has a valid verdict and evidence refs.",
+      "status": "passed"
+    },
+    {
+      "artifactId": "email_draft.md",
+      "artifactType": "email_draft",
+      "message": "Email draft is grounded in structured facts.",
+      "status": "passed"
+    }
+  ],
+  "blockingFailures": [],
+  "fixtureHash": "1aad248ec6671ddcc65d942b40fec220ff4bf257a16877632a89fc0af72ca02c",
+  "fixtureId": "ambiguous_summary",
+  "generatedAt": "2026-05-12T00:00:00Z",
+  "id": "verifier_report:ambiguous_summary",
+  "ruleResults": [
+    {
+      "evidenceIds": [
+        "ev:ambiguous_summary:004",
+        "ev:ambiguous_summary:005",
+        "ev:ambiguous_summary:006"
+      ],
+      "message": "Required artifact fields and enum values are valid.",
+      "ruleId": "schema.validation",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [
+        "ev:ambiguous_summary:004",
+        "ev:ambiguous_summary:005",
+        "ev:ambiguous_summary:006"
+      ],
+      "message": "Regression result evidence refs point to evidence.json.",
+      "ruleId": "evidence.refs",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [
+        "ev:ambiguous_summary:004",
+        "ev:ambiguous_summary:005",
+        "ev:ambiguous_summary:006"
+      ],
+      "message": "Verdict follows marker precedence rules.",
+      "ruleId": "classification.consistency",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [
+        "ev:ambiguous_summary:004",
+        "ev:ambiguous_summary:005",
+        "ev:ambiguous_summary:006"
+      ],
+      "message": "Verdict matches expected fixture verdict unknown.",
+      "ruleId": "fixture.expected_verdict",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [
+        "ev:ambiguous_summary:004",
+        "ev:ambiguous_summary:005",
+        "ev:ambiguous_summary:006"
+      ],
+      "message": "Email draft cites the result artifact, verdict, and evidence ids without unsafe new claims.",
+      "ruleId": "email_draft.uses_structured_facts",
+      "status": "passed"
+    }
+  ],
+  "runId": "run:ambiguous_summary",
+  "status": "passed",
+  "summary": "Phase 1a fixture gate passed."
+}

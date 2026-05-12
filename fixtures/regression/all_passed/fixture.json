@@ -1,0 +1,7 @@
+{
+  "allowAllPassedEmail": true,
+  "expectedVerdict": "passed",
+  "goal": "Confirm whether m2b_lec_regr passed and draft an English status email.",
+  "id": "all_passed",
+  "inputLogFile": "input.log"
+}
