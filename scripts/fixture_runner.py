@@ -365,6 +365,56 @@ def artifact_check(artifact_id: str, artifact_type: str, status: str, message: s
     }
 
 
+def build_verifier_report(
+    fixture: Fixture,
+    run_id: str,
+    fixture_hash: str,
+    task_spec: dict,
+    evidence: list[dict],
+    result: dict,
+    email: str,
+) -> dict:
+    verdict = result.get("verdict", "unknown")
+    verdict_evidence_ids = list(result.get("evidenceIds", []))
+    rule_results = build_rule_results(task_spec, evidence, verdict, verdict_evidence_ids)
+    email_status, email_message = email_grounding_status(fixture, email, result)
+    rule_results.append(rule_result("email_draft_uses_structured_facts", email_status, email_message, verdict_evidence_ids))
+
+    artifact_checks = [
+        artifact_check("evidence.json", "evidence", "passed" if evidence else "failed", "Evidence artifact contains at least one item."),
+        artifact_check(
+            result.get("id", "regression_result.json"),
+            "regression_result",
+            "passed" if verdict in VERDICTS and bool(verdict_evidence_ids) else "failed",
+            "Regression result has a valid verdict and evidence ids.",
+        ),
+        artifact_check("email_draft.md", "email_draft", email_status, email_message),
+    ]
+    blocking_failures = [
+        {"ruleId": item["ruleId"], "message": item["message"], "evidenceIds": item["evidenceIds"]}
+        for item in rule_results
+        if item["status"] == "failed"
+    ] + [
+        {"ruleId": f"artifact.{item['artifactType']}", "message": item["message"], "evidenceIds": verdict_evidence_ids}
+        for item in artifact_checks
+        if item["status"] == "failed"
+    ]
+    report_status = "passed" if not blocking_failures else "failed"
+    return {
+        "schemaVersion": "verifier-report-v1",
+        "id": f"verifier-report-{fixture.id}",
+        "runId": run_id,
+        "fixtureId": fixture.id,
+        "status": report_status,
+        "generatedAt": GENERATED_AT,
+        "fixtureHash": fixture_hash,
+        "ruleResults": rule_results,
+        "artifactChecks": artifact_checks,
+        "blockingFailures": blocking_failures,
+        "summary": f"Fixture {fixture.id} produced verdict {verdict}; verifier status {report_status}.",
+    }
+
+
 def build_events(fixture: Fixture, run_id: str, evidence_ids: list[str], verifier_status: str) -> list[dict]:
     event_specs = [
         ("run.created", "completed", None, "run.json", []),
@@ -419,38 +469,9 @@ def run_fixture(fixture: Fixture, out_dir: Path) -> dict:
         "generatedAt": GENERATED_AT,
     }
     email = build_email(fixture, result)
-    email_status, email_message = email_grounding_status(fixture, email, result)
-    rule_results.append(rule_result("email_draft_uses_structured_facts", email_status, email_message, verdict_evidence_ids))
-    result["ruleResults"] = rule_results
-
-    artifact_checks = [
-        artifact_check("evidence.json", "evidence", "passed" if evidence else "failed", "Evidence artifact contains at least one item."),
-        artifact_check(result["id"], "regression_result", "passed" if verdict in VERDICTS and bool(result["evidenceIds"]) else "failed", "Regression result has a valid verdict and evidence ids."),
-        artifact_check("email_draft.md", "email_draft", email_status, email_message),
-    ]
-    blocking_failures = [
-        {"ruleId": item["ruleId"], "message": item["message"], "evidenceIds": item["evidenceIds"]}
-        for item in rule_results
-        if item["status"] == "failed"
-    ] + [
-        {"ruleId": f"artifact.{item['artifactType']}", "message": item["message"], "evidenceIds": verdict_evidence_ids}
-        for item in artifact_checks
-        if item["status"] == "failed"
-    ]
-    report_status = "passed" if not blocking_failures else "failed"
-    verifier_report = {
-        "schemaVersion": "verifier-report-v1",
-        "id": f"verifier-report-{fixture.id}",
-        "runId": run_id,
-        "fixtureId": fixture.id,
-        "status": report_status,
-        "generatedAt": GENERATED_AT,
-        "fixtureHash": fixture_hash,
-        "ruleResults": rule_results,
-        "artifactChecks": artifact_checks,
-        "blockingFailures": blocking_failures,
-        "summary": f"Fixture {fixture.id} produced verdict {verdict}; verifier status {report_status}.",
-    }
+    verifier_report = build_verifier_report(fixture, run_id, fixture_hash, task_spec, evidence, result, email)
+    result["ruleResults"] = verifier_report["ruleResults"]
+    report_status = verifier_report["status"]
 
     events = build_events(fixture, run_id, verdict_evidence_ids, "completed" if report_status == "passed" else "failed")
     run = {

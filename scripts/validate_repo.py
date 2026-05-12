@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import copy
 import filecmp
 import json
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+import fixture_runner
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -213,6 +216,74 @@ def compare_artifact_packets(expected_dir: Path, actual_dir: Path) -> None:
                 )
 
 
+def load_artifact_inputs(base_dir: Path, fixture_id: str) -> tuple[fixture_runner.Fixture, dict, dict, dict, dict]:
+    run_dir = base_dir / fixture_id
+    fixture = fixture_runner.load_fixture(FIXTURE_DIR / fixture_id)
+    run = load_json(run_dir / "run.json")
+    evidence = load_json(run_dir / "evidence.json")
+    result = load_json(run_dir / "regression_result.json")
+    report = load_json(run_dir / "verifier_report.json")
+    return fixture, run, evidence, result, report
+
+
+def rebuild_report(base_dir: Path, fixture_id: str, result: dict, email: str) -> dict:
+    fixture, run, evidence, _, report = load_artifact_inputs(base_dir, fixture_id)
+    return fixture_runner.build_verifier_report(
+        fixture,
+        run["id"],
+        report["fixtureHash"],
+        run["taskSpec"],
+        evidence["items"],
+        result,
+        email,
+    )
+
+
+def require_failed_report(label: str, report: dict, required_rule_ids: set[str]) -> None:
+    if report["status"] != "failed":
+        raise AssertionError(f"Forced-failure check {label} must produce verifier_report.status=failed")
+    failing_rule_ids = {item["ruleId"] for item in report["blockingFailures"]}
+    missing_rule_ids = required_rule_ids - failing_rule_ids
+    if missing_rule_ids:
+        raise AssertionError(
+            f"Forced-failure check {label} missing expected blocking failures: {sorted(missing_rule_ids)}; "
+            f"actual={sorted(failing_rule_ids)}"
+        )
+
+
+def require_forced_failure_checks(base_dir: Path) -> None:
+    _, _, _, passed_result, _ = load_artifact_inputs(base_dir, "all_passed")
+    bad_refs_result = copy.deepcopy(passed_result)
+    bad_refs_result["evidenceIds"] = ["ev-all-passed-missing"]
+    bad_refs_result["ruleResults"] = []
+    bad_refs_email = fixture_runner.build_email(fixture_runner.load_fixture(FIXTURE_DIR / "all_passed"), bad_refs_result)
+    require_failed_report(
+        "unknown evidence refs",
+        rebuild_report(base_dir, "all_passed", bad_refs_result, bad_refs_email),
+        {"evidence_refs"},
+    )
+
+    _, _, _, failed_result, _ = load_artifact_inputs(base_dir, "failed_tests")
+    bad_verdict_result = copy.deepcopy(failed_result)
+    bad_verdict_result["verdict"] = "passed"
+    bad_verdict_result["summary"] = "Tampered result incorrectly claims a clean pass."
+    bad_verdict_result["ruleResults"] = []
+    bad_verdict_email = fixture_runner.build_email(fixture_runner.load_fixture(FIXTURE_DIR / "failed_tests"), bad_verdict_result)
+    require_failed_report(
+        "failed marker overridden by passed verdict",
+        rebuild_report(base_dir, "failed_tests", bad_verdict_result, bad_verdict_email),
+        {"classification_consistency", "verdict.failed_precedence"},
+    )
+
+    _, _, _, incomplete_result, _ = load_artifact_inputs(base_dir, "incomplete_jobs")
+    bad_email = (base_dir / "incomplete_jobs" / "email_draft.md").read_text(encoding="utf-8") + "\nThe regression is a clean pass.\n"
+    require_failed_report(
+        "ungrounded pass-style email",
+        rebuild_report(base_dir, "incomplete_jobs", incomplete_result, bad_email),
+        {"email_draft_uses_structured_facts", "artifact.email_draft"},
+    )
+
+
 def main() -> None:
     for path in REQUIRED_FILES:
         require_file(path)
@@ -228,10 +299,12 @@ def main() -> None:
         generated_artifacts = Path(temp_dir) / "runs"
         run_fixture_runner(generated_artifacts)
         validate_artifact_packet(generated_artifacts)
+        require_forced_failure_checks(generated_artifacts)
 
         if not ARTIFACT_DIR.is_dir():
             raise AssertionError("Missing committed Phase 1a artifact packet directory: artifacts/runs")
         validate_artifact_packet(ARTIFACT_DIR)
+        require_forced_failure_checks(ARTIFACT_DIR)
         compare_artifact_packets(ARTIFACT_DIR, generated_artifacts)
 
     print("Repository validation passed.")
