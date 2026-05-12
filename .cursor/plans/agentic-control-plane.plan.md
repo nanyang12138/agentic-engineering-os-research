@@ -1235,6 +1235,29 @@ artifacts/runs/<fixture-id>/{run.json,events.jsonl,evidence.json,regression_resu
 - Phase 1a 仍需要在 PR / GitHub checks 中验证同一 gate 后，才能作为进入 Phase 1b 的机器验收依据。
 - 下一轮不应跳到 CUA、IDE 或多 agent；应先做 Phase 1a Evidence Review，审查真实输出是否暴露 parser marker、email grounding 或 schema 摩擦点，再决定是否进入 Local Read-only Runner。
 
+### 13.7 Phase 1a Versioned Schema Validation Gate
+
+2026-05-12 19:03 UTC 自动化实现结论：Phase 1a 的 artifact packet 不应只依赖快乐路径字段检查；必须由 `scripts/validate_repo.py` 显式校验版本化结构，并证明 malformed packet 会被拒绝。
+
+本轮完成的最小可验证切片：
+
+```text
+Add explicit Phase 1a artifact schema validation so that python3 scripts/validate_repo.py rejects malformed fixture packets.
+```
+
+实现摘要：
+
+- `scripts/validate_repo.py` 新增标准库 schema gate，覆盖 `fixture.json`、`run.json`、`events.jsonl`、`evidence.json`、`regression_result.json` 和 `verifier_report.json`。
+- 校验 `schemaVersion`、required keys、枚举值、event 顺序、evidence id 引用、rule result、artifact check 和 blocking failure 结构。
+- 新增 deterministic tamper negative cases：错误 `run.json.schemaVersion`、非法 evidence classification、缺失 `verifier_report.json.status` 均必须触发 validation failure。
+- 不新增外部 JSON Schema 依赖、daemon、SQLite、capability registry、CUA、IDE 或 multi-agent runtime。
+
+当前门槛状态：
+
+- Phase 1a 的 synthetic artifact packet 已具备显式版本化结构校验。
+- Phase 1a 仍需要 forced-failure evidence review 证明 verifier 能拒绝缺 evidence ref、错误 precedence verdict 和未 grounded 的 pass-style email，之后才进入 Phase 1b Local Read-only Runner。
+- 下一轮推荐切片：完成 Phase 1a forced-failure validation，而不是启动 SQLite、daemon、CUA、IDE 或 multi-agent。
+
 ## 14. 第一版不要做什么
 
 - 不要先做多 IDE 控制。
@@ -1346,7 +1369,7 @@ artifacts/runs/<fixture-id>/{run.json,events.jsonl,evidence.json,regression_resu
 1. Open Source Coverage Mapping：已完成，结论是自研 OS 语义，集成底层 runtime 和 coding agent。
 2. MVP Verification Contract：已完成，把第一版压缩成 read-only regression evidence demo。
 3. Feasibility Critic Review：已完成，把 Phase 1a 冻结为静态 fixture runner；SQLite、daemon、adapter 和 durable workflow 全部延后。
-4. Fixture Runner MVP：已实现 Phase 1a one-shot runner、5 个 synthetic fixture、committed artifact packet 和 deterministic validation gate；入口为 `python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir artifacts/runs`，输出并验证 `run.json`、`events.jsonl`、`evidence.json`、`regression_result.json`、`email_draft.md`、`verifier_report.json`，其中 `verifier_report.json` 是唯一验收真相。
+4. Fixture Runner MVP：已实现 Phase 1a one-shot runner、5 个 synthetic fixture、committed artifact packet、deterministic validation gate 和显式版本化 artifact schema validation；入口为 `python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir artifacts/runs`，输出并验证 `run.json`、`events.jsonl`、`evidence.json`、`regression_result.json`、`email_draft.md`、`verifier_report.json`，其中 `verifier_report.json` 是唯一验收真相。
 5. Intent-to-Spec MVP：MVP 默认使用模板/表单化 `RegressionTaskSpecV1`；LLM 只能生成草稿，必须通过 schema/rule verifier。
 6. Evidence List + Verifier Runtime：已固化 `LogEvidenceV1`、`RegressionResultArtifactV1`、email grounding 规则和 fixture gate；下一步以 fixture runner 验证规则是否过多或不足。
 7. Local Read-only Runner：仅在 Phase 1a artifact packet 通过 PR / GitHub checks 且完成 Evidence Review 后，再决定是否引入 capability registry、真实 log adapter、SQLite event store、极简 step runner 和更完整的 run state。
@@ -1630,6 +1653,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-12：本轮 Plan Optimizer 继续选择 `Plan Maintenance`；当前计划已足够进入 Phase 1a fixture runner 证据生产，材料性改进是把重复的 no-new-evidence backlog 收敛为 `Evidence Packet Stop Rule`，避免后续自动化在没有运行证据时继续扩写计划。
 - 2026-05-12 13:00 UTC：本轮 Plan Optimizer 选择 `Plan Maintenance`；证据预检未发现 `fixtures/regression`、`artifacts/runs` 或 `verifier_report.json`，因此不修改正式设计章节、不新增开源 mapping 或 adapter 决策，只记录缺失证据并维持 fixture artifact packet 作为下一步唯一解锁条件。
 - 2026-05-12 14:39 UTC：Phase 1a Fixture Runner Evidence Packet slice 已实现；决定将 5 个 synthetic fixture、committed `artifacts/runs/*` 和 `scripts/validate_repo.py` deterministic validation 作为进入 Phase 1a Evidence Review 的机器证据。Phase 1b 仍需等待 PR / GitHub checks 通过及 evidence review，不直接引入 capability registry、SQLite、daemon、CUA、IDE 或多 agent。
+- 2026-05-12 19:03 UTC：Phase 1a Schema Validation Gate slice 已实现；决定在不引入外部依赖的前提下用标准库校验 `fixture.json`、`run.json`、`events.jsonl`、`evidence.json`、`regression_result.json` 和 `verifier_report.json` 的版本化结构，并用篡改负例证明 malformed artifact packet 会被拒绝。
 
 ## 20. Open Questions
 
@@ -2502,6 +2526,64 @@ python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /t
 ```text
 执行 Phase 1a Evidence Review / forced-failure validation slice：
 基于 committed artifacts 检查 verifier_report、email grounding 和 evidence refs 是否足以拒绝被篡改或缺证据 artifact；如需要，新增一个 deterministic negative validation case，而不是进入 Phase 1b。
+```
+
+### 2026-05-12 19:03 UTC: Phase 1a Schema Validation Gate Implementation
+
+本轮目标：执行最早未完成的 Phase 1a hardening slice，为已提交的 artifact packet 增加显式版本化结构校验，并证明 malformed packet 会被 deterministic validation gate 拒绝。
+
+Active phase：
+
+```text
+Phase 1a: Static Fixture Contract / Read-only Regression Evidence Demo foundation
+```
+
+Selected slice：
+
+```text
+Add explicit Phase 1a artifact schema validation so that python3 scripts/validate_repo.py rejects malformed fixture packets.
+```
+
+为什么这是下一步：Phase 1a 初始 runner 已能生成 5 个 synthetic fixture artifact packet，但主计划验收要求所有 JSON artifact 通过版本化 schema validation；当前 main 的 gate 仍偏向快乐路径语义校验，缺少对 schemaVersion、required keys、枚举值和 artifact 引用结构的显式拒绝测试。
+
+实现摘要：
+
+- 扩展 `scripts/validate_repo.py`，校验 `fixture.json`、`run.json`、`events.jsonl`、`evidence.json`、`regression_result.json` 和 `verifier_report.json` 的版本化结构。
+- 为 rule results、artifact checks、event log、TaskSpec、evidence ids 和 verdict 枚举增加标准库校验。
+- 增加三个 deterministic tamper negative cases：错误 `run.json.schemaVersion`、非法 evidence classification、缺失 `verifier_report.json.status`。
+- 更新 Research Backlog、Decision Log 和正式 Phase 1a 章节，记录 schema gate 已完成且 Phase 1b 仍等待 forced-failure evidence review。
+
+验收标准和结果：
+
+- 正常 generated artifact packet 通过版本化 schema validation：通过。
+- committed `artifacts/runs/*` 通过同一 schema validation：通过。
+- malformed artifact packet 被 validation gate 拒绝：通过。
+- 不新增外部依赖、daemon、SQLite、capability registry、CUA、IDE 或 multi-agent runtime：通过。
+
+验证命令：
+
+```text
+python3 scripts/validate_repo.py
+python3 -m py_compile scripts/fixture_runner.py scripts/validate_repo.py
+python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase1a-schema-smoke
+```
+
+验证结果：
+
+- `python3 scripts/validate_repo.py`：通过。
+- `python3 -m py_compile scripts/fixture_runner.py scripts/validate_repo.py`：通过。
+- fixture runner smoke test：通过，处理 5 个 fixtures。
+
+剩余风险：
+
+- schema gate 证明 artifact 形状可拒绝 malformed packet，但尚未证明 verifier 能拒绝业务层篡改，例如缺 evidence ref、failed marker 被改成 passed、负例邮件被注入 pass-style claim。
+- Phase 1b 仍不得启动 SQLite、daemon、capability registry、CUA、IDE 或 multi-agent；需要先完成 forced-failure validation。
+
+下一轮建议：
+
+```text
+执行 Phase 1a forced-failure validation：
+复用同一 verifier 规则构建缺 evidence ref、错误 verdict precedence、email grounding 注入三个负例，确保 verifier_report.status="failed" 且 blockingFailures 指向对应 rule。
 ```
 
 ## 22. Parking Lot
