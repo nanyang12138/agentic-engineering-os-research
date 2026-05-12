@@ -1,9 +1,9 @@
-RUN_ID=m2b_lec_regr_20260512_002
-STARTED_AT=2026-05-12T02:00:00Z
-OWNER=orion-lsc
-REGRESSION_RESULT=FAILED
-PASSED_TESTS=126
-FAILED_TESTS=2
-TEST_FAILURE: lec_case_017 mismatch at compare point cp_42
-TEST_FAILURE: lec_case_091 timeout waiting for solver
-INCOMPLETE_JOBS=0
+REGRESSION: m2b_lec_regr
+RUN_ID: synth-failed-tests-001
+WORKSPACE: /synthetic/orion/lsc
+STATUS: FAILED
+TESTS_TOTAL: 128
+failed_tests: 2
+ERROR: test m2b_lec_case_017 failed with compare mismatch
+ERROR: test m2b_lec_case_042 failed with unexpected X propagation
+END_OF_SUMMARY

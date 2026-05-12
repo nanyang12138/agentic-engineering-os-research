@@ -2,14 +2,11 @@ Subject: Regression status for failed_tests
 
 Hello,
 
-Structured result artifact: regression_result:failed_tests
-Structured verdict: failed
-Evidence ids: ev:failed_tests:004, ev:failed_tests:005, ev:failed_tests:006, ev:failed_tests:007
+The structured regression result artifact `regression-result-failed_tests` reports verdict `failed`.
+Referenced evidence ids: ev-failed_tests-001, ev-failed_tests-002, ev-failed_tests-003, ev-failed_tests-004.
 
-The regression cannot be reported as successful.
-Failure evidence is present in the structured result and should be investigated.
-
-This draft is grounded only in regression_result.json and the referenced evidence ids.
+The regression has failure markers in the referenced log evidence.
+Please review the failure evidence before deciding the next action.
 
 Regards,
-Agentic Engineering OS
+Agentic Engineering OS Fixture Runner

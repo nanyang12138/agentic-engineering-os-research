@@ -1,81 +1,101 @@
 {
   "evidenceIds": [
-    "ev:passed_with_warning_or_waiver:006",
-    "ev:passed_with_warning_or_waiver:007",
-    "ev:passed_with_warning_or_waiver:008",
-    "ev:passed_with_warning_or_waiver:009",
-    "ev:passed_with_warning_or_waiver:004",
-    "ev:passed_with_warning_or_waiver:005"
+    "ev-passed_with_warning_or_waiver-001",
+    "ev-passed_with_warning_or_waiver-006",
+    "ev-passed_with_warning_or_waiver-002",
+    "ev-passed_with_warning_or_waiver-007",
+    "ev-passed_with_warning_or_waiver-008"
   ],
-  "generatedAt": "2026-05-12T00:00:00Z",
-  "id": "regression_result:passed_with_warning_or_waiver",
+  "fixtureId": "passed_with_warning_or_waiver",
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "regression-result-passed_with_warning_or_waiver",
   "ruleResults": [
     {
       "evidenceIds": [
-        "ev:passed_with_warning_or_waiver:008",
-        "ev:passed_with_warning_or_waiver:009",
-        "ev:passed_with_warning_or_waiver:006",
-        "ev:passed_with_warning_or_waiver:005",
-        "ev:passed_with_warning_or_waiver:007",
-        "ev:passed_with_warning_or_waiver:004"
+        "ev-passed_with_warning_or_waiver-001",
+        "ev-passed_with_warning_or_waiver-006",
+        "ev-passed_with_warning_or_waiver-002",
+        "ev-passed_with_warning_or_waiver-007",
+        "ev-passed_with_warning_or_waiver-008"
       ],
-      "message": "Required artifact fields and enum values are valid.",
-      "ruleId": "schema.validation",
+      "message": "TaskSpec, evidence, and regression result required fields are present.",
+      "ruleId": "schema_validation",
       "status": "passed"
     },
     {
       "evidenceIds": [
-        "ev:passed_with_warning_or_waiver:008",
-        "ev:passed_with_warning_or_waiver:009",
-        "ev:passed_with_warning_or_waiver:006",
-        "ev:passed_with_warning_or_waiver:005",
-        "ev:passed_with_warning_or_waiver:007",
-        "ev:passed_with_warning_or_waiver:004"
+        "ev-passed_with_warning_or_waiver-001",
+        "ev-passed_with_warning_or_waiver-006",
+        "ev-passed_with_warning_or_waiver-002",
+        "ev-passed_with_warning_or_waiver-007",
+        "ev-passed_with_warning_or_waiver-008"
       ],
-      "message": "Regression result evidence refs point to evidence.json.",
-      "ruleId": "evidence.refs",
+      "message": "Verdict evidence ids resolve to evidence.json items.",
+      "ruleId": "evidence_refs",
       "status": "passed"
     },
     {
       "evidenceIds": [
-        "ev:passed_with_warning_or_waiver:008",
-        "ev:passed_with_warning_or_waiver:009",
-        "ev:passed_with_warning_or_waiver:006",
-        "ev:passed_with_warning_or_waiver:005",
-        "ev:passed_with_warning_or_waiver:007",
-        "ev:passed_with_warning_or_waiver:004"
+        "ev-passed_with_warning_or_waiver-001",
+        "ev-passed_with_warning_or_waiver-006",
+        "ev-passed_with_warning_or_waiver-002",
+        "ev-passed_with_warning_or_waiver-007",
+        "ev-passed_with_warning_or_waiver-008"
       ],
-      "message": "Verdict follows marker precedence rules.",
-      "ruleId": "classification.consistency",
+      "message": "Verdict is consistent with marker precedence rules.",
+      "ruleId": "classification_consistency",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [],
+      "message": "Failure markers are not overridden by a passed verdict.",
+      "ruleId": "verdict.failed_precedence",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [],
+      "message": "Incomplete markers are not converted into a passed verdict.",
+      "ruleId": "verdict.incomplete_precedence",
       "status": "passed"
     },
     {
       "evidenceIds": [
-        "ev:passed_with_warning_or_waiver:008",
-        "ev:passed_with_warning_or_waiver:009",
-        "ev:passed_with_warning_or_waiver:006",
-        "ev:passed_with_warning_or_waiver:005",
-        "ev:passed_with_warning_or_waiver:007",
-        "ev:passed_with_warning_or_waiver:004"
+        "ev-passed_with_warning_or_waiver-001",
+        "ev-passed_with_warning_or_waiver-002",
+        "ev-passed_with_warning_or_waiver-006",
+        "ev-passed_with_warning_or_waiver-007",
+        "ev-passed_with_warning_or_waiver-008"
       ],
-      "message": "Verdict matches expected fixture verdict warning_or_waiver.",
-      "ruleId": "fixture.expected_verdict",
+      "message": "Warning or waiver markers require review-oriented verdicts.",
+      "ruleId": "verdict.warning_guard",
       "status": "passed"
     },
     {
       "evidenceIds": [
-        "ev:passed_with_warning_or_waiver:008",
-        "ev:passed_with_warning_or_waiver:009",
-        "ev:passed_with_warning_or_waiver:006",
-        "ev:passed_with_warning_or_waiver:005",
-        "ev:passed_with_warning_or_waiver:007",
-        "ev:passed_with_warning_or_waiver:004"
+        "ev-passed_with_warning_or_waiver-001",
+        "ev-passed_with_warning_or_waiver-006",
+        "ev-passed_with_warning_or_waiver-002",
+        "ev-passed_with_warning_or_waiver-007",
+        "ev-passed_with_warning_or_waiver-008"
       ],
-      "message": "Email draft cites the result artifact, verdict, and evidence ids without unsafe new claims.",
-      "ruleId": "email_draft.uses_structured_facts",
+      "message": "Passed verdict is only allowed for explicit all-pass evidence with no conflicts.",
+      "ruleId": "verdict.passed_sufficiency",
+      "status": "passed"
+    },
+    {
+      "evidenceIds": [
+        "ev-passed_with_warning_or_waiver-001",
+        "ev-passed_with_warning_or_waiver-006",
+        "ev-passed_with_warning_or_waiver-002",
+        "ev-passed_with_warning_or_waiver-007",
+        "ev-passed_with_warning_or_waiver-008"
+      ],
+      "message": "Email draft is grounded in regression_result.json and evidence ids.",
+      "ruleId": "email_draft_uses_structured_facts",
       "status": "passed"
     }
   ],
-  "summary": "Warning or waiver markers prevent a clean passed verdict.",
+  "schemaVersion": "regression-result-v1",
+  "summary": "Warning or waiver markers were found and require review before a clean pass can be claimed.",
   "verdict": "warning_or_waiver"
 }

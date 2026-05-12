@@ -1,10 +1,9 @@
-RUN_ID=m2b_lec_regr_20260512_003
-STARTED_AT=2026-05-12T03:00:00Z
-OWNER=orion-lsc
-RUN_STATUS=INCOMPLETE
-PASSED_TESTS=97
-FAILED_TESTS=0
-INCOMPLETE_JOBS=3
-JOB_STATE=RUNNING lec_case_045
-JOB_STATE=RUNNING lec_case_046
-JOB_STATE=RUNNING lec_case_047
+REGRESSION: m2b_lec_regr
+RUN_ID: synth-incomplete-jobs-001
+WORKSPACE: /synthetic/orion/lsc
+STATUS: INCOMPLETE
+TESTS_TOTAL: 128
+completed_tests: 119
+still_running: 9
+incomplete_jobs: 9
+missing final summary

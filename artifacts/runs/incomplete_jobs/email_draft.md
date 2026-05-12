@@ -2,14 +2,11 @@ Subject: Regression status for incomplete_jobs
 
 Hello,
 
-Structured result artifact: regression_result:incomplete_jobs
-Structured verdict: incomplete
-Evidence ids: ev:incomplete_jobs:004, ev:incomplete_jobs:005, ev:incomplete_jobs:006, ev:incomplete_jobs:007, ev:incomplete_jobs:008
+The structured regression result artifact `regression-result-incomplete_jobs` reports verdict `incomplete`.
+Referenced evidence ids: ev-incomplete_jobs-001, ev-incomplete_jobs-002, ev-incomplete_jobs-003, ev-incomplete_jobs-004.
 
-The regression cannot be confirmed yet.
-Incomplete or running job evidence is present in the structured result.
-
-This draft is grounded only in regression_result.json and the referenced evidence ids.
+The regression is not complete according to the referenced log evidence.
+Please wait for a final summary or review the run manually.
 
 Regards,
-Agentic Engineering OS
+Agentic Engineering OS Fixture Runner

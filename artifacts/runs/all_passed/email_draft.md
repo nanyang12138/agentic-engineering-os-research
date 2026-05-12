@@ -2,14 +2,11 @@ Subject: Regression status for all_passed
 
 Hello,
 
-Structured result artifact: regression_result:all_passed
-Structured verdict: passed
-Evidence ids: ev:all_passed:004, ev:all_passed:005
+The structured regression result artifact `regression-result-all_passed` reports verdict `passed`.
+Referenced evidence ids: ev-all_passed-001, ev-all_passed-002, ev-all_passed-003, ev-all_passed-004.
 
-All tests passed based on the structured regression result.
-No failure, incomplete, warning, or waiver markers were found by the verifier.
-
-This draft is grounded only in regression_result.json and the referenced evidence ids.
+Based only on the structured result and referenced evidence, the regression is a clean pass.
+Please review the attached artifacts before sending any external notification.
 
 Regards,
-Agentic Engineering OS
+Agentic Engineering OS Fixture Runner

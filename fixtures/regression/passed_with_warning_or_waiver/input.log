@@ -1,12 +1,10 @@
-RUN_ID=m2b_lec_regr_20260512_004
-STARTED_AT=2026-05-12T04:00:00Z
-OWNER=orion-lsc
-REGRESSION_RESULT=PASSED
-ALL_TESTS_PASSED
-PASSED_TESTS=128
-FAILED_TESTS=0
-INCOMPLETE_JOBS=0
-WARNING_COUNT=1
-WARNING: waived compare tolerance exceeded in lec_case_072
-WAIVER_COUNT=1
-WAIVER: lec_case_072 waiver WVR-217 is active
+REGRESSION: m2b_lec_regr
+RUN_ID: synth-warning-waiver-001
+WORKSPACE: /synthetic/orion/lsc
+STATUS: PASSED
+TESTS_TOTAL: 128
+failed_tests: 0
+incomplete_jobs: 0
+WARNING: compare job m2b_lec_case_077 used a timing waiver
+waived_errors: 1
+END_OF_SUMMARY

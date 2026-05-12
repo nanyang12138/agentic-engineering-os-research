@@ -1,52 +1,49 @@
 {
   "artifacts": [
-    {
-      "path": "evidence.json",
-      "type": "evidence"
-    },
-    {
-      "id": "regression_result:incomplete_jobs",
-      "path": "regression_result.json",
-      "type": "regression_result"
-    },
-    {
-      "path": "email_draft.md",
-      "type": "email_draft"
-    },
-    {
-      "id": "verifier_report:incomplete_jobs",
-      "path": "verifier_report.json",
-      "type": "verifier_report"
-    }
+    "evidence.json",
+    "regression_result.json",
+    "email_draft.md",
+    "run.json",
+    "events.jsonl",
+    "verifier_report.json"
   ],
-  "completedAt": "2026-05-12T00:00:00Z",
-  "createdAt": "2026-05-12T00:00:00Z",
+  "events": [
+    "event-incomplete_jobs-001",
+    "event-incomplete_jobs-002",
+    "event-incomplete_jobs-003",
+    "event-incomplete_jobs-004",
+    "event-incomplete_jobs-005",
+    "event-incomplete_jobs-006",
+    "event-incomplete_jobs-007"
+  ],
   "fixtureId": "incomplete_jobs",
-  "id": "run:incomplete_jobs",
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "run-incomplete_jobs-65b9735d",
+  "schemaVersion": "run-v1",
   "status": "completed",
   "steps": [
     {
       "capability": "read_log",
-      "id": "step:read_log",
+      "id": "step-read-log",
       "status": "completed"
     },
     {
       "capability": "extract_regression_result",
-      "id": "step:extract_regression_result",
+      "id": "step-extract-regression-result",
       "status": "completed"
     },
     {
       "capability": "write_artifact",
-      "id": "step:write_artifact",
+      "id": "step-write-artifact",
       "status": "completed"
     },
     {
       "capability": "rule_verifier",
-      "id": "step:verify",
+      "id": "step-verify",
       "status": "passed"
     }
   ],
-  "task": "Confirm whether m2b_lec_regr passed and draft an English status email.",
+  "task": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",
   "taskSpec": {
     "allowedActions": [
       "read_log",
@@ -63,23 +60,25 @@
     ],
     "forbiddenActions": [
       "modify_repo_or_log",
-      "execute_external_side_effects",
+      "execute_external_side_effect",
       "send_email",
       "call_gui_desktop_cua_or_browser_capability",
-      "assert_all_passed_without_sufficient_evidence"
+      "claim_all_passed_without_sufficient_evidence"
     ],
-    "goal": "Confirm whether m2b_lec_regr passed and draft an English status email.",
-    "id": "task_spec:incomplete_jobs",
+    "goal": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",
+    "id": "task-spec-incomplete_jobs",
     "inputLogPath": "fixtures/regression/incomplete_jobs/input.log",
     "requiredEvidence": [
-      "log excerpt for each non-unknown verdict",
-      "fixture hash",
-      "evidence id references in generated artifacts"
+      "sourcePath",
+      "exact log excerpt",
+      "classification",
+      "evidence id referenced by artifacts"
     ],
     "successCriteria": [
-      "read the fixed regression log",
-      "extract a structured regression verdict",
-      "write evidence, result, email draft, and verifier artifacts"
+      "Read the fixed regression log fixture.",
+      "Extract a safe structured verdict from log markers.",
+      "Write evidence-linked artifacts without external side effects.",
+      "Verify schema, evidence references, classification precedence, and email grounding."
     ]
   }
 }

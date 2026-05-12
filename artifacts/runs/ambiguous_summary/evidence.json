@@ -1,80 +1,58 @@
-[
-  {
-    "classification": "metadata",
-    "confidence": "high",
-    "excerpt": "RUN_ID=m2b_lec_regr_20260512_005",
-    "id": "ev:ambiguous_summary:001",
-    "lineRange": [
-      1,
-      1
-    ],
-    "observedAt": "2026-05-12T00:00:00Z",
-    "sourcePath": "fixtures/regression/ambiguous_summary/input.log",
-    "type": "log"
-  },
-  {
-    "classification": "metadata",
-    "confidence": "high",
-    "excerpt": "STARTED_AT=2026-05-12T05:00:00Z",
-    "id": "ev:ambiguous_summary:002",
-    "lineRange": [
-      2,
-      2
-    ],
-    "observedAt": "2026-05-12T00:00:00Z",
-    "sourcePath": "fixtures/regression/ambiguous_summary/input.log",
-    "type": "log"
-  },
-  {
-    "classification": "metadata",
-    "confidence": "high",
-    "excerpt": "OWNER=orion-lsc",
-    "id": "ev:ambiguous_summary:003",
-    "lineRange": [
-      3,
-      3
-    ],
-    "observedAt": "2026-05-12T00:00:00Z",
-    "sourcePath": "fixtures/regression/ambiguous_summary/input.log",
-    "type": "log"
-  },
-  {
-    "classification": "ambiguous",
-    "confidence": "low",
-    "excerpt": "SUMMARY_UNCLEAR",
-    "id": "ev:ambiguous_summary:004",
-    "lineRange": [
-      4,
-      4
-    ],
-    "observedAt": "2026-05-12T00:00:00Z",
-    "sourcePath": "fixtures/regression/ambiguous_summary/input.log",
-    "type": "log"
-  },
-  {
-    "classification": "ambiguous",
-    "confidence": "low",
-    "excerpt": "RESULT=UNKNOWN",
-    "id": "ev:ambiguous_summary:005",
-    "lineRange": [
-      5,
-      5
-    ],
-    "observedAt": "2026-05-12T00:00:00Z",
-    "sourcePath": "fixtures/regression/ambiguous_summary/input.log",
-    "type": "log"
-  },
-  {
-    "classification": "ambiguous",
-    "confidence": "low",
-    "excerpt": "MAYBE PASSED according to partial dashboard text",
-    "id": "ev:ambiguous_summary:006",
-    "lineRange": [
-      6,
-      6
-    ],
-    "observedAt": "2026-05-12T00:00:00Z",
-    "sourcePath": "fixtures/regression/ambiguous_summary/input.log",
-    "type": "log"
-  }
-]
+{
+  "fixtureId": "ambiguous_summary",
+  "items": [
+    {
+      "classification": "ambiguous",
+      "confidence": "low",
+      "excerpt": "RUN_ID: synth-ambiguous-summary-001",
+      "id": "ev-ambiguous_summary-001",
+      "lineRange": [
+        2,
+        2
+      ],
+      "observedAt": "2026-05-12T14:39:00Z",
+      "sourcePath": "fixtures/regression/ambiguous_summary/input.log",
+      "type": "log"
+    },
+    {
+      "classification": "ambiguous",
+      "confidence": "low",
+      "excerpt": "SUMMARY unavailable",
+      "id": "ev-ambiguous_summary-002",
+      "lineRange": [
+        4,
+        4
+      ],
+      "observedAt": "2026-05-12T14:39:00Z",
+      "sourcePath": "fixtures/regression/ambiguous_summary/input.log",
+      "type": "log"
+    },
+    {
+      "classification": "ambiguous",
+      "confidence": "low",
+      "excerpt": "No final verdict was emitted by the regression wrapper.",
+      "id": "ev-ambiguous_summary-003",
+      "lineRange": [
+        5,
+        5
+      ],
+      "observedAt": "2026-05-12T14:39:00Z",
+      "sourcePath": "fixtures/regression/ambiguous_summary/input.log",
+      "type": "log"
+    },
+    {
+      "classification": "ambiguous",
+      "confidence": "low",
+      "excerpt": "Operator note: ambiguous handoff state after infrastructure maintenance.",
+      "id": "ev-ambiguous_summary-004",
+      "lineRange": [
+        6,
+        6
+      ],
+      "observedAt": "2026-05-12T14:39:00Z",
+      "sourcePath": "fixtures/regression/ambiguous_summary/input.log",
+      "type": "log"
+    }
+  ],
+  "schemaVersion": "evidence-list-v1"
+}

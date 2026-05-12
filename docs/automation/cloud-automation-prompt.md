@@ -15,6 +15,9 @@ main
 Primary goal:
 Execute the entire Agentic Engineering OS plan phase by phase as working, tested code.
 
+First required gate:
+Implement Phase 1a before advancing to later phases; Phase 1a is necessary but not sufficient for the whole plan.
+
 Source of truth:
 .cursor/plans/agentic-control-plane.plan.md
 

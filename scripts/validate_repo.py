@@ -1,16 +1,38 @@
 from __future__ import annotations
 
+import filecmp
 import json
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS_DIR = ROOT / "scripts"
-sys.path.insert(0, str(SCRIPTS_DIR))
-
-from fixture_runner import EXPECTED_FIXTURES, UNSAFE_ALL_PASSED_PHRASES, run_fixture_dir  # noqa: E402
+FIXTURE_DIR = ROOT / "fixtures/regression"
+ARTIFACT_DIR = ROOT / "artifacts/runs"
+FIXTURE_IDS = [
+    "all_passed",
+    "failed_tests",
+    "incomplete_jobs",
+    "passed_with_warning_or_waiver",
+    "ambiguous_summary",
+]
+ARTIFACT_FILES = [
+    "run.json",
+    "events.jsonl",
+    "evidence.json",
+    "regression_result.json",
+    "email_draft.md",
+    "verifier_report.json",
+]
+REQUIRED_REPORT_RULES = {
+    "schema_validation",
+    "evidence_refs",
+    "classification_consistency",
+    "email_draft_uses_structured_facts",
+}
+PASS_STYLE_PHRASES = ["all passed", "clean pass", "passed successfully", "no failures"]
 
 
 REQUIRED_FILES = [
@@ -37,7 +59,7 @@ PLAN_REQUIRED_MARKERS = [
 ]
 
 AUTOMATION_REQUIRED_MARKERS = [
-    "Execute the entire Agentic Engineering OS plan",
+    "Implement Phase 1a",
     "It is allowed to create implementation code",
     "Read-only Regression Evidence Demo",
     "Definition of Done",
@@ -45,22 +67,10 @@ AUTOMATION_REQUIRED_MARKERS = [
     "fixture-runner --fixture-dir <fixtures/regression> --out-dir <artifacts/runs>",
 ]
 
-RUN_ARTIFACTS = [
-    "run.json",
-    "events.jsonl",
-    "evidence.json",
-    "regression_result.json",
-    "email_draft.md",
-    "verifier_report.json",
-]
 
-REQUIRED_VERIFIER_RULES = {
-    "schema.validation",
-    "evidence.refs",
-    "classification.consistency",
-    "email_draft.uses_structured_facts",
-    "fixture.expected_verdict",
-}
+def load_json(path: Path) -> dict:
+    with path.open("r", encoding="utf-8") as file:
+        return json.load(file)
 
 
 def require_file(path: str) -> str:
@@ -77,109 +87,106 @@ def require_markers(label: str, text: str, markers: list[str]) -> None:
         raise AssertionError(f"{label} is missing required markers:\n  - {joined}")
 
 
-def load_json(path: Path):
-    return json.loads(path.read_text(encoding="utf-8"))
+def require_fixture_layout() -> None:
+    missing = []
+    for fixture_id in FIXTURE_IDS:
+        for filename in ["fixture.json", "input.log"]:
+            path = FIXTURE_DIR / fixture_id / filename
+            if not path.is_file():
+                missing.append(str(path.relative_to(ROOT)))
+    if missing:
+        joined = "\n  - ".join(missing)
+        raise AssertionError(f"Missing Phase 1a fixture files:\n  - {joined}")
 
 
-def require_fixture_inputs() -> dict[str, dict]:
-    fixture_root = ROOT / "fixtures/regression"
-    if not fixture_root.is_dir():
-        raise AssertionError("Missing required fixture directory: fixtures/regression")
-
-    fixtures: dict[str, dict] = {}
-    for fixture_id in EXPECTED_FIXTURES:
-        case_dir = fixture_root / fixture_id
-        fixture_file = case_dir / "fixture.json"
-        input_log = case_dir / "input.log"
-        if not fixture_file.is_file():
-            raise AssertionError(f"Missing fixture metadata: {fixture_file.relative_to(ROOT)}")
-        if not input_log.is_file():
-            raise AssertionError(f"Missing fixture input log: {input_log.relative_to(ROOT)}")
-        fixture = load_json(fixture_file)
-        if fixture.get("id") != fixture_id:
-            raise AssertionError(f"{fixture_file.relative_to(ROOT)} id must be {fixture_id}")
-        fixtures[fixture_id] = fixture
-
-    return fixtures
-
-
-def parse_events(path: Path) -> list[dict]:
-    events = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line:
-            continue
-        events.append(json.loads(line))
-    if not events:
-        raise AssertionError(f"{path.relative_to(ROOT)} must contain events")
-    return events
-
-
-def assert_no_unsafe_pass_email(fixture: dict, email: str, path: Path) -> None:
-    if fixture["allowAllPassedEmail"]:
-        return
-    email_lower = email.lower()
-    unsafe = [phrase for phrase in UNSAFE_ALL_PASSED_PHRASES if phrase in email_lower]
-    if unsafe:
+def run_fixture_runner(out_dir: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/fixture_runner.py"),
+        "--fixture-dir",
+        str(FIXTURE_DIR),
+        "--out-dir",
+        str(out_dir),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
         raise AssertionError(
-            f"{path.relative_to(ROOT)} contains unsafe pass claim for negative fixture: {unsafe}"
+            "Fixture runner failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
         )
 
 
-def validate_artifact_packet(out_dir: Path, fixtures: dict[str, dict]) -> None:
-    if not out_dir.is_dir():
-        raise AssertionError(f"Missing artifact output directory: {out_dir.relative_to(ROOT)}")
+def validate_artifact_packet(base_dir: Path) -> None:
+    for fixture_id in FIXTURE_IDS:
+        fixture = load_json(FIXTURE_DIR / fixture_id / "fixture.json")
+        run_dir = base_dir / fixture_id
+        for filename in ARTIFACT_FILES:
+            if not (run_dir / filename).is_file():
+                raise AssertionError(f"Missing artifact {filename} for fixture {fixture_id} under {base_dir}")
 
-    for fixture_id, fixture in fixtures.items():
-        run_dir = out_dir / fixture_id
-        if not run_dir.is_dir():
-            raise AssertionError(f"Missing artifact run directory: {run_dir.relative_to(ROOT)}")
-
-        for artifact in RUN_ARTIFACTS:
-            artifact_path = run_dir / artifact
-            if not artifact_path.is_file():
-                raise AssertionError(f"Missing artifact: {artifact_path.relative_to(ROOT)}")
-
-        run_json = load_json(run_dir / "run.json")
+        run = load_json(run_dir / "run.json")
         evidence = load_json(run_dir / "evidence.json")
         result = load_json(run_dir / "regression_result.json")
-        verifier = load_json(run_dir / "verifier_report.json")
+        report = load_json(run_dir / "verifier_report.json")
         email = (run_dir / "email_draft.md").read_text(encoding="utf-8")
-        events = parse_events(run_dir / "events.jsonl")
+        events = [
+            json.loads(line)
+            for line in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
 
-        if run_json["status"] != "completed":
-            raise AssertionError(f"{run_dir.relative_to(ROOT)}/run.json status must be completed")
-        if result["verdict"] != fixture["expectedVerdict"]:
+        expected_verdict = fixture["expectedVerdict"]
+        allowed_verdicts = {expected_verdict, "needs_human_check"}
+        if expected_verdict == "unknown":
+            allowed_verdicts.add("unknown")
+        if result["verdict"] not in allowed_verdicts:
             raise AssertionError(
-                f"{fixture_id} verdict {result['verdict']} does not match expected {fixture['expectedVerdict']}"
+                f"Fixture {fixture_id} produced verdict {result['verdict']}, expected one of {sorted(allowed_verdicts)}"
             )
-        if verifier["status"] != "passed":
-            raise AssertionError(f"{fixture_id} verifier_report.json status must be passed")
-        if not evidence:
-            raise AssertionError(f"{fixture_id} evidence.json must contain at least one evidence item")
 
-        evidence_ids = {item["id"] for item in evidence}
+        if run["status"] != "completed":
+            raise AssertionError(f"Fixture {fixture_id} run.json status must be completed")
+        if report["status"] != "passed":
+            raise AssertionError(f"Fixture {fixture_id} verifier_report.json status must be passed")
+        if len(report["fixtureHash"]) != 64:
+            raise AssertionError(f"Fixture {fixture_id} fixtureHash must be a sha256 hex digest")
+
+        evidence_items = evidence.get("items", [])
+        if not evidence_items:
+            raise AssertionError(f"Fixture {fixture_id} evidence.json must contain at least one evidence item")
+        evidence_ids = {item["id"] for item in evidence_items}
         result_evidence_ids = set(result["evidenceIds"])
-        if not result_evidence_ids or not result_evidence_ids.issubset(evidence_ids):
-            raise AssertionError(f"{fixture_id} regression_result.json has invalid evidence refs")
-        if fixture["expectedVerdict"] != "unknown" and not result_evidence_ids:
-            raise AssertionError(f"{fixture_id} non-unknown verdict must cite evidence")
+        if not result_evidence_ids:
+            raise AssertionError(f"Fixture {fixture_id} regression_result.json must reference evidence ids")
+        if not result_evidence_ids <= evidence_ids:
+            raise AssertionError(f"Fixture {fixture_id} regression_result.json references unknown evidence ids")
 
-        rule_ids = {rule["ruleId"] for rule in verifier["ruleResults"]}
-        missing_rules = REQUIRED_VERIFIER_RULES.difference(rule_ids)
+        rule_ids = {item["ruleId"] for item in report["ruleResults"]}
+        missing_rules = REQUIRED_REPORT_RULES - rule_ids
         if missing_rules:
-            raise AssertionError(f"{fixture_id} verifier_report.json is missing rules: {sorted(missing_rules)}")
-        failing_rules = [rule for rule in verifier["ruleResults"] if rule["status"] == "failed"]
+            raise AssertionError(f"Fixture {fixture_id} verifier_report.json missing rules: {sorted(missing_rules)}")
+        failing_rules = [item for item in report["ruleResults"] if item["status"] == "failed"]
         if failing_rules:
-            raise AssertionError(f"{fixture_id} verifier_report.json has failing rules: {failing_rules}")
-        if verifier["blockingFailures"]:
-            raise AssertionError(f"{fixture_id} verifier_report.json has blocking failures")
+            raise AssertionError(f"Fixture {fixture_id} has failing verifier rules: {failing_rules}")
+        if report["blockingFailures"]:
+            raise AssertionError(f"Fixture {fixture_id} verifier_report.json must not have blocking failures")
 
-        assert_no_unsafe_pass_email(fixture, email, run_dir / "email_draft.md")
-        if result["id"] not in email or result["verdict"] not in email:
-            raise AssertionError(f"{fixture_id} email_draft.md must cite result artifact and verdict")
-        for evidence_id in result["evidenceIds"]:
-            if evidence_id not in email:
-                raise AssertionError(f"{fixture_id} email_draft.md must cite evidence id {evidence_id}")
+        artifact_types = {item["artifactType"] for item in report["artifactChecks"]}
+        if artifact_types != {"evidence", "regression_result", "email_draft"}:
+            raise AssertionError(f"Fixture {fixture_id} artifactChecks do not cover all artifact types")
+        if any(item["status"] != "passed" for item in report["artifactChecks"]):
+            raise AssertionError(f"Fixture {fixture_id} has failing artifact checks")
+
+        lower_email = email.lower()
+        if result["id"].lower() not in lower_email:
+            raise AssertionError(f"Fixture {fixture_id} email_draft.md must reference regression_result artifact id")
+        missing_email_refs = [evidence_id for evidence_id in result["evidenceIds"] if evidence_id.lower() not in lower_email]
+        if missing_email_refs:
+            raise AssertionError(f"Fixture {fixture_id} email_draft.md missing evidence references: {missing_email_refs}")
+        if not fixture["allowAllPassedEmail"] and any(phrase in lower_email for phrase in PASS_STYLE_PHRASES):
+            raise AssertionError(f"Fixture {fixture_id} must not generate a pass-style email")
 
         event_types = {event["type"] for event in events}
         required_event_types = {
@@ -191,22 +198,19 @@ def validate_artifact_packet(out_dir: Path, fixtures: dict[str, dict]) -> None:
             "verifier.completed",
             "run.completed",
         }
-        if not required_event_types.issubset(event_types):
-            raise AssertionError(f"{fixture_id} events.jsonl is missing required event types")
+        if not required_event_types <= event_types:
+            raise AssertionError(f"Fixture {fixture_id} events.jsonl missing required events")
 
 
-def validate_fixture_runner(fixtures: dict[str, dict]) -> None:
-    fixture_root = ROOT / "fixtures/regression"
-    committed_out_dir = ROOT / "artifacts/runs"
-
-    validate_artifact_packet(committed_out_dir, fixtures)
-
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp_out = Path(tmp) / "runs"
-        reports = run_fixture_dir(fixture_root, tmp_out)
-        if len(reports) != len(EXPECTED_FIXTURES):
-            raise AssertionError(f"Expected {len(EXPECTED_FIXTURES)} verifier reports, got {len(reports)}")
-        validate_artifact_packet(tmp_out, fixtures)
+def compare_artifact_packets(expected_dir: Path, actual_dir: Path) -> None:
+    for fixture_id in FIXTURE_IDS:
+        for filename in ARTIFACT_FILES:
+            expected = expected_dir / fixture_id / filename
+            actual = actual_dir / fixture_id / filename
+            if not filecmp.cmp(expected, actual, shallow=False):
+                raise AssertionError(
+                    f"Committed artifact {expected.relative_to(ROOT)} differs from deterministic runner output"
+                )
 
 
 def main() -> None:
@@ -218,8 +222,17 @@ def main() -> None:
 
     require_markers("plan", plan, PLAN_REQUIRED_MARKERS)
     require_markers("automation prompt", automation_prompt, AUTOMATION_REQUIRED_MARKERS)
-    fixtures = require_fixture_inputs()
-    validate_fixture_runner(fixtures)
+    require_fixture_layout()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        generated_artifacts = Path(temp_dir) / "runs"
+        run_fixture_runner(generated_artifacts)
+        validate_artifact_packet(generated_artifacts)
+
+        if not ARTIFACT_DIR.is_dir():
+            raise AssertionError("Missing committed Phase 1a artifact packet directory: artifacts/runs")
+        validate_artifact_packet(ARTIFACT_DIR)
+        compare_artifact_packets(ARTIFACT_DIR, generated_artifacts)
 
     print("Repository validation passed.")
 

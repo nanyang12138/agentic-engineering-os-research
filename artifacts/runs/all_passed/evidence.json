@@ -1,67 +1,58 @@
-[
-  {
-    "classification": "metadata",
-    "confidence": "high",
-    "excerpt": "RUN_ID=m2b_lec_regr_20260512_001",
-    "id": "ev:all_passed:001",
-    "lineRange": [
-      1,
-      1
-    ],
-    "observedAt": "2026-05-12T00:00:00Z",
-    "sourcePath": "fixtures/regression/all_passed/input.log",
-    "type": "log"
-  },
-  {
-    "classification": "metadata",
-    "confidence": "high",
-    "excerpt": "STARTED_AT=2026-05-12T01:00:00Z",
-    "id": "ev:all_passed:002",
-    "lineRange": [
-      2,
-      2
-    ],
-    "observedAt": "2026-05-12T00:00:00Z",
-    "sourcePath": "fixtures/regression/all_passed/input.log",
-    "type": "log"
-  },
-  {
-    "classification": "metadata",
-    "confidence": "high",
-    "excerpt": "OWNER=orion-lsc",
-    "id": "ev:all_passed:003",
-    "lineRange": [
-      3,
-      3
-    ],
-    "observedAt": "2026-05-12T00:00:00Z",
-    "sourcePath": "fixtures/regression/all_passed/input.log",
-    "type": "log"
-  },
-  {
-    "classification": "all_passed_marker",
-    "confidence": "high",
-    "excerpt": "REGRESSION_RESULT=PASSED",
-    "id": "ev:all_passed:004",
-    "lineRange": [
-      4,
-      4
-    ],
-    "observedAt": "2026-05-12T00:00:00Z",
-    "sourcePath": "fixtures/regression/all_passed/input.log",
-    "type": "log"
-  },
-  {
-    "classification": "all_passed_marker",
-    "confidence": "high",
-    "excerpt": "ALL_TESTS_PASSED",
-    "id": "ev:all_passed:005",
-    "lineRange": [
-      5,
-      5
-    ],
-    "observedAt": "2026-05-12T00:00:00Z",
-    "sourcePath": "fixtures/regression/all_passed/input.log",
-    "type": "log"
-  }
-]
+{
+  "fixtureId": "all_passed",
+  "items": [
+    {
+      "classification": "all_passed_marker",
+      "confidence": "high",
+      "excerpt": "STATUS: PASSED",
+      "id": "ev-all_passed-001",
+      "lineRange": [
+        4,
+        4
+      ],
+      "observedAt": "2026-05-12T14:39:00Z",
+      "sourcePath": "fixtures/regression/all_passed/input.log",
+      "type": "log"
+    },
+    {
+      "classification": "all_passed_marker",
+      "confidence": "high",
+      "excerpt": "failed_tests: 0",
+      "id": "ev-all_passed-002",
+      "lineRange": [
+        6,
+        6
+      ],
+      "observedAt": "2026-05-12T14:39:00Z",
+      "sourcePath": "fixtures/regression/all_passed/input.log",
+      "type": "log"
+    },
+    {
+      "classification": "all_passed_marker",
+      "confidence": "high",
+      "excerpt": "incomplete_jobs: 0",
+      "id": "ev-all_passed-003",
+      "lineRange": [
+        7,
+        7
+      ],
+      "observedAt": "2026-05-12T14:39:00Z",
+      "sourcePath": "fixtures/regression/all_passed/input.log",
+      "type": "log"
+    },
+    {
+      "classification": "all_passed_marker",
+      "confidence": "high",
+      "excerpt": "ALL TESTS PASSED",
+      "id": "ev-all_passed-004",
+      "lineRange": [
+        8,
+        8
+      ],
+      "observedAt": "2026-05-12T14:39:00Z",
+      "sourcePath": "fixtures/regression/all_passed/input.log",
+      "type": "log"
+    }
+  ],
+  "schemaVersion": "evidence-list-v1"
+}
