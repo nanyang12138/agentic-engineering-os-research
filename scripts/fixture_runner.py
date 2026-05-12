@@ -87,6 +87,14 @@ def stable_hash(paths: Iterable[Path]) -> str:
     return digest.hexdigest()
 
 
+def display_path(path: Path) -> str:
+    resolved = path.resolve()
+    try:
+        return str(resolved.relative_to(Path.cwd().resolve()))
+    except ValueError:
+        return str(resolved)
+
+
 def load_fixture(directory: Path) -> Fixture:
     payload = read_json(directory / "fixture.json")
     required = ["id", "goal", "inputLogFile", "expectedVerdict", "allowAllPassedEmail"]
@@ -114,7 +122,7 @@ def task_spec_for(fixture: Fixture) -> dict:
     return {
         "id": f"task-spec-{fixture.id}",
         "goal": fixture.goal,
-        "inputLogPath": str(fixture.log_path),
+        "inputLogPath": display_path(fixture.log_path),
         "allowedActions": ALLOWED_ACTIONS,
         "forbiddenActions": FORBIDDEN_ACTIONS,
         "successCriteria": SUCCESS_CRITERIA,
@@ -139,7 +147,7 @@ def extract_evidence(fixture: Fixture) -> list[dict]:
                     {
                         "id": f"ev-{fixture.id}-{len(evidence) + 1:03d}",
                         "type": "log",
-                        "sourcePath": str(fixture.log_path),
+                        "sourcePath": display_path(fixture.log_path),
                         "lineRange": [line_number, line_number],
                         "excerpt": line.strip(),
                         "observedAt": GENERATED_AT,
@@ -152,7 +160,7 @@ def extract_evidence(fixture: Fixture) -> list[dict]:
             {
                 "id": f"ev-{fixture.id}-001",
                 "type": "log",
-                "sourcePath": str(fixture.log_path),
+                "sourcePath": display_path(fixture.log_path),
                 "lineRange": [1, min(len(lines), 3) if lines else 1],
                 "excerpt": "\n".join(lines[:3]) if lines else "",
                 "observedAt": GENERATED_AT,
@@ -361,7 +369,7 @@ def build_events(fixture: Fixture, run_id: str, evidence_ids: list[str], verifie
     event_specs = [
         ("run.created", "completed", None, "run.json", []),
         ("task_spec.generated", "completed", "fixture.json", "run.json#taskSpec", []),
-        ("capability.read_log.completed", "completed", str(fixture.log_path), "log_text", []),
+        ("capability.read_log.completed", "completed", display_path(fixture.log_path), "log_text", []),
         ("capability.extract_regression_result.completed", "completed", "log_text", "regression_result.json", evidence_ids),
         ("artifact.write.completed", "completed", "regression_result.json", "evidence.json,email_draft.md,run.json", evidence_ids),
         ("verifier.completed", verifier_status, "evidence.json,regression_result.json,email_draft.md", "verifier_report.json", evidence_ids),
