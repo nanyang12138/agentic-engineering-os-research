@@ -1237,7 +1237,7 @@ artifacts/runs/<fixture-id>/{run.json,events.jsonl,evidence.json,regression_resu
 
 ### 13.7 Phase 1a Verifier Hardening And Forced-Failure Evidence Review
 
-2026-05-12 22:00 UTC 自动化实现结论：Phase 1a 已从“正向 fixture packet 能通过”推进到“验证器能拒绝被篡改或畸形 artifact packet”。
+2026-05-12 23:00 UTC 自动化实现结论：Phase 1a 已从“正向 fixture packet 能通过”推进到“验证器能拒绝被篡改或畸形 artifact packet”。
 
 本轮完成的最小可验证切片：
 
@@ -2541,7 +2541,7 @@ python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /t
 基于 committed artifacts 检查 verifier_report、email grounding 和 evidence refs 是否足以拒绝被篡改或缺证据 artifact；如需要，新增一个 deterministic negative validation case，而不是进入 Phase 1b。
 ```
 
-### 2026-05-12 22:00 UTC: Phase 1a Forced-Failure Verifier Hardening
+### 2026-05-12 23:00 UTC: Phase 1a Forced-Failure Verifier Hardening
 
 本轮目标：执行最早未完成的 Phase 1a Evidence Review slice，让验证器不仅证明正向 fixture packet 可生成，也证明被篡改或畸形的 artifact packet 会被拒绝。
 
