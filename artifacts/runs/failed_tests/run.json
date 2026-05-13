@@ -97,6 +97,38 @@
         "schemaVersion": "capability-metadata-v1",
         "sideEffect": false,
         "timeoutMs": 1000
+      },
+      {
+        "inputContract": {
+          "properties": {
+            "emailDraftRef": "string:artifact-ref",
+            "evidenceRef": "string:artifact-ref",
+            "regressionResultRef": "string:artifact-ref",
+            "taskSpecRef": "string:run-json-pointer"
+          },
+          "required": [
+            "taskSpecRef",
+            "evidenceRef",
+            "regressionResultRef",
+            "emailDraftRef"
+          ],
+          "schema": "RuleVerifierInputV1"
+        },
+        "name": "rule_verifier",
+        "outputContract": {
+          "produces": [
+            "verifierReport"
+          ],
+          "properties": {
+            "verifierReport": "VerifierReportV1"
+          },
+          "schema": "RuleVerifierOutputV1"
+        },
+        "permission": "read",
+        "ref": "capability://phase3/rule_verifier",
+        "schemaVersion": "capability-metadata-v1",
+        "sideEffect": false,
+        "timeoutMs": 1000
       }
     ],
     "schemaVersion": "capability-envelope-v1"
@@ -136,44 +168,7 @@
     },
     {
       "capability": "rule_verifier",
-      "capabilityContract": {
-        "description": "Verify schema, evidence references, classification precedence, and email grounding.",
-        "inputSchema": {
-          "properties": {
-            "emailDraft": {
-              "type": "string"
-            },
-            "evidence": {
-              "type": "array"
-            },
-            "regressionResult": {
-              "type": "object"
-            }
-          },
-          "required": [
-            "evidence",
-            "regressionResult",
-            "emailDraft"
-          ],
-          "type": "object"
-        },
-        "name": "rule_verifier",
-        "outputSchema": {
-          "properties": {
-            "verifierReport": {
-              "type": "object"
-            }
-          },
-          "required": [
-            "verifierReport"
-          ],
-          "type": "object"
-        },
-        "permission": "read",
-        "schemaVersion": "capability-contract-v1",
-        "sideEffect": false,
-        "timeoutMs": 5000
-      },
+      "capabilityRef": "capability://phase3/rule_verifier",
       "id": "step-verify",
       "status": "passed"
     }

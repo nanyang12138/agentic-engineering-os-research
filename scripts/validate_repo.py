@@ -93,7 +93,6 @@ PLAN_REQUIRED_MARKERS = [
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
-    "capability-contract-v1",
     "fixtures/regression/",
     "all_passed",
     "failed_tests",
@@ -352,10 +351,9 @@ def validate_schema_structure(
     if not isinstance(run["steps"], list) or not run["steps"]:
         raise AssertionError(f"Fixture {fixture_id} run.steps must be a non-empty list")
     for step in run["steps"]:
-        require_fields(f"{fixture_id} step", step, ["id", "capability", "capabilityContract", "status"])
+        require_fields(f"{fixture_id} step", step, ["id", "capability", "capabilityRef", "status"])
         require_enum(f"{fixture_id} step.status", step["status"], STEP_STATUSES)
         if step["capability"] in PHASE3_CAPABILITY_NAMES:
-            require_fields(f"{fixture_id} step {step['id']}", step, ["capabilityRef"])
             if step["capabilityRef"] != capability_ref(step["capability"]):
                 raise AssertionError(f"Fixture {fixture_id} step {step['id']} capabilityRef mismatch")
 
@@ -450,6 +448,8 @@ def validate_schema_structure(
             expected_capability = "extract_regression_result"
         elif event["type"] == "artifact.write.completed":
             expected_capability = "write_artifact"
+        elif event["type"] == "verifier.completed":
+            expected_capability = "rule_verifier"
         if expected_capability:
             require_fields(event_label, event, ["capability", "capabilityRef"])
             if event["capability"] != expected_capability:
@@ -573,6 +573,16 @@ def add_external_capability_side_effect(tampered_dir: Path) -> None:
     write_json(run_path, run)
 
 
+def remove_rule_verifier_step_ref(tampered_dir: Path) -> None:
+    run_path = tampered_dir / "all_passed/run.json"
+    run = load_json(run_path)
+    for step in run["steps"]:
+        if step["capability"] == "rule_verifier":
+            del step["capabilityRef"]
+            break
+    write_json(run_path, run)
+
+
 def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
     scratch_root.mkdir(parents=True, exist_ok=True)
     expect_artifact_validation_failure(
@@ -609,6 +619,13 @@ def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
         scratch_root,
         add_external_capability_side_effect,
         "must not declare external side effects",
+    )
+    expect_artifact_validation_failure(
+        "missing_rule_verifier_capability_ref",
+        source_dir,
+        scratch_root,
+        remove_rule_verifier_step_ref,
+        "missing required fields",
     )
 
 
@@ -678,10 +695,6 @@ def validate_local_readonly_runner(out_dir: Path, task_spec_path: Path) -> None:
 def main() -> None:
     for path in REQUIRED_FILES:
         require_file(path)
-
-    validate_capability_catalog(MVP_CAPABILITY_CATALOG)
-    if CAPABILITY_CONTRACT_SCHEMA_VERSION != "capability-contract-v1":
-        raise AssertionError("Unexpected capability contract schema version")
 
     plan = require_file(".cursor/plans/agentic-control-plane.plan.md")
     automation_prompt = require_file("docs/automation/cloud-automation-prompt.md")

@@ -386,7 +386,7 @@ def build_run_steps(report_status: str) -> list[dict]:
         capability_step("step-read-log", "read_log", "completed"),
         capability_step("step-extract-regression-result", "extract_regression_result", "completed"),
         capability_step("step-write-artifact", "write_artifact", "completed"),
-        {"id": "step-verify", "capability": "rule_verifier", "status": report_status},
+        capability_step("step-verify", "rule_verifier", report_status),
     ]
 
 
@@ -397,7 +397,7 @@ def build_events(fixture: Fixture, run_id: str, evidence_ids: list[str], verifie
         ("capability.read_log.completed", "completed", display_path(fixture.log_path), "log_text", [], "read_log"),
         ("capability.extract_regression_result.completed", "completed", "log_text", "regression_result.json", evidence_ids, "extract_regression_result"),
         ("artifact.write.completed", "completed", "regression_result.json", "evidence.json,email_draft.md,run.json", evidence_ids, "write_artifact"),
-        ("verifier.completed", verifier_status, "evidence.json,regression_result.json,email_draft.md", "verifier_report.json", evidence_ids, None),
+        ("verifier.completed", verifier_status, "evidence.json,regression_result.json,email_draft.md", "verifier_report.json", evidence_ids, "rule_verifier"),
         ("run.completed" if verifier_status == "completed" else "run.failed", verifier_status, "verifier_report.json", "run.json", evidence_ids, None),
     ]
     events: list[dict] = []
@@ -456,7 +456,7 @@ def run_fixture(fixture: Fixture, out_dir: Path) -> dict:
         "fixtureId": fixture.id,
         "task": fixture.goal,
         "taskSpec": task_spec,
-        "capabilityEnvelope": build_capability_envelope(task_spec["allowedActions"]),
+        "capabilityEnvelope": build_capability_envelope(task_spec["allowedActions"] + ["rule_verifier"]),
         "steps": build_run_steps(report_status),
         "events": [event["id"] for event in events],
         "artifacts": EXPECTED_ARTIFACTS + ["run.json", "events.jsonl", "verifier_report.json"],

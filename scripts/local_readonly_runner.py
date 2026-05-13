@@ -89,7 +89,7 @@ def write_local_run(log_path: Path, goal: str, out_dir: Path, task_spec_path: Pa
         "fixtureId": case_id,
         "task": goal,
         "taskSpec": task_spec,
-        "capabilityEnvelope": build_capability_envelope(task_spec["allowedActions"]),
+        "capabilityEnvelope": build_capability_envelope(task_spec["allowedActions"] + ["rule_verifier"]),
         "steps": build_run_steps(report_status),
         "events": [event["id"] for event in events],
         "artifacts": EXPECTED_ARTIFACTS + ["run.json", "events.jsonl", "verifier_report.json"],
