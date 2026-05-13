@@ -7,6 +7,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from fixture_runner import load_fixture, verify_artifact_payloads
+
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_DIR = ROOT / "fixtures/regression"
@@ -213,6 +215,56 @@ def compare_artifact_packets(expected_dir: Path, actual_dir: Path) -> None:
                 )
 
 
+def require_forced_failure(report: dict, expected_rule_id: str, label: str) -> None:
+    if report["status"] != "failed":
+        raise AssertionError(f"{label} must produce a failed verifier report")
+    blocking_rule_ids = {failure["ruleId"] for failure in report["blockingFailures"]}
+    if expected_rule_id not in blocking_rule_ids:
+        raise AssertionError(
+            f"{label} must produce blocking failure {expected_rule_id}; got {sorted(blocking_rule_ids)}"
+        )
+
+
+def validate_forced_failure_verifier(base_dir: Path) -> None:
+    fixture_id = "all_passed"
+    fixture = load_fixture(FIXTURE_DIR / fixture_id)
+    run_dir = base_dir / fixture_id
+    run = load_json(run_dir / "run.json")
+    evidence = load_json(run_dir / "evidence.json")["items"]
+    result = load_json(run_dir / "regression_result.json")
+    report = load_json(run_dir / "verifier_report.json")
+    email = (run_dir / "email_draft.md").read_text(encoding="utf-8")
+
+    broken_result = dict(result)
+    broken_result["evidenceIds"] = ["ev-does-not-exist"]
+    broken_evidence_report, _ = verify_artifact_payloads(
+        fixture,
+        run["id"],
+        report["fixtureHash"],
+        run["taskSpec"],
+        evidence,
+        broken_result,
+        email,
+    )
+    require_forced_failure(broken_evidence_report, "evidence_refs", "Tampered evidence ids")
+
+    broken_email = email.replace(result["id"], "regression-result-not-referenced")
+    broken_email_report, _ = verify_artifact_payloads(
+        fixture,
+        run["id"],
+        report["fixtureHash"],
+        run["taskSpec"],
+        evidence,
+        result,
+        broken_email,
+    )
+    require_forced_failure(
+        broken_email_report,
+        "email_draft_uses_structured_facts",
+        "Tampered email grounding",
+    )
+
+
 def main() -> None:
     for path in REQUIRED_FILES:
         require_file(path)
@@ -233,6 +285,7 @@ def main() -> None:
             raise AssertionError("Missing committed Phase 1a artifact packet directory: artifacts/runs")
         validate_artifact_packet(ARTIFACT_DIR)
         compare_artifact_packets(ARTIFACT_DIR, generated_artifacts)
+        validate_forced_failure_verifier(generated_artifacts)
 
     print("Repository validation passed.")
 

@@ -1235,6 +1235,36 @@ artifacts/runs/<fixture-id>/{run.json,events.jsonl,evidence.json,regression_resu
 - Phase 1a 仍需要在 PR / GitHub checks 中验证同一 gate 后，才能作为进入 Phase 1b 的机器验收依据。
 - 下一轮不应跳到 CUA、IDE 或多 agent；应先做 Phase 1a Evidence Review，审查真实输出是否暴露 parser marker、email grounding 或 schema 摩擦点，再决定是否进入 Local Read-only Runner。
 
+### 13.7 Phase 1a Forced-Failure Verifier Review
+
+2026-05-13 00:00 UTC 自动化实现结论：Phase 1a Evidence Review 的最小强制失败切片已完成。现在 `scripts/validate_repo.py` 不只验证 happy-path artifact packet，也会复用 runner 的 verifier 逻辑，故意篡改 evidence refs 和 email grounding，并要求 `verifier_report.status="failed"` 与对应 `blockingFailures` 出现。
+
+本轮完成的最小可验证切片：
+
+```text
+Add forced-failure verifier checks so that python3 scripts/validate_repo.py proves tampered evidence refs and email grounding produce failed verifier reports.
+```
+
+实现摘要：
+
+- `scripts/fixture_runner.py` 新增 `verify_artifact_payloads(...)`，把原先嵌在 runner 生成流程中的 rule results、artifact checks、blocking failures 和 `verifier_report.json` 组装逻辑抽成可复用 verifier 函数。
+- `scripts/validate_repo.py` 新增 forced-failure validation：基于生成的 `all_passed` artifact packet，分别篡改 `regression_result.json.evidenceIds` 和 `email_draft.md` 的 structured result 引用。
+- 篡改 evidence ids 必须触发 `evidence_refs` blocking failure；篡改 email grounding 必须触发 `email_draft_uses_structured_facts` blocking failure。
+- 正常 5 个 synthetic fixture artifact packet 仍保持 deterministic，committed artifacts 与重新生成输出一致。
+
+验收结果：
+
+- 正常 fixture gate：通过。
+- evidence ref forced-failure：通过，产生 failed verifier report 和 `evidence_refs` blocking failure。
+- email grounding forced-failure：通过，产生 failed verifier report 和 `email_draft_uses_structured_facts` blocking failure。
+- Phase 1a 仍不引入 SQLite、daemon、capability registry、CUA、IDE、多 agent 或真实外部副作用。
+
+当前门槛状态：
+
+- Phase 1a static fixture contract 已具备 happy-path artifact packet、deterministic validation gate 和 forced-failure verifier proof。
+- Phase 1a 仍需本 PR 的 GitHub check 通过后，才能作为进入 Phase 1b 的机器验收依据。
+- 下一轮建议进入 Phase 1b 的最小 Local Read-only Runner 切片：接受一个本地 log 路径和用户目标，复用 Phase 1a schema / verifier，输出同一 artifact packet；仍不引入 daemon、SQLite、CUA、IDE 或外部副作用。
+
 ## 14. 第一版不要做什么
 
 - 不要先做多 IDE 控制。
@@ -1348,11 +1378,11 @@ artifacts/runs/<fixture-id>/{run.json,events.jsonl,evidence.json,regression_resu
 3. Feasibility Critic Review：已完成，把 Phase 1a 冻结为静态 fixture runner；SQLite、daemon、adapter 和 durable workflow 全部延后。
 4. Fixture Runner MVP：已实现 Phase 1a one-shot runner、5 个 synthetic fixture、committed artifact packet 和 deterministic validation gate；入口为 `python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir artifacts/runs`，输出并验证 `run.json`、`events.jsonl`、`evidence.json`、`regression_result.json`、`email_draft.md`、`verifier_report.json`，其中 `verifier_report.json` 是唯一验收真相。
 5. Intent-to-Spec MVP：MVP 默认使用模板/表单化 `RegressionTaskSpecV1`；LLM 只能生成草稿，必须通过 schema/rule verifier。
-6. Evidence List + Verifier Runtime：已固化 `LogEvidenceV1`、`RegressionResultArtifactV1`、email grounding 规则和 fixture gate；下一步以 fixture runner 验证规则是否过多或不足。
-7. Local Read-only Runner：仅在 Phase 1a artifact packet 通过 PR / GitHub checks 且完成 Evidence Review 后，再决定是否引入 capability registry、真实 log adapter、SQLite event store、极简 step runner 和更完整的 run state。
+6. Evidence List + Verifier Runtime：已固化 `LogEvidenceV1`、`RegressionResultArtifactV1`、email grounding 规则和 fixture gate；forced-failure validation 已证明 evidence refs 与 email grounding 被篡改时会产生 failed verifier report。
+7. Local Read-only Runner：仅在 Phase 1a artifact packet、forced-failure verifier gate 和本 PR / GitHub checks 通过后，进入最小 read-only runner；仍不得引入 capability registry、SQLite event store、daemon、CUA、IDE 或 multi-agent。
 8. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
-9. Phase 1a Evidence Intake Review：在 fixture runner 输出完整 artifact packet 前，后续优化只允许维护评分、Decision Log、Open Questions 和 Research Sprint Log；只有 `verifier_report.json` 失败、grounded email 问题、真实脱敏日志差异或 Build vs Integrate 运行证据出现后，才修改正式设计章节。
-10. Evidence Packet Stop Rule：已由 2026-05-12 14:39 UTC artifact packet 解锁；后续修改必须基于 committed `artifacts/runs/*`、`verifier_report.json` failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据，不再无证据扩写 adapter mapping 或正式设计章节。
+9. Phase 1a Evidence Intake Review：已完成 happy-path artifact packet review 和 forced-failure verifier proof；后续只有真实脱敏日志差异、marker 误判、source locator 不足或 Phase 1b runner 输出问题才继续修改 Phase 1a schema/rules。
+10. Evidence Packet Stop Rule：已由 2026-05-12 14:39 UTC artifact packet 和 2026-05-13 00:00 UTC forced-failure verifier gate 解锁；后续不再无证据扩写 adapter mapping 或正式设计章节。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -1630,6 +1660,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-12：本轮 Plan Optimizer 继续选择 `Plan Maintenance`；当前计划已足够进入 Phase 1a fixture runner 证据生产，材料性改进是把重复的 no-new-evidence backlog 收敛为 `Evidence Packet Stop Rule`，避免后续自动化在没有运行证据时继续扩写计划。
 - 2026-05-12 13:00 UTC：本轮 Plan Optimizer 选择 `Plan Maintenance`；证据预检未发现 `fixtures/regression`、`artifacts/runs` 或 `verifier_report.json`，因此不修改正式设计章节、不新增开源 mapping 或 adapter 决策，只记录缺失证据并维持 fixture artifact packet 作为下一步唯一解锁条件。
 - 2026-05-12 14:39 UTC：Phase 1a Fixture Runner Evidence Packet slice 已实现；决定将 5 个 synthetic fixture、committed `artifacts/runs/*` 和 `scripts/validate_repo.py` deterministic validation 作为进入 Phase 1a Evidence Review 的机器证据。Phase 1b 仍需等待 PR / GitHub checks 通过及 evidence review，不直接引入 capability registry、SQLite、daemon、CUA、IDE 或多 agent。
+- 2026-05-13 00:00 UTC：Phase 1a forced-failure verifier slice 已实现；决定把 evidence ref 篡改和 email grounding 篡改纳入 `scripts/validate_repo.py`，要求 verifier 产生 failed report 和 blocking failure，作为进入 Phase 1b 前的机器证据之一。
 
 ## 20. Open Questions
 
@@ -1650,7 +1681,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - `verifier_report.json` 是 Phase 1a 唯一验收事实源；`regression_result.json` 不能覆盖 verifier 失败，`run.json` 不重新判定业务 verdict，`events.jsonl` 不承担 replay backend。
 - `read_log`、`extract_regression_result`、`write_artifact` 在 Phase 1a 只是 fixture runner 内部 deterministic functions；正式 capability registry 和 adapter 化实现延后到 Phase 1b。
 - 没有完整 fixture artifact packet、verifier failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据时，后续优化不再修改正式设计章节。
-- Phase 1a synthetic fixture artifact packet 已由 `scripts/fixture_runner.py` 生成并由 `scripts/validate_repo.py` 校验；当前默认门槛是先完成 Evidence Review，再决定是否进入 Phase 1b。
+- Phase 1a synthetic fixture artifact packet 已由 `scripts/fixture_runner.py` 生成并由 `scripts/validate_repo.py` 校验；forced-failure validation 已证明 evidence ref 和 email grounding 篡改会触发 failed verifier report。
 
 ### 20.2 仍开放的问题
 
@@ -1668,7 +1699,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - Phase 1a 内部 deterministic functions 是否足够表达 evidence provenance，还是实际实现会证明需要提前引入最小 capability call envelope？
 - 当前最低分维度只剩 Open Source Mapping 完整度；如果没有 fixture runner 运行证据指出具体 adapter/provider 缺口，是否应保持 4/5 而不是继续扩写项目清单？
 - 已有 5 个 synthetic fixture artifact packet 后，后续自动化是否应该从 Plan Maintenance 切换为 Evidence Review / implementation loop，并停止追加 no-evidence no-op 日志？
-- Phase 1a artifact packet 通过 PR / GitHub checks 后，是否足以直接进入 Phase 1b Local Read-only Runner，还是需要先补一个 forced-failure fixture 来证明 verifier_report.status 能在 artifact grounding 被破坏时输出 `failed`？
+- Phase 1a artifact packet 和 forced-failure verifier gate 通过 PR / GitHub checks 后，Phase 1b 的最小 runner 是否应只接受本地 log 路径和用户目标，还是需要同时引入最小 metadata/run id 输入？
 - 当前 marker 常量是否对真实脱敏 regression log 足够，还是 Evidence Review 会证明需要新增 project-specific marker 配置？
 
 ## 21. Research Sprint Log
@@ -2502,6 +2533,68 @@ python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /t
 ```text
 执行 Phase 1a Evidence Review / forced-failure validation slice：
 基于 committed artifacts 检查 verifier_report、email grounding 和 evidence refs 是否足以拒绝被篡改或缺证据 artifact；如需要，新增一个 deterministic negative validation case，而不是进入 Phase 1b。
+```
+
+### 2026-05-13 00:00 UTC: Phase 1a Forced-Failure Verifier Review
+
+本轮目标：完成最早未完成的 Phase 1a Evidence Review 子切片，证明 verifier 不只会接受正常 artifact packet，也会拒绝被篡改的 evidence refs 和 email grounding。
+
+Active phase：
+
+```text
+Phase 1a: Static Fixture Contract / Evidence Review forced-failure gate
+```
+
+Selected slice：
+
+```text
+Add forced-failure verifier checks so that python3 scripts/validate_repo.py proves tampered evidence refs and email grounding produce failed verifier reports.
+```
+
+为什么这是下一步：上一轮 artifact packet 已满足 happy path，但计划明确禁止在证明 verifier 能拒绝负例前进入 Phase 1b。forced-failure gate 是进入 Local Read-only Runner 前最小且可机器验证的剩余 Phase 1a 风险。
+
+实现摘要：
+
+- `scripts/fixture_runner.py` 将 `verifier_report.json` 构造逻辑抽为 `verify_artifact_payloads(...)`，供 runner 和验证脚本复用。
+- `scripts/validate_repo.py` 在临时生成的 artifact packet 上执行两个 deterministic tamper case：
+  - 将 `regression_result.json.evidenceIds` 改成不存在的 id，必须触发 `evidence_refs` blocking failure。
+  - 将 `email_draft.md` 中的 structured result id 替换为错误 id，必须触发 `email_draft_uses_structured_facts` blocking failure。
+- 正常 5 个 synthetic fixture 的 committed artifact packet 仍与重新生成输出逐文件一致。
+
+验收标准和结果：
+
+- 正常 fixture gate 继续通过：通过。
+- evidence ref 篡改会让 verifier report 失败：通过。
+- email grounding 篡改会让 verifier report 失败：通过。
+- 不引入 SQLite、daemon、capability registry、CUA、IDE、多 agent 或外部副作用：通过。
+
+验证命令：
+
+```text
+python3 scripts/validate_repo.py
+python3 -m py_compile scripts/fixture_runner.py scripts/validate_repo.py
+python scripts/validate_repo.py
+python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase1a-forced-failure-smoke
+```
+
+验证结果：
+
+- `python3 scripts/validate_repo.py`：通过。
+- `python3 -m py_compile scripts/fixture_runner.py scripts/validate_repo.py`：通过。
+- `python scripts/validate_repo.py`：本机缺少 `python` 命令，返回 command not found；GitHub Actions 的 setup-python 环境预期提供 `python`。
+- fixture runner smoke test：通过，处理 5 个 fixtures。
+
+剩余风险：
+
+- 当前 marker 规则仍只由 synthetic logs 覆盖，尚未经过真实脱敏 regression log 校准。
+- 本轮证明 verifier 能拒绝 artifact-level tampering，但还没有真实 log 的 parser robustness 证据。
+- Phase 1b 仍应保持 read-only、one-shot、本地文件输出，不得直接引入 daemon、SQLite、CUA、IDE 或 multi-agent。
+
+下一轮建议：
+
+```text
+执行 Phase 1b Local Read-only Runner 最小切片：
+接受一个本地 regression log 路径和用户目标，复用 Phase 1a schema / verifier / artifact writer，输出同一 artifact packet；不引入 daemon、SQLite、正式 capability registry、CUA、IDE 或外部副作用。
 ```
 
 ## 22. Parking Lot
