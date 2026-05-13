@@ -978,6 +978,26 @@ Build vs Integrate：
 
 成功标准：长任务失败后能知道卡在哪里，并能从中间恢复。
 
+#### Phase 6 RunControlV1 State / Permission / Recovery Snapshot Gate
+
+2026-05-13 09:03 UTC 自动化实现结论：Phase 6 的第一步不是引入 daemon、SQLite/Temporal checkpoint、分布式 worker、外部 approval backend、CUA 或 IDE adapter，而是把当前 read-only regression run 已经产生的 `run.json` / `events.jsonl` 提升为可机器校验的控制平面快照。
+
+最小 RunControlV1 contract：
+
+- `scripts/run_control.py` 提供 `RunControlV1` validator / CLI，校验 `run-control-v1`、`run-state-machine-v1`、`permission-policy-v1` 和 `recovery-snapshot-v1`。
+- `run.json#runControl.stateHistory` 必须由 `events.jsonl` deterministic 推导，覆盖 `created -> planning -> waiting_context -> running -> verifying -> completed|failed` 的当前 read-only regression MVP 状态流。
+- `run.json#runControl.permissionPolicy` 必须镜像 capability envelope：`read_log`、`extract_regression_result`、`rule_verifier` 为 read/no side effect；`write_artifact` 只能在 `local_artifact_output_only` 边界内写入本地 artifact；`send_email`、dangerous capability 和 external side effect 必须保留为 approval-required/forbidden。
+- `run.json#runControl.stepAttempts[]` 必须记录每个 step 的 capabilityRef、permission、inputRef、outputRef、timeoutMs、attempt、maxRetries 和 lastError，使失败位置可审计。
+- `run.json#runControl.recoverySnapshot` 必须指向最后 event、当前 terminal state 和可重放 artifact refs；当前 MVP 的 completed terminal run 使用 `terminal_replay_only`，后续非 terminal run 才进入 durable resume。
+- `scripts/validate_repo.py` 运行 RunControlV1 CLI，并包含 illegal state history、external side effects allowed、broken recovery last event 的 forced-failure cases。
+
+Build vs Integrate：
+
+- Build：最小 RunControlV1 schema、state history validation、permission policy validation、recovery snapshot validation、runner embedding 和 deterministic repository gate。
+- Integrate later：SQLite/Temporal/LangGraph durable state backend、checkpoint storage、approval service、retry scheduler、distributed worker lease、real resume executor、CUA/IDE/browser adapter runtime。
+
+当前 Phase 6 已启动但未完成：本 gate 让现有 read-only regression artifacts 能证明状态、权限和 terminal replay snapshot；下一步应增加可恢复的非 terminal failure fixture 或 interrupted-run fixture，证明 runner 能在中断点生成 recovery snapshot，而不是只对已完成 run 做事后审计。
+
 ### Phase 7：Computer Runtime 和 CUA Adapter
 
 把 GUI、桌面、VM、sandbox 这类能力作为底层执行基座，而不是系统核心：
@@ -1643,6 +1663,7 @@ Add forced-failure verifier checks so that python3 scripts/validate_repo.py prov
 10. Phase 1a Evidence Intake Review：在 fixture runner 输出完整 artifact packet 前，后续优化只允许维护评分、Decision Log、Open Questions 和 Research Sprint Log；只有 `verifier_report.json` 失败、grounded email 问题、真实脱敏日志差异或 Build vs Integrate 运行证据出现后，才修改正式设计章节。
 11. Evidence Packet Stop Rule：已由 2026-05-12 14:39 UTC artifact packet 解锁；后续修改必须基于 committed `artifacts/runs/*`、`verifier_report.json` failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据，不再无证据扩写 adapter mapping 或正式设计章节。
 12. Phase 1a Verifier Hardening：已实现 deterministic negative validation，`scripts/validate_repo.py` 会验证 malformed schema、missing evidence refs、failure-marker-to-passed tamper 和 pass-style email injection 均被拒绝或生成 failed verifier report。
+13. RunControlV1 State / Permission / Recovery：已启动 Phase 6 regression MVP gate：`scripts/run_control.py` 提供 `RunControlV1` validator / CLI，`run.json#runControl` 使用 `run-control-v1`、`permission-policy-v1` 和 `recovery-snapshot-v1` 记录 stateHistory、permissionPolicy、stepAttempts 和 recoverySnapshot；`scripts/validate_repo.py` 会拒绝 state history 漂移、允许 external side effects 或 recovery last event 损坏的契约。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -3692,6 +3713,76 @@ git diff --check
 ```text
 进入 Phase 6：
 新增最小 RunStateV1 / PermissionPolicyV1 / RecoverySnapshotV1 contract，让当前 read-only runner 的 run.json/events.jsonl 能证明状态流转、允许/禁止动作、失败位置和可恢复输入快照，而不引入 daemon、SQLite、外部 side effects、CUA 或 IDE adapter。
+```
+
+### 2026-05-13 09:03 UTC Automation Implementation Log - Phase 6 RunControlV1 State / Permission / Recovery Snapshot Gate
+
+Active phase：
+
+```text
+Phase 6: state, permission, and recovery
+```
+
+Selected slice：
+
+```text
+Add RunControlV1 to committed run artifacts so that python3 scripts/validate_repo.py proves state history, permission policy, step attempts, and recovery snapshot integrity.
+```
+
+为什么这是下一步：Phase 5 regression MVP gate 已满足，最早未完成阶段是 Phase 6。当前系统已经有 `run.json`、`events.jsonl`、capability metadata、EvidenceListV1 和 VerifierRuntimeV1；最小有价值切片是把这些 artifacts 收敛成可审计控制平面快照，而不是提前实现 daemon、数据库、retry scheduler、CUA 或 IDE adapter。
+
+实现摘要：
+
+- 新增 `scripts/run_control.py`，提供 `RunControlV1` validator / CLI。
+- `fixture_runner.py` 和 `local_readonly_runner.py` 现在在 `run.json#runControl` 写入 `run-control-v1`、`run-state-machine-v1`、`permission-policy-v1`、`stepAttempts` 和 `recovery-snapshot-v1`。
+- `scripts/validate_repo.py` 校验每个 committed run 的 RunControlV1，并运行 CLI smoke。
+- 新增 forced-failure cases：stateHistory 与 events 漂移、permission policy 允许 external side effects、recovery snapshot last event 损坏。
+- 已重新生成 `artifacts/runs/*/run.json` 和 `artifacts/context/*/context_pack.json`，保持 ContextPack artifact hashes deterministic。
+
+验收标准：
+
+- 5 个 committed fixture 的 `run.json#runControl.stateHistory` 可由 `events.jsonl` deterministic 推导：通过。
+- PermissionPolicyV1 镜像 capability envelope，禁止 external side effects，并限制 `write_artifact` 到 local artifact boundary：通过。
+- Step attempts 记录 capabilityRef、permission、input/output refs、timeout、attempt、retry 和 lastError：通过。
+- RecoverySnapshotV1 指向最后 event、terminal state 和可重放 artifact refs：通过。
+- 篡改 state history、external side-effect policy 或 recovery last event 会被 validation 拒绝：通过。
+
+验证命令：
+
+```text
+/usr/bin/python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/agentic-os-task-spec.json
+/usr/bin/python3 scripts/validate_repo.py
+/usr/bin/python3 -m py_compile scripts/*.py
+/usr/bin/python3 scripts/run_control.py --run artifacts/runs/all_passed/run.json --events artifacts/runs/all_passed/events.jsonl
+/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/agentic-os-fixture-smoke
+/usr/bin/python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --out-dir /tmp/agentic-os-local-smoke --task-spec-path /tmp/agentic-os-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json
+git diff --check
+```
+
+验证结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 Phase 1a/1b/2/3/4/5 gates，以及 Phase 6 RunControlV1 state/permission/recovery forced-failure validation。
+- `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- `/usr/bin/python3 scripts/run_control.py --run artifacts/runs/all_passed/run.json --events artifacts/runs/all_passed/events.jsonl`：通过。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/agentic-os-fixture-smoke`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py ... --task-spec-path /tmp/agentic-os-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json ...`：通过。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- RunControlV1 当前是 embedded artifact snapshot，不是 durable state backend。
+- RecoverySnapshotV1 只覆盖 terminal replay；还没有 interrupted/non-terminal fixture 证明真正 resume。
+- `maxRetries=0` 是 MVP 不重试策略；retry scheduler 和 failure recovery executor 后移。
+- PermissionPolicyV1 还没有外部 approval backend，只记录本地 read-only/write-artifact 边界。
+
+下一轮建议：
+
+```text
+继续 Phase 6：
+新增 interrupted-run 或 non-terminal failure fixture，使 runner 能产出 waiting_context/running/verifying 中断状态和 recovery snapshot，并用 validate_repo 证明可以从最后 event/artifacts 判断下一步 resume action。
 ```
 
 ## 22. Parking Lot

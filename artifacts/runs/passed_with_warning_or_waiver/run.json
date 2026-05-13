@@ -145,6 +145,231 @@
   "fixtureId": "passed_with_warning_or_waiver",
   "generatedAt": "2026-05-12T14:39:00Z",
   "id": "run-passed_with_warning_or_waiver-e91988c7",
+  "runControl": {
+    "currentState": "completed",
+    "permissionPolicy": {
+      "approvalRequiredFor": [
+        "dangerous",
+        "external_side_effect",
+        "send_email"
+      ],
+      "capabilities": [
+        {
+          "approvalRequired": false,
+          "capability": "read_log",
+          "capabilityRef": "capability://phase3/read_log",
+          "effectBoundary": "same_process_readonly",
+          "permission": "read",
+          "sideEffect": false
+        },
+        {
+          "approvalRequired": false,
+          "capability": "extract_regression_result",
+          "capabilityRef": "capability://phase3/extract_regression_result",
+          "effectBoundary": "same_process_readonly",
+          "permission": "read",
+          "sideEffect": false
+        },
+        {
+          "approvalRequired": false,
+          "capability": "write_artifact",
+          "capabilityRef": "capability://phase3/write_artifact",
+          "effectBoundary": "local_artifact_output_only",
+          "permission": "write",
+          "sideEffect": false
+        },
+        {
+          "approvalRequired": false,
+          "capability": "rule_verifier",
+          "capabilityRef": "capability://phase3/rule_verifier",
+          "effectBoundary": "same_process_readonly",
+          "permission": "read",
+          "sideEffect": false
+        }
+      ],
+      "externalSideEffectsAllowed": false,
+      "id": "permission-policy-passed_with_warning_or_waiver",
+      "localWriteBoundary": "artifacts/runs/passed_with_warning_or_waiver",
+      "mode": "readonly_regression_mvp",
+      "schemaVersion": "permission-policy-v1"
+    },
+    "recoverySnapshot": {
+      "currentState": "completed",
+      "fixtureId": "passed_with_warning_or_waiver",
+      "id": "recovery-snapshot-passed_with_warning_or_waiver",
+      "lastEventId": "event-passed_with_warning_or_waiver-007",
+      "nextAction": "none_terminal",
+      "replayArtifactRefs": [
+        {
+          "path": "artifacts/runs/passed_with_warning_or_waiver/evidence.json",
+          "required": true
+        },
+        {
+          "path": "artifacts/runs/passed_with_warning_or_waiver/regression_result.json",
+          "required": true
+        },
+        {
+          "path": "artifacts/runs/passed_with_warning_or_waiver/email_draft.md",
+          "required": true
+        },
+        {
+          "path": "artifacts/runs/passed_with_warning_or_waiver/run.json",
+          "required": true
+        },
+        {
+          "path": "artifacts/runs/passed_with_warning_or_waiver/events.jsonl",
+          "required": true
+        },
+        {
+          "path": "artifacts/runs/passed_with_warning_or_waiver/verifier_report.json",
+          "required": true
+        }
+      ],
+      "resumeFromEventId": "event-passed_with_warning_or_waiver-007",
+      "resumeMode": "terminal_replay_only",
+      "runId": "run-passed_with_warning_or_waiver-e91988c7",
+      "schemaVersion": "recovery-snapshot-v1"
+    },
+    "schemaVersion": "run-control-v1",
+    "stateHistory": [
+      {
+        "eventRef": "event-passed_with_warning_or_waiver-001",
+        "eventType": "run.created",
+        "state": "created"
+      },
+      {
+        "eventRef": "event-passed_with_warning_or_waiver-002",
+        "eventType": "task_spec.generated",
+        "state": "planning"
+      },
+      {
+        "eventRef": "event-passed_with_warning_or_waiver-003",
+        "eventType": "capability.read_log.completed",
+        "state": "waiting_context"
+      },
+      {
+        "eventRef": "event-passed_with_warning_or_waiver-004",
+        "eventType": "capability.extract_regression_result.completed",
+        "state": "running"
+      },
+      {
+        "eventRef": "event-passed_with_warning_or_waiver-005",
+        "eventType": "artifact.write.completed",
+        "state": "running"
+      },
+      {
+        "eventRef": "event-passed_with_warning_or_waiver-006",
+        "eventType": "verifier.completed",
+        "state": "verifying"
+      },
+      {
+        "eventRef": "event-passed_with_warning_or_waiver-007",
+        "eventType": "run.completed",
+        "state": "completed"
+      }
+    ],
+    "stateMachine": {
+      "allowedTransitions": [
+        {
+          "from": "created",
+          "to": "planning"
+        },
+        {
+          "from": "planning",
+          "to": "waiting_context"
+        },
+        {
+          "from": "waiting_context",
+          "to": "running"
+        },
+        {
+          "from": "running",
+          "to": "running"
+        },
+        {
+          "from": "running",
+          "to": "verifying"
+        },
+        {
+          "from": "verifying",
+          "to": "completed"
+        },
+        {
+          "from": "verifying",
+          "to": "failed"
+        }
+      ],
+      "initialState": "created",
+      "schemaVersion": "run-state-machine-v1",
+      "states": [
+        "created",
+        "planning",
+        "waiting_context",
+        "running",
+        "verifying",
+        "completed",
+        "failed"
+      ],
+      "terminalStates": [
+        "completed",
+        "failed"
+      ]
+    },
+    "stepAttempts": [
+      {
+        "attempt": 1,
+        "capability": "read_log",
+        "capabilityRef": "capability://phase3/read_log",
+        "inputRef": "fixtures/regression/passed_with_warning_or_waiver/input.log",
+        "lastError": null,
+        "maxRetries": 0,
+        "outputRef": "log_text",
+        "permission": "read",
+        "status": "completed",
+        "stepId": "step-read-log",
+        "timeoutMs": 1000
+      },
+      {
+        "attempt": 1,
+        "capability": "extract_regression_result",
+        "capabilityRef": "capability://phase3/extract_regression_result",
+        "inputRef": "log_text",
+        "lastError": null,
+        "maxRetries": 0,
+        "outputRef": "regression_result.json",
+        "permission": "read",
+        "status": "completed",
+        "stepId": "step-extract-regression-result",
+        "timeoutMs": 1000
+      },
+      {
+        "attempt": 1,
+        "capability": "write_artifact",
+        "capabilityRef": "capability://phase3/write_artifact",
+        "inputRef": "regression_result.json",
+        "lastError": null,
+        "maxRetries": 0,
+        "outputRef": "evidence.json,email_draft.md,run.json",
+        "permission": "write",
+        "status": "completed",
+        "stepId": "step-write-artifact",
+        "timeoutMs": 1000
+      },
+      {
+        "attempt": 1,
+        "capability": "rule_verifier",
+        "capabilityRef": "capability://phase3/rule_verifier",
+        "inputRef": "evidence.json,regression_result.json,email_draft.md",
+        "lastError": null,
+        "maxRetries": 0,
+        "outputRef": "verifier_report.json",
+        "permission": "read",
+        "status": "passed",
+        "stepId": "step-verify",
+        "timeoutMs": 1000
+      }
+    ]
+  },
   "schemaVersion": "run-v1",
   "status": "completed",
   "steps": [
