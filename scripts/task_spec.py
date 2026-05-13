@@ -111,6 +111,35 @@ def validate_regression_task_spec(task_spec: dict[str, Any]) -> None:
             raise TaskSpecValidationError(f"TaskSpec {field} must contain only non-empty strings")
 
 
+def load_regression_task_spec(path: Path) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8") as file:
+        task_spec = json.load(file)
+    if not isinstance(task_spec, dict):
+        raise TaskSpecValidationError("TaskSpec file must contain a JSON object")
+    validate_regression_task_spec(task_spec)
+    return task_spec
+
+
+def paths_match(left: str | Path, right: str | Path, base_dir: Path | None = None) -> bool:
+    base = base_dir or Path.cwd()
+
+    def normalized(value: str | Path) -> Path:
+        path = Path(value)
+        if not path.is_absolute():
+            path = base / path
+        return path.resolve(strict=False)
+
+    return normalized(left) == normalized(right)
+
+
+def validate_task_spec_for_request(task_spec: dict[str, Any], goal: str, input_log_path: str | Path, base_dir: Path | None = None) -> None:
+    validate_regression_task_spec(task_spec)
+    if task_spec["goal"].strip() != goal.strip():
+        raise TaskSpecValidationError("TaskSpec goal must match requested --goal")
+    if not paths_match(task_spec["inputLogPath"], input_log_path, base_dir):
+        raise TaskSpecValidationError("TaskSpec inputLogPath must match requested --log-path")
+
+
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
