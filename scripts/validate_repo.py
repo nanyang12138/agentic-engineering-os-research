@@ -107,6 +107,7 @@ PLAN_REQUIRED_MARKERS = [
     "capability-envelope-v1",
     "phase3_capability_catalog.json",
     "context-pack-v1",
+    "context-budget-v1",
     "ContextPackV1",
     "verifier-runtime-v1",
     "verifier-rule-catalog-v1",
@@ -249,6 +250,8 @@ def expect_local_readonly_context_pack_failure(context_pack_path: Path, task_spe
         for item in tampered["contextItems"]
         if item.get("kind") != "log_excerpt"
     ]
+    tampered["budget"]["actualLogExcerptItems"] = 0
+    tampered["budget"]["actualLogExcerptLines"] = 0
     write_json(tampered_pack_path, tampered)
 
     command = [
