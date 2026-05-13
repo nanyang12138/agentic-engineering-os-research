@@ -9,30 +9,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+from task_spec import EXPECTED_ARTIFACTS, build_regression_task_spec, validate_regression_task_spec
+
 
 GENERATED_AT = "2026-05-12T14:39:00Z"
-ALLOWED_ACTIONS = ["read_log", "extract_regression_result", "write_artifact"]
-EXPECTED_ARTIFACTS = ["evidence.json", "regression_result.json", "email_draft.md"]
-APPROVAL_POINTS = ["send_email_requires_human_approval"]
-FORBIDDEN_ACTIONS = [
-    "modify_repo_or_log",
-    "execute_external_side_effect",
-    "send_email",
-    "call_gui_desktop_cua_or_browser_capability",
-    "claim_all_passed_without_sufficient_evidence",
-]
-SUCCESS_CRITERIA = [
-    "Read the fixed regression log fixture.",
-    "Extract a safe structured verdict from log markers.",
-    "Write evidence-linked artifacts without external side effects.",
-    "Verify schema, evidence references, classification precedence, and email grounding.",
-]
-REQUIRED_EVIDENCE = [
-    "sourcePath",
-    "exact log excerpt",
-    "classification",
-    "evidence id referenced by artifacts",
-]
 
 
 @dataclass(frozen=True)
@@ -119,17 +99,7 @@ def load_fixture(directory: Path) -> Fixture:
 
 
 def task_spec_for(fixture: Fixture) -> dict:
-    return {
-        "id": f"task-spec-{fixture.id}",
-        "goal": fixture.goal,
-        "inputLogPath": display_path(fixture.log_path),
-        "allowedActions": ALLOWED_ACTIONS,
-        "forbiddenActions": FORBIDDEN_ACTIONS,
-        "successCriteria": SUCCESS_CRITERIA,
-        "requiredEvidence": REQUIRED_EVIDENCE,
-        "expectedArtifacts": EXPECTED_ARTIFACTS,
-        "approvalPoints": APPROVAL_POINTS,
-    }
+    return build_regression_task_spec(fixture.goal, display_path(fixture.log_path), f"task-spec-{fixture.id}")
 
 
 def extract_evidence(fixture: Fixture) -> list[dict]:
@@ -211,21 +181,11 @@ def rule_result(rule_id: str, status: str, message: str, evidence_ids: list[str]
 def build_rule_results(task_spec: dict, evidence: list[dict], verdict: str, verdict_evidence_ids: list[str]) -> list[dict]:
     ids = {item["id"] for item in evidence}
     classes = {item["classification"] for item in evidence}
-    missing_task_fields = [
-        field
-        for field in [
-            "id",
-            "goal",
-            "inputLogPath",
-            "allowedActions",
-            "forbiddenActions",
-            "successCriteria",
-            "requiredEvidence",
-            "expectedArtifacts",
-            "approvalPoints",
-        ]
-        if field not in task_spec
-    ]
+    task_spec_error = ""
+    try:
+        validate_regression_task_spec(task_spec)
+    except ValueError as exc:
+        task_spec_error = str(exc)
     required_evidence_fields = {"id", "type", "sourcePath", "excerpt", "observedAt", "classification", "confidence"}
     bad_evidence = [item.get("id", "<missing-id>") for item in evidence if not required_evidence_fields.issubset(item)]
     referenced = [evidence_id for evidence_id in verdict_evidence_ids if evidence_id in ids]
@@ -234,10 +194,10 @@ def build_rule_results(task_spec: dict, evidence: list[dict], verdict: str, verd
     results = [
         rule_result(
             "schema_validation",
-            "passed" if not missing_task_fields and not bad_evidence and verdict in VERDICTS else "failed",
+            "passed" if not task_spec_error and not bad_evidence and verdict in VERDICTS else "failed",
             "TaskSpec, evidence, and regression result required fields are present."
-            if not missing_task_fields and not bad_evidence and verdict in VERDICTS
-            else f"Missing task fields={missing_task_fields}; bad evidence={bad_evidence}; verdict={verdict}",
+            if not task_spec_error and not bad_evidence and verdict in VERDICTS
+            else f"TaskSpec error={task_spec_error}; bad evidence={bad_evidence}; verdict={verdict}",
             referenced,
         ),
         rule_result(

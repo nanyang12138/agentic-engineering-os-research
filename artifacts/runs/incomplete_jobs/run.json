@@ -74,8 +74,9 @@
       "classification",
       "evidence id referenced by artifacts"
     ],
+    "schemaVersion": "regression-task-spec-v1",
     "successCriteria": [
-      "Read the fixed regression log fixture.",
+      "Read the regression log path without modifying it.",
       "Extract a safe structured verdict from log markers.",
       "Write evidence-linked artifacts without external side effects.",
       "Verify schema, evidence references, classification precedence, and email grounding."
