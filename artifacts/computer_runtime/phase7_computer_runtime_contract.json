@@ -232,6 +232,13 @@
   ],
   "id": "phase7-static-computer-runtime-contract",
   "mode": "static_contract_only",
+  "observationPolicy": {
+    "policyRef": "artifacts/computer_runtime/phase7_observation_redaction_policy.json",
+    "rawScreenPixelsAllowed": false,
+    "schemaVersion": "observation-redaction-policy-v1",
+    "sensitiveValueCaptureAllowed": false,
+    "sourceBindingRequired": true
+  },
   "phase": "phase7",
   "policy": {
     "dangerousCapabilitiesRequireApproval": true,

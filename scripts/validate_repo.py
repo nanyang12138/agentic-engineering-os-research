@@ -19,13 +19,16 @@ from capability_contract import (
 from context_pack import build_context_pack, validate_context_pack
 from computer_runtime import (
     POLICY_MANIFEST_ARTIFACT_PATH,
+    REDACTION_POLICY_ARTIFACT_PATH,
     CONTRACT_ARTIFACT_PATH,
     OBSERVATION_ARTIFACT_PATH,
     build_adapter_policy_manifest,
     build_computer_runtime_contract,
+    build_observation_redaction_policy,
     build_trajectory_observation,
     validate_adapter_policy_manifest,
     validate_computer_runtime_contract,
+    validate_observation_redaction_policy,
     validate_trajectory_observation,
 )
 from evidence_list import (
@@ -56,6 +59,7 @@ RECOVERY_FIXTURE_DIR = ROOT / "artifacts/recovery/interrupted_after_extract"
 COMPUTER_RUNTIME_CONTRACT_PATH = ROOT / CONTRACT_ARTIFACT_PATH
 TRAJECTORY_OBSERVATION_PATH = ROOT / OBSERVATION_ARTIFACT_PATH
 ADAPTER_POLICY_MANIFEST_PATH = ROOT / POLICY_MANIFEST_ARTIFACT_PATH
+OBSERVATION_REDACTION_POLICY_PATH = ROOT / REDACTION_POLICY_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -116,6 +120,7 @@ REQUIRED_FILES = [
     "artifacts/computer_runtime/phase7_computer_runtime_contract.json",
     "artifacts/computer_runtime/phase7_trajectory_observation.json",
     "artifacts/computer_runtime/phase7_adapter_policy_manifest.json",
+    "artifacts/computer_runtime/phase7_observation_redaction_policy.json",
 ]
 
 PLAN_REQUIRED_MARKERS = [
@@ -146,6 +151,9 @@ PLAN_REQUIRED_MARKERS = [
     "AdapterPolicyManifestV1",
     "adapter-policy-manifest-v1",
     "phase7_adapter_policy_manifest.json",
+    "ObservationRedactionPolicyV1",
+    "observation-redaction-policy-v1",
+    "phase7_observation_redaction_policy.json",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -978,6 +986,7 @@ def validate_committed_computer_runtime_artifacts() -> None:
     contract = load_json(COMPUTER_RUNTIME_CONTRACT_PATH)
     observation = load_json(TRAJECTORY_OBSERVATION_PATH)
     policy_manifest = load_json(ADAPTER_POLICY_MANIFEST_PATH)
+    redaction_policy = load_json(OBSERVATION_REDACTION_POLICY_PATH)
     capability_catalog = load_json(CAPABILITY_CATALOG_PATH)
     try:
         validate_computer_runtime_contract(contract)
@@ -991,6 +1000,10 @@ def validate_committed_computer_runtime_artifacts() -> None:
         validate_adapter_policy_manifest(policy_manifest, contract, capability_catalog, ROOT)
     except ValueError as exc:
         raise AssertionError(f"Committed AdapterPolicyManifestV1 artifact failed validation: {exc}") from exc
+    try:
+        validate_observation_redaction_policy(redaction_policy, contract, ROOT)
+    except ValueError as exc:
+        raise AssertionError(f"Committed ObservationRedactionPolicyV1 artifact failed validation: {exc}") from exc
 
     expected_contract = build_computer_runtime_contract()
     if contract != expected_contract:
@@ -1013,6 +1026,13 @@ def validate_committed_computer_runtime_artifacts() -> None:
     if policy_manifest != expected_policy_manifest:
         raise AssertionError("Committed AdapterPolicyManifestV1 artifact differs from deterministic builder output")
 
+    expected_redaction_policy = build_observation_redaction_policy(
+        COMPUTER_RUNTIME_CONTRACT_PATH,
+        ROOT,
+    )
+    if redaction_policy != expected_redaction_policy:
+        raise AssertionError("Committed ObservationRedactionPolicyV1 artifact differs from deterministic builder output")
+
     tampered_contract = json.loads(json.dumps(contract))
     tampered_contract["policy"]["externalSideEffectsAllowed"] = True
     expect_computer_runtime_validation_failure(
@@ -1031,6 +1051,15 @@ def validate_committed_computer_runtime_artifacts() -> None:
         "must remain contract-only",
     )
 
+    tampered_contract = json.loads(json.dumps(contract))
+    tampered_contract["observationPolicy"]["rawScreenPixelsAllowed"] = True
+    expect_computer_runtime_validation_failure(
+        "raw_screen_pixels_allowed",
+        tampered_contract,
+        validate_computer_runtime_contract,
+        "must disallow raw screen pixels",
+    )
+
     tampered_observation = json.loads(json.dumps(observation))
     tampered_observation["externalSideEffect"] = True
     expect_trajectory_observation_validation_failure(
@@ -1038,6 +1067,24 @@ def validate_committed_computer_runtime_artifacts() -> None:
         tampered_observation,
         contract,
         "must not declare external side effects",
+    )
+
+    tampered_observation = json.loads(json.dumps(observation))
+    del tampered_observation["redactionPolicyRef"]
+    expect_trajectory_observation_validation_failure(
+        "trajectory_missing_redaction_policy_ref",
+        tampered_observation,
+        contract,
+        "missing required fields",
+    )
+
+    tampered_observation = json.loads(json.dumps(observation))
+    tampered_observation["policy"]["rawScreenPixelsCaptured"] = True
+    expect_trajectory_observation_validation_failure(
+        "trajectory_raw_screen_pixels",
+        tampered_observation,
+        contract,
+        "must not capture raw screen pixels",
     )
 
     tampered_observation = json.loads(json.dumps(observation))
@@ -1103,8 +1150,33 @@ def validate_committed_computer_runtime_artifacts() -> None:
     else:
         raise AssertionError("AdapterPolicyManifest forced-failure unexpectedly accepted adapter refs in runner catalog")
 
+    tampered_redaction_policy = json.loads(json.dumps(redaction_policy))
+    tampered_redaction_policy["defaults"]["rawScreenPixelsAllowed"] = True
+    try:
+        validate_observation_redaction_policy(tampered_redaction_policy, contract, ROOT)
+    except ValueError as exc:
+        if "must disallow raw screen pixels" not in str(exc):
+            raise AssertionError(f"ObservationRedactionPolicy raw-screen forced-failure rejected for the wrong reason: {exc}") from exc
+    else:
+        raise AssertionError("ObservationRedactionPolicy forced-failure unexpectedly accepted raw screen pixels")
 
-def run_computer_runtime_builder(contract_out: Path, observation_out: Path, policy_manifest_out: Path) -> None:
+    tampered_redaction_policy = json.loads(json.dumps(redaction_policy))
+    for kind in tampered_redaction_policy["observationKinds"]:
+        if kind["kind"] == "trajectory_event":
+            kind["forbiddenDataClasses"] = [
+                value for value in kind["forbiddenDataClasses"] if value != "task_verdict"
+            ]
+            break
+    try:
+        validate_observation_redaction_policy(tampered_redaction_policy, contract, ROOT)
+    except ValueError as exc:
+        if "must forbid task_verdict" not in str(exc):
+            raise AssertionError(f"ObservationRedactionPolicy task-verdict forced-failure rejected for the wrong reason: {exc}") from exc
+    else:
+        raise AssertionError("ObservationRedactionPolicy forced-failure unexpectedly accepted trajectory task verdicts")
+
+
+def run_computer_runtime_builder(contract_out: Path, observation_out: Path, policy_manifest_out: Path, redaction_policy_out: Path) -> None:
     command = [
         sys.executable,
         str(ROOT / "scripts/computer_runtime.py"),
@@ -1114,6 +1186,8 @@ def run_computer_runtime_builder(contract_out: Path, observation_out: Path, poli
         str(observation_out),
         "--policy-manifest-out",
         str(policy_manifest_out),
+        "--redaction-policy-out",
+        str(redaction_policy_out),
         "--run",
         str(ARTIFACT_DIR / "all_passed/run.json"),
         "--evidence",
@@ -1438,13 +1512,21 @@ def main() -> None:
         generated_computer_contract = temp_root / "phase7_computer_runtime_contract.json"
         generated_trajectory_observation = temp_root / "phase7_trajectory_observation.json"
         generated_policy_manifest = temp_root / "phase7_adapter_policy_manifest.json"
-        run_computer_runtime_builder(generated_computer_contract, generated_trajectory_observation, generated_policy_manifest)
+        generated_redaction_policy = temp_root / "phase7_observation_redaction_policy.json"
+        run_computer_runtime_builder(
+            generated_computer_contract,
+            generated_trajectory_observation,
+            generated_policy_manifest,
+            generated_redaction_policy,
+        )
         if load_json(generated_computer_contract) != load_json(COMPUTER_RUNTIME_CONTRACT_PATH):
             raise AssertionError("Committed ComputerRuntimeAdapterV1 contract differs from deterministic CLI output")
         if load_json(generated_trajectory_observation) != load_json(TRAJECTORY_OBSERVATION_PATH):
             raise AssertionError("Committed TrajectoryObservationV1 artifact differs from deterministic CLI output")
         if load_json(generated_policy_manifest) != load_json(ADAPTER_POLICY_MANIFEST_PATH):
             raise AssertionError("Committed AdapterPolicyManifestV1 artifact differs from deterministic CLI output")
+        if load_json(generated_redaction_policy) != load_json(OBSERVATION_REDACTION_POLICY_PATH):
+            raise AssertionError("Committed ObservationRedactionPolicyV1 artifact differs from deterministic CLI output")
 
     print("Repository validation passed.")
 

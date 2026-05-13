@@ -13,14 +13,17 @@ COMPUTER_RUNTIME_CAPABILITY_SCHEMA_VERSION = "computer-runtime-capability-v1"
 TRAJECTORY_OBSERVATION_SCHEMA_VERSION = "trajectory-observation-v1"
 ADAPTER_POLICY_MANIFEST_SCHEMA_VERSION = "adapter-policy-manifest-v1"
 ADAPTER_POLICY_DECISION_SCHEMA_VERSION = "adapter-policy-decision-v1"
+OBSERVATION_REDACTION_POLICY_SCHEMA_VERSION = "observation-redaction-policy-v1"
 GENERATED_AT = "2026-05-12T14:39:00Z"
 
 CONTRACT_ID = "phase7-static-computer-runtime-contract"
 OBSERVATION_ID = "phase7-static-trajectory-observation-all_passed"
 POLICY_MANIFEST_ID = "phase7-computer-runtime-adapter-policy"
+REDACTION_POLICY_ID = "phase7-observation-redaction-source-policy"
 CONTRACT_ARTIFACT_PATH = "artifacts/computer_runtime/phase7_computer_runtime_contract.json"
 OBSERVATION_ARTIFACT_PATH = "artifacts/computer_runtime/phase7_trajectory_observation.json"
 POLICY_MANIFEST_ARTIFACT_PATH = "artifacts/computer_runtime/phase7_adapter_policy_manifest.json"
+REDACTION_POLICY_ARTIFACT_PATH = "artifacts/computer_runtime/phase7_observation_redaction_policy.json"
 PHASE3_CAPABILITY_CATALOG_PATH = "artifacts/capabilities/phase3_capability_catalog.json"
 ADAPTER_REF = "computer-runtime://phase7/adapter/cua-placeholder"
 CAPABILITY_URI_PREFIX = "computer-runtime://phase7/"
@@ -288,6 +291,13 @@ def build_computer_runtime_contract() -> dict[str, Any]:
             "requiredBindings": ["runId", "eventRef", "evidenceId", "capabilityRef"],
             "taskVerdictOwner": "verifier-runtime-v1",
         },
+        "observationPolicy": {
+            "schemaVersion": OBSERVATION_REDACTION_POLICY_SCHEMA_VERSION,
+            "policyRef": REDACTION_POLICY_ARTIFACT_PATH,
+            "rawScreenPixelsAllowed": False,
+            "sensitiveValueCaptureAllowed": False,
+            "sourceBindingRequired": True,
+        },
         "policy": {
             "externalSideEffectsAllowed": False,
             "realProviderExecutionAllowed": False,
@@ -311,6 +321,7 @@ def validate_computer_runtime_contract(contract: dict[str, Any]) -> None:
             "adapterBoundary",
             "capabilities",
             "trajectoryContract",
+            "observationPolicy",
             "policy",
         ],
     )
@@ -338,6 +349,29 @@ def validate_computer_runtime_contract(contract: dict[str, Any]) -> None:
         raise ValueError(f"trajectoryContract schemaVersion must be {TRAJECTORY_OBSERVATION_SCHEMA_VERSION}")
     if trajectory_contract.get("taskVerdictOwner") != "verifier-runtime-v1":
         raise ValueError("trajectoryContract taskVerdictOwner must remain verifier-runtime-v1")
+
+    observation_policy = contract["observationPolicy"]
+    _require_fields(
+        "ComputerRuntimeAdapterV1 observationPolicy",
+        observation_policy,
+        [
+            "schemaVersion",
+            "policyRef",
+            "rawScreenPixelsAllowed",
+            "sensitiveValueCaptureAllowed",
+            "sourceBindingRequired",
+        ],
+    )
+    if observation_policy["schemaVersion"] != OBSERVATION_REDACTION_POLICY_SCHEMA_VERSION:
+        raise ValueError(f"observationPolicy schemaVersion must be {OBSERVATION_REDACTION_POLICY_SCHEMA_VERSION}")
+    if observation_policy["policyRef"] != REDACTION_POLICY_ARTIFACT_PATH:
+        raise ValueError(f"observationPolicy policyRef must be {REDACTION_POLICY_ARTIFACT_PATH}")
+    if observation_policy["rawScreenPixelsAllowed"] is not False:
+        raise ValueError("observationPolicy must disallow raw screen pixels")
+    if observation_policy["sensitiveValueCaptureAllowed"] is not False:
+        raise ValueError("observationPolicy must disallow sensitive value capture")
+    if observation_policy["sourceBindingRequired"] is not True:
+        raise ValueError("observationPolicy must require source binding")
 
     capabilities = contract["capabilities"]
     if not isinstance(capabilities, list) or not capabilities:
@@ -420,6 +454,7 @@ def build_trajectory_observation(run_path: Path, evidence_path: Path, events_pat
         "schemaVersion": TRAJECTORY_OBSERVATION_SCHEMA_VERSION,
         "id": OBSERVATION_ID,
         "contractRef": CONTRACT_ARTIFACT_PATH,
+        "redactionPolicyRef": REDACTION_POLICY_ARTIFACT_PATH,
         "adapterRef": ADAPTER_REF,
         "provider": "static_fixture",
         "mode": "static_fixture_only",
@@ -443,6 +478,7 @@ def build_trajectory_observation(run_path: Path, evidence_path: Path, events_pat
                 "sourceRef": f"{evidence_path.resolve().relative_to(root.resolve()).as_posix()}#items/{first_evidence['id']}",
                 "lineRange": first_evidence["lineRange"],
                 "excerptHash": first_evidence["excerptHash"],
+                "redactionPolicy": "evidence_bound_excerpt_only",
                 "timestamp": GENERATED_AT,
                 "assertion": "Trajectory observations can cite evidence, but task verdicts remain owned by EvidenceListV1 and VerifierRuntimeV1.",
             }
@@ -450,6 +486,8 @@ def build_trajectory_observation(run_path: Path, evidence_path: Path, events_pat
         "policy": {
             "noExternalSideEffects": True,
             "noGuiAutomationExecuted": True,
+            "rawScreenPixelsCaptured": False,
+            "sensitiveValuesCaptured": False,
             "requiresVerifierForTaskVerdict": True,
         },
     }
@@ -464,6 +502,7 @@ def validate_trajectory_observation(observation: dict[str, Any], contract: dict[
             "schemaVersion",
             "id",
             "contractRef",
+            "redactionPolicyRef",
             "adapterRef",
             "provider",
             "mode",
@@ -481,6 +520,10 @@ def validate_trajectory_observation(observation: dict[str, Any], contract: dict[
         raise ValueError(f"TrajectoryObservationV1 id must be {OBSERVATION_ID}")
     if observation["contractRef"] != CONTRACT_ARTIFACT_PATH:
         raise ValueError(f"TrajectoryObservationV1 contractRef must be {CONTRACT_ARTIFACT_PATH}")
+    if observation["redactionPolicyRef"] != REDACTION_POLICY_ARTIFACT_PATH:
+        raise ValueError(f"TrajectoryObservationV1 redactionPolicyRef must be {REDACTION_POLICY_ARTIFACT_PATH}")
+    if observation["redactionPolicyRef"] != contract["observationPolicy"]["policyRef"]:
+        raise ValueError("TrajectoryObservationV1 redactionPolicyRef must match ComputerRuntimeAdapterV1 observationPolicy")
     if observation["adapterRef"] != contract["adapterRef"]:
         raise ValueError("TrajectoryObservationV1 adapterRef must match ComputerRuntimeAdapterV1")
     if observation["mode"] != "static_fixture_only":
@@ -493,6 +536,10 @@ def validate_trajectory_observation(observation: dict[str, Any], contract: dict[
         raise ValueError("TrajectoryObservationV1 policy must forbid external side effects")
     if policy.get("noGuiAutomationExecuted") is not True:
         raise ValueError("TrajectoryObservationV1 policy must record that no GUI automation was executed")
+    if policy.get("rawScreenPixelsCaptured") is not False:
+        raise ValueError("TrajectoryObservationV1 must not capture raw screen pixels")
+    if policy.get("sensitiveValuesCaptured") is not False:
+        raise ValueError("TrajectoryObservationV1 must not capture sensitive values")
     if policy.get("requiresVerifierForTaskVerdict") is not True:
         raise ValueError("TrajectoryObservationV1 must require verifier ownership for task verdicts")
 
@@ -539,10 +586,23 @@ def validate_trajectory_observation(observation: dict[str, Any], contract: dict[
         _require_fields(
             "TrajectoryObservationV1 observation",
             item,
-            ["id", "kind", "capability", "capabilityRef", "eventRef", "evidenceId", "sourceRef", "lineRange", "excerptHash"],
+            [
+                "id",
+                "kind",
+                "capability",
+                "capabilityRef",
+                "eventRef",
+                "evidenceId",
+                "sourceRef",
+                "lineRange",
+                "excerptHash",
+                "redactionPolicy",
+            ],
         )
         if "verdict" in item or "taskVerdict" in item:
             raise ValueError("TrajectoryObservationV1 observations must not declare task verdicts")
+        if item["redactionPolicy"] != "evidence_bound_excerpt_only":
+            raise ValueError("TrajectoryObservationV1 observations must use evidence_bound_excerpt_only redaction policy")
         if item["kind"] not in contract["trajectoryContract"]["allowedObservationKinds"]:
             raise ValueError(f"TrajectoryObservationV1 observation kind is not allowed: {item['kind']}")
         if item["capability"] != "trajectory.record":
@@ -558,6 +618,197 @@ def validate_trajectory_observation(observation: dict[str, Any], contract: dict[
             raise ValueError("TrajectoryObservationV1 observation lineRange must match EvidenceListV1")
         if item["excerptHash"] != evidence_item.get("excerptHash"):
             raise ValueError("TrajectoryObservationV1 observation excerptHash must match EvidenceListV1")
+
+
+def build_observation_redaction_policy(contract_path: Path, root: Path) -> dict[str, Any]:
+    contract = _load_json(contract_path)
+    validate_computer_runtime_contract(contract)
+    return {
+        "schemaVersion": OBSERVATION_REDACTION_POLICY_SCHEMA_VERSION,
+        "id": REDACTION_POLICY_ID,
+        "phase": "phase7",
+        "scope": "computer_runtime_observation_redaction_and_source_policy",
+        "generatedAt": GENERATED_AT,
+        "contractRef": CONTRACT_ARTIFACT_PATH,
+        "adapterRef": contract["adapterRef"],
+        "sourceArtifacts": [
+            _artifact_source("computer_runtime_contract", contract_path, root),
+        ],
+        "defaults": {
+            "rawScreenPixelsAllowed": False,
+            "sensitiveValueCaptureAllowed": False,
+            "sourceBindingRequired": True,
+            "verdictEmissionAllowed": False,
+        },
+        "observationKinds": [
+            {
+                "kind": "screen_observation",
+                "capability": "computer.screenshot",
+                "capabilityRef": computer_capability_ref("computer.screenshot"),
+                "rawCaptureAllowed": False,
+                "requiredRedaction": "redacted_metadata_or_redacted_image_ref_only",
+                "allowedDataClasses": [
+                    "redacted_screenshot_ref",
+                    "window_title",
+                    "visible_text_excerpt",
+                    "accessibility_tree_excerpt",
+                ],
+                "forbiddenDataClasses": [
+                    "credential",
+                    "personal_data",
+                    "raw_screen_pixels",
+                    "secret",
+                ],
+                "sourceBinding": "screenObservationRef_with_redaction_policy",
+            },
+            {
+                "kind": "trajectory_event",
+                "capability": "trajectory.record",
+                "capabilityRef": computer_capability_ref("trajectory.record"),
+                "rawCaptureAllowed": False,
+                "requiredRedaction": "evidence_bound_excerpt_only",
+                "allowedDataClasses": [
+                    "eventRef",
+                    "evidenceId",
+                    "excerptHash",
+                    "lineRange",
+                    "sourceRef",
+                ],
+                "forbiddenDataClasses": [
+                    "credential",
+                    "raw_screen_pixels",
+                    "secret",
+                    "task_verdict",
+                ],
+                "sourceBinding": "run_event_and_evidence_ref",
+            },
+        ],
+        "invariants": [
+            "Computer runtime observations must bind to source refs before they can be used as evidence.",
+            "Raw screen pixels, credentials, secrets, and task verdicts are forbidden in Phase 7 observation artifacts.",
+            "Trajectory observations may cite evidence ids and excerpt hashes but must not decide engineering task success.",
+        ],
+    }
+
+
+def validate_observation_redaction_policy(policy: dict[str, Any], contract: dict[str, Any], root: Path) -> None:
+    validate_computer_runtime_contract(contract)
+    _require_fields(
+        "ObservationRedactionPolicyV1",
+        policy,
+        [
+            "schemaVersion",
+            "id",
+            "phase",
+            "scope",
+            "contractRef",
+            "adapterRef",
+            "sourceArtifacts",
+            "defaults",
+            "observationKinds",
+            "invariants",
+        ],
+    )
+    if policy["schemaVersion"] != OBSERVATION_REDACTION_POLICY_SCHEMA_VERSION:
+        raise ValueError(f"ObservationRedactionPolicyV1 schemaVersion must be {OBSERVATION_REDACTION_POLICY_SCHEMA_VERSION}")
+    if policy["id"] != REDACTION_POLICY_ID:
+        raise ValueError(f"ObservationRedactionPolicyV1 id must be {REDACTION_POLICY_ID}")
+    if policy["phase"] != "phase7":
+        raise ValueError("ObservationRedactionPolicyV1 phase must be phase7")
+    if policy["contractRef"] != CONTRACT_ARTIFACT_PATH:
+        raise ValueError(f"ObservationRedactionPolicyV1 contractRef must be {CONTRACT_ARTIFACT_PATH}")
+    if policy["adapterRef"] != contract["adapterRef"]:
+        raise ValueError("ObservationRedactionPolicyV1 adapterRef must match ComputerRuntimeAdapterV1")
+    if contract["observationPolicy"]["policyRef"] != REDACTION_POLICY_ARTIFACT_PATH:
+        raise ValueError("ComputerRuntimeAdapterV1 must reference the committed ObservationRedactionPolicyV1 artifact")
+
+    source_artifacts = policy["sourceArtifacts"]
+    if not isinstance(source_artifacts, list) or len(source_artifacts) != 1:
+        raise ValueError("ObservationRedactionPolicyV1 sourceArtifacts must contain the computer runtime contract")
+    source = source_artifacts[0]
+    _require_fields("ObservationRedactionPolicyV1 source artifact", source, ["role", "path", "contentHash"])
+    if source["role"] != "computer_runtime_contract" or source["path"] != CONTRACT_ARTIFACT_PATH:
+        raise ValueError("ObservationRedactionPolicyV1 source artifact must be the computer runtime contract")
+    _validate_relative_posix_path(source["path"])
+    source_path = root / source["path"]
+    if not source_path.is_file():
+        raise ValueError(f"ObservationRedactionPolicyV1 source artifact does not exist: {source['path']}")
+    if _stable_file_hash(source_path) != source["contentHash"]:
+        raise ValueError(f"ObservationRedactionPolicyV1 source hash mismatch for {source['path']}")
+
+    defaults = policy["defaults"]
+    _require_fields(
+        "ObservationRedactionPolicyV1 defaults",
+        defaults,
+        [
+            "rawScreenPixelsAllowed",
+            "sensitiveValueCaptureAllowed",
+            "sourceBindingRequired",
+            "verdictEmissionAllowed",
+        ],
+    )
+    if defaults["rawScreenPixelsAllowed"] is not False:
+        raise ValueError("ObservationRedactionPolicyV1 must disallow raw screen pixels")
+    if defaults["sensitiveValueCaptureAllowed"] is not False:
+        raise ValueError("ObservationRedactionPolicyV1 must disallow sensitive value capture")
+    if defaults["sourceBindingRequired"] is not True:
+        raise ValueError("ObservationRedactionPolicyV1 must require source binding")
+    if defaults["verdictEmissionAllowed"] is not False:
+        raise ValueError("ObservationRedactionPolicyV1 must not allow observation verdict emission")
+
+    kinds = policy["observationKinds"]
+    if not isinstance(kinds, list) or len(kinds) != 2:
+        raise ValueError("ObservationRedactionPolicyV1 must define screen_observation and trajectory_event policies")
+    by_kind = {item.get("kind"): item for item in kinds if isinstance(item, dict)}
+    if set(by_kind) != {"screen_observation", "trajectory_event"}:
+        raise ValueError("ObservationRedactionPolicyV1 kinds must be screen_observation and trajectory_event")
+    required = {
+        "screen_observation": {
+            "capability": "computer.screenshot",
+            "requiredRedaction": "redacted_metadata_or_redacted_image_ref_only",
+            "sourceBinding": "screenObservationRef_with_redaction_policy",
+        },
+        "trajectory_event": {
+            "capability": "trajectory.record",
+            "requiredRedaction": "evidence_bound_excerpt_only",
+            "sourceBinding": "run_event_and_evidence_ref",
+        },
+    }
+    contract_capability_refs = {capability["name"]: capability["ref"] for capability in contract["capabilities"]}
+    for kind, expectations in required.items():
+        item = by_kind[kind]
+        _require_fields(
+            f"ObservationRedactionPolicyV1 {kind}",
+            item,
+            [
+                "kind",
+                "capability",
+                "capabilityRef",
+                "rawCaptureAllowed",
+                "requiredRedaction",
+                "allowedDataClasses",
+                "forbiddenDataClasses",
+                "sourceBinding",
+            ],
+        )
+        if item["capability"] != expectations["capability"]:
+            raise ValueError(f"ObservationRedactionPolicyV1 {kind} capability mismatch")
+        if item["capabilityRef"] != contract_capability_refs[item["capability"]]:
+            raise ValueError(f"ObservationRedactionPolicyV1 {kind} capabilityRef must match ComputerRuntimeAdapterV1")
+        if item["rawCaptureAllowed"] is not False:
+            raise ValueError(f"ObservationRedactionPolicyV1 {kind} must not allow raw capture")
+        if item["requiredRedaction"] != expectations["requiredRedaction"]:
+            raise ValueError(f"ObservationRedactionPolicyV1 {kind} requiredRedaction mismatch")
+        if item["sourceBinding"] != expectations["sourceBinding"]:
+            raise ValueError(f"ObservationRedactionPolicyV1 {kind} sourceBinding mismatch")
+        forbidden = item["forbiddenDataClasses"]
+        if not isinstance(forbidden, list):
+            raise ValueError(f"ObservationRedactionPolicyV1 {kind} forbiddenDataClasses must be a list")
+        for value in ["credential", "raw_screen_pixels", "secret"]:
+            if value not in forbidden:
+                raise ValueError(f"ObservationRedactionPolicyV1 {kind} must forbid {value}")
+    if "task_verdict" not in by_kind["trajectory_event"]["forbiddenDataClasses"]:
+        raise ValueError("ObservationRedactionPolicyV1 trajectory_event must forbid task_verdict")
 
 
 def build_adapter_policy_manifest(contract_path: Path, capability_catalog_path: Path, root: Path) -> dict[str, Any]:
@@ -787,6 +1038,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--contract-out", type=Path)
     parser.add_argument("--observation-out", type=Path)
     parser.add_argument("--policy-manifest-out", type=Path)
+    parser.add_argument("--redaction-policy-out", type=Path)
     parser.add_argument("--run", type=Path)
     parser.add_argument("--evidence", type=Path)
     parser.add_argument("--events", type=Path)
@@ -795,6 +1047,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--validate-contract", type=Path)
     parser.add_argument("--validate-observation", type=Path)
     parser.add_argument("--validate-policy-manifest", type=Path)
+    parser.add_argument("--validate-redaction-policy", type=Path)
     return parser.parse_args(argv)
 
 
@@ -823,6 +1076,11 @@ def main(argv: list[str] | None = None) -> int:
         _write_json(args.policy_manifest_out, policy_manifest)
         print(f"Wrote AdapterPolicyManifestV1 artifact to {args.policy_manifest_out}.")
 
+    if args.redaction_policy_out:
+        redaction_policy = build_observation_redaction_policy(root / CONTRACT_ARTIFACT_PATH, root)
+        _write_json(args.redaction_policy_out, redaction_policy)
+        print(f"Wrote ObservationRedactionPolicyV1 artifact to {args.redaction_policy_out}.")
+
     if args.validate_contract:
         contract = _load_json(args.validate_contract)
         validate_computer_runtime_contract(contract)
@@ -843,14 +1101,23 @@ def main(argv: list[str] | None = None) -> int:
         validate_adapter_policy_manifest(policy_manifest, contract, catalog, root)
         print(f"Validated AdapterPolicyManifestV1 artifact {args.validate_policy_manifest}.")
 
+    if args.validate_redaction_policy:
+        contract_path = args.validate_contract or (root / CONTRACT_ARTIFACT_PATH)
+        contract = _load_json(contract_path)
+        redaction_policy = _load_json(args.validate_redaction_policy)
+        validate_observation_redaction_policy(redaction_policy, contract, root)
+        print(f"Validated ObservationRedactionPolicyV1 artifact {args.validate_redaction_policy}.")
+
     if not any(
         [
             args.contract_out,
             args.observation_out,
             args.policy_manifest_out,
+            args.redaction_policy_out,
             args.validate_contract,
             args.validate_observation,
             args.validate_policy_manifest,
+            args.validate_redaction_policy,
         ]
     ):
         raise ValueError("No action requested")

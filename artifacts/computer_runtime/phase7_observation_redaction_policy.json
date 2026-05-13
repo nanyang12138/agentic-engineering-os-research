@@ -1,0 +1,70 @@
+{
+  "adapterRef": "computer-runtime://phase7/adapter/cua-placeholder",
+  "contractRef": "artifacts/computer_runtime/phase7_computer_runtime_contract.json",
+  "defaults": {
+    "rawScreenPixelsAllowed": false,
+    "sensitiveValueCaptureAllowed": false,
+    "sourceBindingRequired": true,
+    "verdictEmissionAllowed": false
+  },
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "phase7-observation-redaction-source-policy",
+  "invariants": [
+    "Computer runtime observations must bind to source refs before they can be used as evidence.",
+    "Raw screen pixels, credentials, secrets, and task verdicts are forbidden in Phase 7 observation artifacts.",
+    "Trajectory observations may cite evidence ids and excerpt hashes but must not decide engineering task success."
+  ],
+  "observationKinds": [
+    {
+      "allowedDataClasses": [
+        "redacted_screenshot_ref",
+        "window_title",
+        "visible_text_excerpt",
+        "accessibility_tree_excerpt"
+      ],
+      "capability": "computer.screenshot",
+      "capabilityRef": "computer-runtime://phase7/computer.screenshot",
+      "forbiddenDataClasses": [
+        "credential",
+        "personal_data",
+        "raw_screen_pixels",
+        "secret"
+      ],
+      "kind": "screen_observation",
+      "rawCaptureAllowed": false,
+      "requiredRedaction": "redacted_metadata_or_redacted_image_ref_only",
+      "sourceBinding": "screenObservationRef_with_redaction_policy"
+    },
+    {
+      "allowedDataClasses": [
+        "eventRef",
+        "evidenceId",
+        "excerptHash",
+        "lineRange",
+        "sourceRef"
+      ],
+      "capability": "trajectory.record",
+      "capabilityRef": "computer-runtime://phase7/trajectory.record",
+      "forbiddenDataClasses": [
+        "credential",
+        "raw_screen_pixels",
+        "secret",
+        "task_verdict"
+      ],
+      "kind": "trajectory_event",
+      "rawCaptureAllowed": false,
+      "requiredRedaction": "evidence_bound_excerpt_only",
+      "sourceBinding": "run_event_and_evidence_ref"
+    }
+  ],
+  "phase": "phase7",
+  "schemaVersion": "observation-redaction-policy-v1",
+  "scope": "computer_runtime_observation_redaction_and_source_policy",
+  "sourceArtifacts": [
+    {
+      "contentHash": "a92a556d378903f21045f92701ae32599250ef9b658c61cc8cbf9f87d1a99e8b",
+      "path": "artifacts/computer_runtime/phase7_computer_runtime_contract.json",
+      "role": "computer_runtime_contract"
+    }
+  ]
+}

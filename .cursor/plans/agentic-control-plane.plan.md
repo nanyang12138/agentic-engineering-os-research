@@ -1067,6 +1067,25 @@ Build vs Integrate：
 
 当前 Phase 7 MVP gate 进一步收敛：Computer Runtime 已具备静态 adapter contract、trajectory observation artifact 和 adapter policy overlay。Phase 7 仍未完成真实 provider integration；下一步可以补一个更细的 observation redaction/source policy，或在计划明确接受 contract-only Phase 7 MVP 后进入 Phase 8 IDE Adapter。
 
+#### Phase 7 ObservationRedactionPolicyV1 Source / Redaction Gate
+
+2026-05-13 15:02 UTC 自动化实现结论：Phase 7 的第三步不是接入真实 trycua/cua、screen recorder、desktop automation 或 redaction engine，而是在现有 contract-only Computer Runtime artifact 上补齐 observation redaction/source policy。这个 gate 证明即使未来接入 screenshot/trajectory provider，Computer Runtime observation 也必须先声明 source binding、redaction boundary 和 Evidence/Verifier ownership，不能把 raw screen pixels、secret、credential 或 task verdict 直接带入工程任务 OS。
+
+最小 ObservationRedactionPolicyV1 contract：
+
+- `artifacts/computer_runtime/phase7_observation_redaction_policy.json` 采用 `observation-redaction-policy-v1`，引用 `phase7_computer_runtime_contract.json` 的 POSIX 相对路径和 content hash。
+- `ComputerRuntimeAdapterV1#observationPolicy` 引用该 redaction policy artifact，并固定 `rawScreenPixelsAllowed=false`、`sensitiveValueCaptureAllowed=false`、`sourceBindingRequired=true`。
+- `TrajectoryObservationV1` 增加 `redactionPolicyRef`、`policy.rawScreenPixelsCaptured=false`、`policy.sensitiveValuesCaptured=false` 和每条 observation 的 `redactionPolicy="evidence_bound_excerpt_only"`。
+- redaction policy 覆盖 `screen_observation` 与 `trajectory_event` 两类 observation：前者只允许 redacted screenshot ref / metadata / visible text excerpt / accessibility excerpt；后者只允许 event/evidence/source/hash binding，且禁止 `task_verdict`。
+- validator 拒绝三类关键错误：contract 允许 raw screen pixels、trajectory observation 缺失 redaction policy 或声明捕获 raw pixels、redaction policy 允许 raw screen pixels 或 trajectory event 携带 task verdict。
+
+Build vs Integrate：
+
+- Build：Phase 7 最小 `ObservationRedactionPolicyV1` schema、contract/observation 引用、source hash validation、redaction/source forced-failure cases。
+- Integrate later：真实 screen redaction engine、accessibility tree sanitizer、trycua/cua trajectory redaction、provider-side capture policy、human approval UI 和 replay viewer。
+
+当前 Phase 7 contract-only MVP gate 已满足：Computer Runtime 有 adapter boundary、trajectory observation、permission overlay 和 observation redaction/source policy，且全部由 deterministic validation 覆盖；真实 provider integration 明确后移。下一步可以进入 Phase 8 IDE Adapter，先定义 IDE adapter contract / workspace observation artifact，而不是执行 IDE side effects。
+
 ### Phase 8：IDE Adapter
 
 再把 IDE 接进来，而不是一开始绑定 IDE：
@@ -1716,7 +1735,7 @@ Add forced-failure verifier checks so that python3 scripts/validate_repo.py prov
 6. Evidence List + Verifier Runtime：已实现 Phase 5 regression MVP gate：`scripts/evidence_list.py` 提供 `EvidenceListV1` builder / validator / CLI，校验 sourcePath、lineRange、excerptHash、ContextPack provenance 和 artifact backlinks；`scripts/verifier_runtime.py` 提供 `verifier-runtime-v1` / `verifier-rule-catalog-v1` deterministic replay。数据库 Evidence Graph、review agent 和 human verifier backend 后移。
 7. Local Read-only Runner：已实现 Phase 1b one-shot CLI `python3 scripts/local_readonly_runner.py --log-path <log> --goal <goal> --out-dir <out>`；该 runner 复用 Phase 1a schema、evidence list、email grounding 和 verifier report，`scripts/validate_repo.py` 已加入本地 read-only smoke gate。SQLite event store、daemon、正式 capability registry、真实外部 adapter 和更完整 run state 仍后移。
 8. Capability Metadata Gate：已实现 Phase 3 最小 `capability-envelope-v1` / `capability-metadata-v1`，覆盖 `read_log`、`extract_regression_result`、`write_artifact` 和 `rule_verifier` 的 permission、sideEffect、timeout、input/output contract；`run.json` 和 `events.jsonl` 引用 capability ref，`artifacts/capabilities/phase3_capability_catalog.json` 作为独立 catalogue artifact，`scripts/validate_repo.py` 会拒绝缺失 permission、声明外部 side effect、缺失 `step-verify.capabilityRef` 或 catalogue 缺失当前 capability 的契约。
-9. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
+9. CUA Adapter Contract：Phase 7 contract-only MVP 已实现 `ComputerRuntimeAdapterV1`、`TrajectoryObservationV1`、`AdapterPolicyManifestV1` 和 `ObservationRedactionPolicyV1`，只定义 `computer.*` / `sandbox.*` / `trajectory.*` adapter boundary、permission overlay 与 redaction/source policy，不实际集成 GUI/CUA provider。
 10. Phase 1a Evidence Intake Review：在 fixture runner 输出完整 artifact packet 前，后续优化只允许维护评分、Decision Log、Open Questions 和 Research Sprint Log；只有 `verifier_report.json` 失败、grounded email 问题、真实脱敏日志差异或 Build vs Integrate 运行证据出现后，才修改正式设计章节。
 11. Evidence Packet Stop Rule：已由 2026-05-12 14:39 UTC artifact packet 解锁；后续修改必须基于 committed `artifacts/runs/*`、`verifier_report.json` failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据，不再无证据扩写 adapter mapping 或正式设计章节。
 12. Phase 1a Verifier Hardening：已实现 deterministic negative validation，`scripts/validate_repo.py` 会验证 malformed schema、missing evidence refs、failure-marker-to-passed tamper 和 pass-style email injection 均被拒绝或生成 failed verifier report。
@@ -2012,6 +2031,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-13 07:45 UTC：Phase 5 VerifierRuntimeV1 Rule Catalog / Replay Gate 已实现；决定将当前规则验证自研为 `verifier-runtime-v1` / `verifier-rule-catalog-v1`、committed `artifacts/verifier/phase5_verifier_rule_catalog.json` 和 deterministic replay gate。外部 review agent、human verifier backend、policy engine 和完整 Evidence Graph 继续后移。
 - 2026-05-13 08:00 UTC：Phase 5 EvidenceListV1 Provenance / Backlink Gate 已实现；决定将 `evidence.json` 固化为独立 `EvidenceListV1` contract，由 `scripts/evidence_list.py` 校验 sourcePath、lineRange、excerptHash、ContextPack provenance 和 artifact backlinks。数据库 Evidence Graph、跨任务 evidence store、review agent 和 human verifier backend 继续后移；下一轮进入 Phase 6 state, permission, and recovery。
 - 2026-05-13 09:27 UTC：Phase 6 InterruptedRecoveryFixtureV1 Non-terminal Resume Gate 已实现；决定先用 committed interrupted fixture 证明 `RunControlV1` 的 non-terminal recovery contract，`resumeTarget` 指向下一步 `write_artifact`，而不是提前引入 durable workflow backend、真实 resume executor、CUA 或 IDE adapter。Phase 6 regression MVP gate 视为基本满足；下一轮可以进入 Phase 7 adapter contract boundary。
+- 2026-05-13 15:02 UTC：Phase 7 ObservationRedactionPolicyV1 Source / Redaction Gate 已实现；决定将 Phase 7 contract-only MVP 收敛为 adapter boundary + trajectory observation + permission overlay + redaction/source policy 四件套。真实 trycua/cua provider、desktop automation、screen redaction engine、trajectory replay 和 IDE/CUA runtime scheduling 继续后移；下一轮可以进入 Phase 8 IDE Adapter contract。
 
 ## 20. Open Questions
 
@@ -2040,6 +2060,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - Phase 4 的 Context Broker artifact 固定为 `ContextPackV1` / `context-pack-v1`：先用静态 builder 收敛 TaskSpec、log excerpts、capability catalogue 和 artifact refs，并用 contentHash 验证来源可复查；local runner 可选消费 committed ContextPack，且最小 `budget` 会限制 evidence-backed log excerpt 的数量和总行数。动态 retrieval 与 broker service 后移。
 - Phase 5 的 Evidence / Verifier artifacts 固定为 `EvidenceListV1`、`verifier-runtime-v1` 和 `verifier-rule-catalog-v1`：先用 same-process read-only evidence validator、rule catalog 和 replay gate 验证 sourcePath/lineRange/excerptHash、ContextPack provenance、artifact backlinks 与 `verifier_report.json`，review agent、human verifier backend、policy engine 和数据库 Evidence Graph 后移。
 - Phase 6 的 state/permission/recovery gate 固定为 `RunControlV1` + `InterruptedRecoveryFixtureV1`：terminal run 使用 `terminal_replay_only`，non-terminal interrupted run 必须提供 `resumeTarget` 和 `resume_step`；durable checkpoint store、真实 resume executor、retry scheduler 和 approval backend 后移。
+- Phase 7 的 Computer Runtime / CUA Adapter gate 固定为 contract-only artifact set：`ComputerRuntimeAdapterV1` 定义底层 `computer.*` / `sandbox.*` / `trajectory.*` 能力边界，`TrajectoryObservationV1` 只能作为 Evidence/Verifier 输入，`AdapterPolicyManifestV1` 阻止未审批 dangerous capability，`ObservationRedactionPolicyV1` 禁止 raw screen pixels、secret、credential 和 trajectory task verdict；真实 trycua/cua、GUI automation、redaction engine 和 replay runtime 后移。
 
 ### 20.2 仍开放的问题
 
@@ -4054,6 +4075,78 @@ git diff --check
 ```text
 继续 Phase 7：
 新增最小 observation redaction/source policy，规定 screenshot/trajectory observation 必须声明 redaction boundary 和 Evidence/Verifier ownership；或者记录决策认为 Phase 7 contract-only MVP 已足以进入 Phase 8 IDE Adapter。
+```
+
+### 2026-05-13 15:02 UTC Automation Implementation Log - Phase 7 ObservationRedactionPolicyV1 Source / Redaction Gate
+
+Active phase：
+
+```text
+Phase 7: Computer Runtime and CUA Adapter
+```
+
+Selected slice：
+
+```text
+Add a Phase 7 ObservationRedactionPolicyV1 so that python3 scripts/validate_repo.py proves computer runtime observations are source-bound and redaction-aware without real CUA/GUI side effects.
+```
+
+为什么这是下一步：Phase 7 已经完成 static adapter contract、trajectory observation 和 permission overlay；计划明确把 observation redaction/source policy 作为进入 Phase 8 前的最小安全缺口。本切片只补 artifact contract 和 validator，不注册真实 provider、不执行 GUI/desktop/browser/sandbox/shell/CUA side effect。
+
+实现摘要：
+
+- `scripts/computer_runtime.py` 新增 `observation-redaction-policy-v1` / `ObservationRedactionPolicyV1` builder、validator 和 CLI 参数。
+- 新增 committed `artifacts/computer_runtime/phase7_observation_redaction_policy.json`，引用 `phase7_computer_runtime_contract.json` source hash。
+- `phase7_computer_runtime_contract.json` 新增 `observationPolicy`，固定 raw screen pixels、sensitive value capture 均不允许，且要求 source binding。
+- `phase7_trajectory_observation.json` 新增 `redactionPolicyRef`、raw/sensitive capture flags 和 per-observation `redactionPolicy="evidence_bound_excerpt_only"`。
+- `scripts/validate_repo.py` 校验 committed redaction policy、deterministic CLI 输出，并加入 forced-failure：contract 允许 raw screen pixels、trajectory observation 缺失 redaction ref 或声明 raw capture、redaction policy 允许 raw screen pixels 或 trajectory event 携带 task verdict。
+
+验收标准：
+
+- `phase7_observation_redaction_policy.json` 可 deterministic 生成并通过 validation：通过。
+- contract 与 trajectory observation 都引用同一 redaction policy artifact：通过。
+- validator 拒绝 raw screen pixels、sensitive capture、缺失 redaction policy 和 trajectory task verdict leakage：通过。
+- 不执行真实 GUI、desktop、browser、sandbox、shell、CUA provider 或外部 side effect：通过。
+
+验证命令：
+
+```text
+python3 -m py_compile scripts/*.py
+python3 scripts/validate_repo.py
+python3 scripts/computer_runtime.py --validate-contract artifacts/computer_runtime/phase7_computer_runtime_contract.json --validate-observation artifacts/computer_runtime/phase7_trajectory_observation.json --validate-policy-manifest artifacts/computer_runtime/phase7_adapter_policy_manifest.json --validate-redaction-policy artifacts/computer_runtime/phase7_observation_redaction_policy.json
+python3 scripts/computer_runtime.py --contract-out /tmp/phase7_redaction_contract.json --observation-out /tmp/phase7_redaction_observation.json --policy-manifest-out /tmp/phase7_redaction_policy_manifest.json --redaction-policy-out /tmp/phase7_redaction_policy.json --run artifacts/runs/all_passed/run.json --evidence artifacts/runs/all_passed/evidence.json --events artifacts/runs/all_passed/events.jsonl
+python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase7-redaction-fixture-smoke
+python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase7-redaction-task-spec.json
+python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --out-dir /tmp/phase7-redaction-local-smoke --task-spec-path /tmp/phase7-redaction-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json
+git diff --check
+```
+
+验证结果：
+
+```text
+- Python executable resolved for this run: python3.
+- Baseline `python3 scripts/validate_repo.py` before edits：通过。
+- `python3 -m py_compile scripts/*.py`：通过。
+- `python3 scripts/validate_repo.py`：通过，覆盖 ObservationRedactionPolicyV1 committed artifact、deterministic builder、raw screen pixel / missing redaction ref / task verdict leakage forced-failure cases。
+- `python3 scripts/computer_runtime.py --validate-contract ... --validate-observation ... --validate-policy-manifest ... --validate-redaction-policy ...`：通过。
+- `python3 scripts/computer_runtime.py --contract-out ... --redaction-policy-out ...`：通过，可 deterministic 生成 Phase 7 contract、trajectory observation、adapter policy manifest 和 redaction policy artifacts。
+- `python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase7-redaction-fixture-smoke`：通过。
+- `python3 scripts/task_spec.py ... --out /tmp/phase7-redaction-task-spec.json`：通过。
+- `python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json ...`：通过。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- ObservationRedactionPolicyV1 仍是 contract-only policy，不是实际 screen redaction engine、provider-side sanitizer 或 replay viewer。
+- 只覆盖 static fixture trajectory observation；真实 CUA/screenshot/accessibility tree 数据需要后续 provider adapter 和 redaction runtime 验证。
+- Phase 7 adapter capability 仍未注册进 runner catalogue，避免当前 regression MVP 误调真实 computer runtime。
+
+下一轮建议：
+
+```text
+进入 Phase 8：
+新增最小 IDEAdapterContractV1 / workspace observation artifact，声明 IDE workspace、open file、diagnostics、terminal/diff approval 等 capability boundary，并用 validation 证明 IDE adapter 只产生 observation/approval request，不直接绕过 TaskSpec、Policy、Evidence 和 Verifier。
 ```
 
 ## 22. Parking Lot
