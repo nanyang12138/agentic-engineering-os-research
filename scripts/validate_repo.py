@@ -182,7 +182,7 @@ def run_fixture_runner(out_dir: Path) -> None:
         )
 
 
-def run_local_readonly_runner(out_dir: Path) -> None:
+def run_local_readonly_runner(out_dir: Path, task_spec_path: Path | None = None) -> None:
     command = [
         sys.executable,
         str(ROOT / "scripts/local_readonly_runner.py"),
@@ -193,11 +193,44 @@ def run_local_readonly_runner(out_dir: Path) -> None:
         "--out-dir",
         str(out_dir),
     ]
+    if task_spec_path:
+        command.extend(["--task-spec-path", str(task_spec_path)])
     result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
     if result.returncode != 0:
         raise AssertionError(
             "Local read-only runner failed.\n"
             f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
+def expect_local_readonly_task_spec_failure(task_spec_path: Path, scratch_root: Path) -> None:
+    scratch_root.mkdir(parents=True, exist_ok=True)
+    mismatched_spec_path = scratch_root / "mismatched-task-spec.json"
+    mismatched = load_json(task_spec_path)
+    mismatched["inputLogPath"] = str(FIXTURE_DIR / "failed_tests/input.log")
+    write_json(mismatched_spec_path, mismatched)
+
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/local_readonly_runner.py"),
+        "--log-path",
+        str(FIXTURE_DIR / "all_passed/input.log"),
+        "--goal",
+        "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",
+        "--out-dir",
+        str(scratch_root / "should-not-run"),
+        "--task-spec-path",
+        str(mismatched_spec_path),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode == 0:
+        raise AssertionError("Local read-only runner accepted a TaskSpec with the wrong inputLogPath")
+    output = result.stdout + result.stderr
+    if "TaskSpec inputLogPath must match requested --log-path" not in output:
+        raise AssertionError(
+            "Local read-only runner rejected a mismatched TaskSpec for the wrong reason.\n"
             f"stdout:\n{result.stdout}\n"
             f"stderr:\n{result.stderr}"
         )
@@ -538,14 +571,17 @@ def validate_task_spec_gate(out_file: Path) -> None:
         expect_task_spec_validation_failure(f"missing_{field}", tampered, "missing required fields")
 
 
-def validate_local_readonly_runner(out_dir: Path) -> None:
-    run_local_readonly_runner(out_dir)
+def validate_local_readonly_runner(out_dir: Path, task_spec_path: Path) -> None:
+    run_local_readonly_runner(out_dir, task_spec_path)
     run_dir = out_dir / "all_passed"
     for filename in ARTIFACT_FILES:
         if not (run_dir / filename).is_file():
             raise AssertionError(f"Missing local read-only runner artifact: {filename}")
 
     run = load_json(run_dir / "run.json")
+    expected_task_spec = load_json(task_spec_path)
+    if run["taskSpec"] != expected_task_spec:
+        raise AssertionError("Local read-only runner run.json must use the provided TaskSpec unchanged")
     evidence = load_json(run_dir / "evidence.json")
     result = load_json(run_dir / "regression_result.json")
     report = load_json(run_dir / "verifier_report.json")
@@ -563,6 +599,7 @@ def validate_local_readonly_runner(out_dir: Path) -> None:
         raise AssertionError(f"Local read-only runner verifier_report status must be passed, got {report['status']}")
     if result["id"].lower() not in email.lower():
         raise AssertionError("Local read-only runner email must reference regression_result artifact id")
+    expect_local_readonly_task_spec_failure(task_spec_path, out_dir / "forced-failures")
 
 
 def main() -> None:
@@ -587,8 +624,9 @@ def main() -> None:
         validate_artifact_packet(ARTIFACT_DIR)
         compare_artifact_packets(ARTIFACT_DIR, generated_artifacts)
         validate_forced_failure_cases(generated_artifacts, Path(temp_dir) / "forced-failures")
-        validate_task_spec_gate(Path(temp_dir) / "task-spec.json")
-        validate_local_readonly_runner(Path(temp_dir) / "local-readonly")
+        task_spec_path = Path(temp_dir) / "task-spec.json"
+        validate_task_spec_gate(task_spec_path)
+        validate_local_readonly_runner(Path(temp_dir) / "local-readonly", task_spec_path)
 
     print("Repository validation passed.")
 
