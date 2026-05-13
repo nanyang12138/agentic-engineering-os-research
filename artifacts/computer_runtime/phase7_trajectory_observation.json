@@ -20,6 +20,7 @@
         4,
         4
       ],
+      "redactionPolicy": "evidence_bound_excerpt_only",
       "sourceRef": "artifacts/runs/all_passed/evidence.json#items/ev-all_passed-001",
       "timestamp": "2026-05-12T14:39:00Z"
     }
@@ -27,9 +28,12 @@
   "policy": {
     "noExternalSideEffects": true,
     "noGuiAutomationExecuted": true,
-    "requiresVerifierForTaskVerdict": true
+    "rawScreenPixelsCaptured": false,
+    "requiresVerifierForTaskVerdict": true,
+    "sensitiveValuesCaptured": false
   },
   "provider": "static_fixture",
+  "redactionPolicyRef": "artifacts/computer_runtime/phase7_observation_redaction_policy.json",
   "runId": "run-all_passed-988940c2",
   "schemaVersion": "trajectory-observation-v1",
   "sourceArtifacts": [
