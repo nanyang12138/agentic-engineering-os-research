@@ -351,10 +351,9 @@ def validate_schema_structure(
     if not isinstance(run["steps"], list) or not run["steps"]:
         raise AssertionError(f"Fixture {fixture_id} run.steps must be a non-empty list")
     for step in run["steps"]:
-        require_fields(f"{fixture_id} step", step, ["id", "capability", "status"])
+        require_fields(f"{fixture_id} step", step, ["id", "capability", "capabilityRef", "status"])
         require_enum(f"{fixture_id} step.status", step["status"], STEP_STATUSES)
         if step["capability"] in PHASE3_CAPABILITY_NAMES:
-            require_fields(f"{fixture_id} step {step['id']}", step, ["capabilityRef"])
             if step["capabilityRef"] != capability_ref(step["capability"]):
                 raise AssertionError(f"Fixture {fixture_id} step {step['id']} capabilityRef mismatch")
 
@@ -626,7 +625,7 @@ def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
         source_dir,
         scratch_root,
         remove_rule_verifier_step_ref,
-        "step step-verify",
+        "missing required fields",
     )
 
 
