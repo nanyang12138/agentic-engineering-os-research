@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import filecmp
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -216,71 +217,84 @@ def compare_artifact_packets(expected_dir: Path, actual_dir: Path) -> None:
                 )
 
 
-def load_artifact_inputs(base_dir: Path, fixture_id: str) -> tuple[fixture_runner.Fixture, dict, dict, dict, dict]:
-    run_dir = base_dir / fixture_id
-    fixture = fixture_runner.load_fixture(FIXTURE_DIR / fixture_id)
-    run = load_json(run_dir / "run.json")
-    evidence = load_json(run_dir / "evidence.json")
-    result = load_json(run_dir / "regression_result.json")
-    report = load_json(run_dir / "verifier_report.json")
-    return fixture, run, evidence, result, report
+def write_json(path: Path, payload: dict) -> None:
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def rebuild_report(base_dir: Path, fixture_id: str, result: dict, email: str) -> dict:
-    fixture, run, evidence, _, report = load_artifact_inputs(base_dir, fixture_id)
-    return fixture_runner.build_verifier_report(
-        fixture,
-        run["id"],
-        report["fixtureHash"],
-        run["taskSpec"],
-        evidence["items"],
-        result,
-        email,
+def expect_artifact_validation_failure(
+    label: str,
+    source_dir: Path,
+    scratch_root: Path,
+    mutate,
+    expected_message_fragment: str,
+) -> None:
+    tampered_dir = scratch_root / label
+    if tampered_dir.exists():
+        shutil.rmtree(tampered_dir)
+    shutil.copytree(source_dir, tampered_dir)
+    mutate(tampered_dir)
+    try:
+        validate_artifact_packet(tampered_dir)
+    except AssertionError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"Forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"Forced-failure case {label} unexpectedly passed validation")
+
+
+def append_pass_style_email(tampered_dir: Path) -> None:
+    email_path = tampered_dir / "failed_tests/email_draft.md"
+    email_path.write_text(
+        email_path.read_text(encoding="utf-8") + "\nAll passed with no failures.\n",
+        encoding="utf-8",
     )
 
 
-def require_failed_report(label: str, report: dict, required_rule_ids: set[str]) -> None:
-    if report["status"] != "failed":
-        raise AssertionError(f"Forced-failure check {label} must produce verifier_report.status=failed")
-    failing_rule_ids = {item["ruleId"] for item in report["blockingFailures"]}
-    missing_rule_ids = required_rule_ids - failing_rule_ids
-    if missing_rule_ids:
-        raise AssertionError(
-            f"Forced-failure check {label} missing expected blocking failures: {sorted(missing_rule_ids)}; "
-            f"actual={sorted(failing_rule_ids)}"
-        )
+def break_result_evidence_ref(tampered_dir: Path) -> None:
+    result_path = tampered_dir / "all_passed/regression_result.json"
+    result = load_json(result_path)
+    result["evidenceIds"] = ["ev-all_passed-missing"]
+    write_json(result_path, result)
 
 
-def require_forced_failure_checks(base_dir: Path) -> None:
-    _, _, _, passed_result, _ = load_artifact_inputs(base_dir, "all_passed")
-    bad_refs_result = copy.deepcopy(passed_result)
-    bad_refs_result["evidenceIds"] = ["ev-all-passed-missing"]
-    bad_refs_result["ruleResults"] = []
-    bad_refs_email = fixture_runner.build_email(fixture_runner.load_fixture(FIXTURE_DIR / "all_passed"), bad_refs_result)
-    require_failed_report(
-        "unknown evidence refs",
-        rebuild_report(base_dir, "all_passed", bad_refs_result, bad_refs_email),
-        {"evidence_refs"},
+def remove_required_report_rule(tampered_dir: Path) -> None:
+    report_path = tampered_dir / "all_passed/verifier_report.json"
+    report = load_json(report_path)
+    report["ruleResults"] = [
+        rule
+        for rule in report["ruleResults"]
+        if rule["ruleId"] != "schema_validation"
+    ]
+    write_json(report_path, report)
+
+
+def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
+    scratch_root.mkdir(parents=True, exist_ok=True)
+    expect_artifact_validation_failure(
+        "pass_style_negative_email",
+        source_dir,
+        scratch_root,
+        append_pass_style_email,
+        "must not generate a pass-style email",
     )
-
-    _, _, _, failed_result, _ = load_artifact_inputs(base_dir, "failed_tests")
-    bad_verdict_result = copy.deepcopy(failed_result)
-    bad_verdict_result["verdict"] = "passed"
-    bad_verdict_result["summary"] = "Tampered result incorrectly claims a clean pass."
-    bad_verdict_result["ruleResults"] = []
-    bad_verdict_email = fixture_runner.build_email(fixture_runner.load_fixture(FIXTURE_DIR / "failed_tests"), bad_verdict_result)
-    require_failed_report(
-        "failed marker overridden by passed verdict",
-        rebuild_report(base_dir, "failed_tests", bad_verdict_result, bad_verdict_email),
-        {"classification_consistency", "verdict.failed_precedence"},
+    expect_artifact_validation_failure(
+        "broken_evidence_reference",
+        source_dir,
+        scratch_root,
+        break_result_evidence_ref,
+        "references unknown evidence ids",
     )
-
-    _, _, _, incomplete_result, _ = load_artifact_inputs(base_dir, "incomplete_jobs")
-    bad_email = (base_dir / "incomplete_jobs" / "email_draft.md").read_text(encoding="utf-8") + "\nThe regression is a clean pass.\n"
-    require_failed_report(
-        "ungrounded pass-style email",
-        rebuild_report(base_dir, "incomplete_jobs", incomplete_result, bad_email),
-        {"email_draft_uses_structured_facts", "artifact.email_draft"},
+    expect_artifact_validation_failure(
+        "missing_verifier_rule",
+        source_dir,
+        scratch_root,
+        remove_required_report_rule,
+        "missing rules",
     )
 
 
@@ -306,6 +320,7 @@ def main() -> None:
         validate_artifact_packet(ARTIFACT_DIR)
         require_forced_failure_checks(ARTIFACT_DIR)
         compare_artifact_packets(ARTIFACT_DIR, generated_artifacts)
+        validate_forced_failure_cases(generated_artifacts, Path(temp_dir) / "forced-failures")
 
     print("Repository validation passed.")
 
