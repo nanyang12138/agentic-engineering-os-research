@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import filecmp
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -216,64 +217,84 @@ def compare_artifact_packets(expected_dir: Path, actual_dir: Path) -> None:
                 )
 
 
-def verifier_report_for_mutation(base_dir: Path, fixture_id: str, mutation: str) -> dict:
-    fixture = load_fixture(FIXTURE_DIR / fixture_id)
-    run_dir = base_dir / fixture_id
-    run = load_json(run_dir / "run.json")
-    evidence = load_json(run_dir / "evidence.json")["items"]
-    result = copy.deepcopy(load_json(run_dir / "regression_result.json"))
-    email = (run_dir / "email_draft.md").read_text(encoding="utf-8")
+def write_json(path: Path, payload: dict) -> None:
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
-    if mutation == "missing_evidence_ref":
-        result["evidenceIds"] = ["ev-missing-forced-failure"]
-    elif mutation == "failed_marker_overridden":
-        result["verdict"] = "passed"
-        result["summary"] = "Tampered result incorrectly claims a clean pass."
-    elif mutation == "pass_style_email_injection":
-        email = email + "\nTampered claim: all passed with no failures.\n"
-    else:
-        raise AssertionError(f"Unknown forced-failure mutation: {mutation}")
 
-    fixture_hash = stable_hash([fixture.directory / "fixture.json", fixture.log_path])
-    report, _ = build_verifier_report(
-        fixture=fixture,
-        run_id=run["id"],
-        fixture_hash=fixture_hash,
-        task_spec=run["taskSpec"],
-        evidence=evidence,
-        result=result,
-        email=email,
+def expect_artifact_validation_failure(
+    label: str,
+    source_dir: Path,
+    scratch_root: Path,
+    mutate,
+    expected_message_fragment: str,
+) -> None:
+    tampered_dir = scratch_root / label
+    if tampered_dir.exists():
+        shutil.rmtree(tampered_dir)
+    shutil.copytree(source_dir, tampered_dir)
+    mutate(tampered_dir)
+    try:
+        validate_artifact_packet(tampered_dir)
+    except AssertionError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"Forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"Forced-failure case {label} unexpectedly passed validation")
+
+
+def append_pass_style_email(tampered_dir: Path) -> None:
+    email_path = tampered_dir / "failed_tests/email_draft.md"
+    email_path.write_text(
+        email_path.read_text(encoding="utf-8") + "\nAll passed with no failures.\n",
+        encoding="utf-8",
     )
-    return report
 
 
-def require_forced_failure(base_dir: Path, fixture_id: str, mutation: str, expected_rule_ids: set[str]) -> None:
-    report = verifier_report_for_mutation(base_dir, fixture_id, mutation)
-    if report["status"] != "failed":
-        raise AssertionError(f"Forced-failure mutation {mutation} for {fixture_id} unexpectedly passed")
-
-    blocking_rule_ids = {failure["ruleId"] for failure in report["blockingFailures"]}
-    missing = expected_rule_ids - blocking_rule_ids
-    if missing:
-        raise AssertionError(
-            f"Forced-failure mutation {mutation} for {fixture_id} did not report expected blocking rules "
-            f"{sorted(missing)}; got {sorted(blocking_rule_ids)}"
-        )
+def break_result_evidence_ref(tampered_dir: Path) -> None:
+    result_path = tampered_dir / "all_passed/regression_result.json"
+    result = load_json(result_path)
+    result["evidenceIds"] = ["ev-all_passed-missing"]
+    write_json(result_path, result)
 
 
-def validate_forced_failure_cases(base_dir: Path) -> None:
-    require_forced_failure(base_dir, "all_passed", "missing_evidence_ref", {"evidence_refs"})
-    require_forced_failure(
-        base_dir,
-        "failed_tests",
-        "failed_marker_overridden",
-        {"classification_consistency", "verdict.failed_precedence"},
+def remove_required_report_rule(tampered_dir: Path) -> None:
+    report_path = tampered_dir / "all_passed/verifier_report.json"
+    report = load_json(report_path)
+    report["ruleResults"] = [
+        rule
+        for rule in report["ruleResults"]
+        if rule["ruleId"] != "schema_validation"
+    ]
+    write_json(report_path, report)
+
+
+def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
+    scratch_root.mkdir(parents=True, exist_ok=True)
+    expect_artifact_validation_failure(
+        "pass_style_negative_email",
+        source_dir,
+        scratch_root,
+        append_pass_style_email,
+        "must not generate a pass-style email",
     )
-    require_forced_failure(
-        base_dir,
-        "incomplete_jobs",
-        "pass_style_email_injection",
-        {"email_draft_uses_structured_facts", "artifact.email_draft"},
+    expect_artifact_validation_failure(
+        "broken_evidence_reference",
+        source_dir,
+        scratch_root,
+        break_result_evidence_ref,
+        "references unknown evidence ids",
+    )
+    expect_artifact_validation_failure(
+        "missing_verifier_rule",
+        source_dir,
+        scratch_root,
+        remove_required_report_rule,
+        "missing rules",
     )
 
 
@@ -299,6 +320,7 @@ def main() -> None:
         validate_artifact_packet(ARTIFACT_DIR)
         validate_forced_failure_cases(ARTIFACT_DIR)
         compare_artifact_packets(ARTIFACT_DIR, generated_artifacts)
+        validate_forced_failure_cases(generated_artifacts, Path(temp_dir) / "forced-failures")
 
     print("Repository validation passed.")
 
