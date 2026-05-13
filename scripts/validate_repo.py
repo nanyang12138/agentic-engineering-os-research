@@ -8,6 +8,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from fixture_runner import load_fixture, stable_hash, verify_artifacts
+
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_DIR = ROOT / "fixtures/regression"
@@ -34,6 +36,33 @@ REQUIRED_REPORT_RULES = {
     "email_draft_uses_structured_facts",
 }
 PASS_STYLE_PHRASES = ["all passed", "clean pass", "passed successfully", "no failures"]
+VERDICTS = {"passed", "failed", "incomplete", "warning_or_waiver", "unknown", "needs_human_check"}
+EVIDENCE_CLASSES = {
+    "all_passed_marker",
+    "failure_marker",
+    "incomplete_marker",
+    "warning_marker",
+    "waiver_marker",
+    "metadata",
+    "ambiguous",
+}
+EVIDENCE_CONFIDENCE = {"high", "medium", "low"}
+RUN_STATUSES = {"completed", "failed"}
+STEP_STATUSES = {"completed", "failed", "passed"}
+EVENT_TYPES = {
+    "run.created",
+    "task_spec.generated",
+    "capability.read_log.completed",
+    "capability.extract_regression_result.completed",
+    "artifact.write.completed",
+    "verifier.completed",
+    "run.completed",
+    "run.failed",
+}
+EVENT_STATUSES = {"started", "completed", "failed"}
+RULE_STATUSES = {"passed", "failed", "not_applicable"}
+ARTIFACT_TYPES = {"regression_result", "email_draft", "evidence"}
+ARTIFACT_STATUSES = {"passed", "failed"}
 
 
 REQUIRED_FILES = [
@@ -88,6 +117,17 @@ def require_markers(label: str, text: str, markers: list[str]) -> None:
         raise AssertionError(f"{label} is missing required markers:\n  - {joined}")
 
 
+def require_fields(label: str, payload: dict, fields: list[str]) -> None:
+    missing = [field for field in fields if field not in payload]
+    if missing:
+        raise AssertionError(f"{label} is missing required fields: {missing}")
+
+
+def require_enum(label: str, value: str, allowed: set[str]) -> None:
+    if value not in allowed:
+        raise AssertionError(f"{label} has invalid value {value!r}; expected one of {sorted(allowed)}")
+
+
 def require_fixture_layout() -> None:
     missing = []
     for fixture_id in FIXTURE_IDS:
@@ -98,6 +138,20 @@ def require_fixture_layout() -> None:
     if missing:
         joined = "\n  - ".join(missing)
         raise AssertionError(f"Missing Phase 1a fixture files:\n  - {joined}")
+    for fixture_id in FIXTURE_IDS:
+        fixture = load_json(FIXTURE_DIR / fixture_id / "fixture.json")
+        require_fields(
+            f"fixture {fixture_id}",
+            fixture,
+            ["id", "goal", "inputLogFile", "expectedVerdict", "allowAllPassedEmail"],
+        )
+        if fixture["id"] != fixture_id:
+            raise AssertionError(f"Fixture directory {fixture_id} must match fixture.json id {fixture['id']}")
+        if fixture["inputLogFile"] != "input.log":
+            raise AssertionError(f"Fixture {fixture_id} must use inputLogFile='input.log'")
+        require_enum(f"fixture {fixture_id} expectedVerdict", fixture["expectedVerdict"], VERDICTS)
+        if not isinstance(fixture["allowAllPassedEmail"], bool):
+            raise AssertionError(f"Fixture {fixture_id} allowAllPassedEmail must be boolean")
 
 
 def run_fixture_runner(out_dir: Path) -> None:
@@ -119,6 +173,148 @@ def run_fixture_runner(out_dir: Path) -> None:
         )
 
 
+def validate_rule_results(label: str, rule_results: list[dict]) -> None:
+    if not isinstance(rule_results, list) or not rule_results:
+        raise AssertionError(f"{label} ruleResults must be a non-empty list")
+    for index, rule in enumerate(rule_results):
+        rule_label = f"{label} ruleResults[{index}]"
+        require_fields(rule_label, rule, ["ruleId", "status", "message", "evidenceIds"])
+        require_enum(f"{rule_label}.status", rule["status"], RULE_STATUSES)
+        if not isinstance(rule["evidenceIds"], list):
+            raise AssertionError(f"{rule_label}.evidenceIds must be a list")
+
+
+def validate_schema_structure(
+    fixture_id: str,
+    run: dict,
+    evidence: dict,
+    result: dict,
+    report: dict,
+    events: list[dict],
+) -> None:
+    require_fields(
+        f"{fixture_id} run.json",
+        run,
+        ["schemaVersion", "id", "fixtureId", "task", "taskSpec", "steps", "events", "artifacts", "status", "generatedAt"],
+    )
+    if run["schemaVersion"] != "run-v1":
+        raise AssertionError(f"Fixture {fixture_id} run.json schemaVersion must be run-v1")
+    if run["fixtureId"] != fixture_id:
+        raise AssertionError(f"Fixture {fixture_id} run.json fixtureId mismatch")
+    require_enum(f"{fixture_id} run.status", run["status"], RUN_STATUSES)
+    task_spec = run["taskSpec"]
+    require_fields(
+        f"{fixture_id} taskSpec",
+        task_spec,
+        [
+            "id",
+            "goal",
+            "inputLogPath",
+            "allowedActions",
+            "forbiddenActions",
+            "successCriteria",
+            "requiredEvidence",
+            "expectedArtifacts",
+            "approvalPoints",
+        ],
+    )
+    if task_spec["allowedActions"] != ["read_log", "extract_regression_result", "write_artifact"]:
+        raise AssertionError(f"Fixture {fixture_id} taskSpec allowedActions changed unexpectedly")
+    for field in ["forbiddenActions", "successCriteria", "requiredEvidence", "expectedArtifacts", "approvalPoints"]:
+        if not isinstance(task_spec[field], list) or not task_spec[field]:
+            raise AssertionError(f"Fixture {fixture_id} taskSpec.{field} must be a non-empty list")
+    if not isinstance(run["steps"], list) or not run["steps"]:
+        raise AssertionError(f"Fixture {fixture_id} run.steps must be a non-empty list")
+    for step in run["steps"]:
+        require_fields(f"{fixture_id} step", step, ["id", "capability", "status"])
+        require_enum(f"{fixture_id} step.status", step["status"], STEP_STATUSES)
+
+    require_fields(f"{fixture_id} evidence.json", evidence, ["schemaVersion", "fixtureId", "items"])
+    if evidence["schemaVersion"] != "evidence-list-v1":
+        raise AssertionError(f"Fixture {fixture_id} evidence.json schemaVersion must be evidence-list-v1")
+    if evidence["fixtureId"] != fixture_id:
+        raise AssertionError(f"Fixture {fixture_id} evidence.json fixtureId mismatch")
+    if not isinstance(evidence["items"], list) or not evidence["items"]:
+        raise AssertionError(f"Fixture {fixture_id} evidence.items must be a non-empty list")
+    for index, item in enumerate(evidence["items"]):
+        item_label = f"{fixture_id} evidence.items[{index}]"
+        require_fields(item_label, item, ["id", "type", "sourcePath", "excerpt", "observedAt", "classification", "confidence"])
+        if item["type"] != "log":
+            raise AssertionError(f"{item_label}.type must be log")
+        require_enum(f"{item_label}.classification", item["classification"], EVIDENCE_CLASSES)
+        require_enum(f"{item_label}.confidence", item["confidence"], EVIDENCE_CONFIDENCE)
+        if "lineRange" in item:
+            line_range = item["lineRange"]
+            if (
+                not isinstance(line_range, list)
+                or len(line_range) != 2
+                or not all(isinstance(number, int) and number >= 1 for number in line_range)
+                or line_range[0] > line_range[1]
+            ):
+                raise AssertionError(f"{item_label}.lineRange must be [start, end] positive integers")
+
+    require_fields(
+        f"{fixture_id} regression_result.json",
+        result,
+        ["schemaVersion", "id", "fixtureId", "verdict", "summary", "evidenceIds", "ruleResults", "generatedAt"],
+    )
+    if result["schemaVersion"] != "regression-result-v1":
+        raise AssertionError(f"Fixture {fixture_id} regression_result.json schemaVersion must be regression-result-v1")
+    if result["fixtureId"] != fixture_id:
+        raise AssertionError(f"Fixture {fixture_id} regression_result.json fixtureId mismatch")
+    require_enum(f"{fixture_id} regression_result.verdict", result["verdict"], VERDICTS)
+    if not isinstance(result["evidenceIds"], list):
+        raise AssertionError(f"Fixture {fixture_id} regression_result.evidenceIds must be a list")
+    validate_rule_results(f"{fixture_id} regression_result", result["ruleResults"])
+
+    require_fields(
+        f"{fixture_id} verifier_report.json",
+        report,
+        [
+            "schemaVersion",
+            "id",
+            "runId",
+            "fixtureId",
+            "status",
+            "generatedAt",
+            "fixtureHash",
+            "ruleResults",
+            "artifactChecks",
+            "blockingFailures",
+            "summary",
+        ],
+    )
+    if report["schemaVersion"] != "verifier-report-v1":
+        raise AssertionError(f"Fixture {fixture_id} verifier_report.json schemaVersion must be verifier-report-v1")
+    if report["fixtureId"] != fixture_id:
+        raise AssertionError(f"Fixture {fixture_id} verifier_report.json fixtureId mismatch")
+    require_enum(f"{fixture_id} verifier_report.status", report["status"], ARTIFACT_STATUSES)
+    validate_rule_results(f"{fixture_id} verifier_report", report["ruleResults"])
+    if not isinstance(report["artifactChecks"], list) or not report["artifactChecks"]:
+        raise AssertionError(f"Fixture {fixture_id} verifier_report.artifactChecks must be a non-empty list")
+    for index, check in enumerate(report["artifactChecks"]):
+        check_label = f"{fixture_id} artifactChecks[{index}]"
+        require_fields(check_label, check, ["artifactId", "artifactType", "status", "message"])
+        require_enum(f"{check_label}.artifactType", check["artifactType"], ARTIFACT_TYPES)
+        require_enum(f"{check_label}.status", check["status"], ARTIFACT_STATUSES)
+    if not isinstance(report["blockingFailures"], list):
+        raise AssertionError(f"Fixture {fixture_id} verifier_report.blockingFailures must be a list")
+
+    if not isinstance(events, list) or not events:
+        raise AssertionError(f"Fixture {fixture_id} events.jsonl must contain events")
+    for index, event in enumerate(events):
+        event_label = f"{fixture_id} events[{index}]"
+        require_fields(event_label, event, ["id", "runId", "fixtureId", "type", "status", "timestamp", "causalRefs"])
+        if event["fixtureId"] != fixture_id:
+            raise AssertionError(f"{event_label}.fixtureId mismatch")
+        require_enum(f"{event_label}.type", event["type"], EVENT_TYPES)
+        require_enum(f"{event_label}.status", event["status"], EVENT_STATUSES)
+        if not isinstance(event["causalRefs"], list):
+            raise AssertionError(f"{event_label}.causalRefs must be a list")
+        if "evidenceIds" in event and not isinstance(event["evidenceIds"], list):
+            raise AssertionError(f"{event_label}.evidenceIds must be a list")
+
+
 def validate_artifact_packet(base_dir: Path) -> None:
     for fixture_id in FIXTURE_IDS:
         fixture = load_json(FIXTURE_DIR / fixture_id / "fixture.json")
@@ -137,6 +333,8 @@ def validate_artifact_packet(base_dir: Path) -> None:
             for line in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()
             if line.strip()
         ]
+
+        validate_schema_structure(fixture_id, run, evidence, result, report, events)
 
         expected_verdict = fixture["expectedVerdict"]
         allowed_verdicts = {expected_verdict, "needs_human_check"}
