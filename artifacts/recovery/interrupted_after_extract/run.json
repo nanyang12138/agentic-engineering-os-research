@@ -1,0 +1,410 @@
+{
+  "artifactRoot": "artifacts/recovery",
+  "artifacts": [
+    "run.json",
+    "events.jsonl"
+  ],
+  "capabilityEnvelope": {
+    "items": [
+      {
+        "inputContract": {
+          "properties": {
+            "sourcePath": "string:path"
+          },
+          "required": [
+            "sourcePath"
+          ],
+          "schema": "ReadLogInputV1"
+        },
+        "name": "read_log",
+        "outputContract": {
+          "produces": [
+            "logTextRef"
+          ],
+          "properties": {
+            "logTextRef": "string:memory-ref"
+          },
+          "schema": "ReadLogOutputV1"
+        },
+        "permission": "read",
+        "ref": "capability://phase3/read_log",
+        "schemaVersion": "capability-metadata-v1",
+        "sideEffect": false,
+        "timeoutMs": 1000
+      },
+      {
+        "inputContract": {
+          "properties": {
+            "logTextRef": "string:memory-ref",
+            "taskSpecRef": "string:run-json-pointer"
+          },
+          "required": [
+            "logTextRef",
+            "taskSpecRef"
+          ],
+          "schema": "ExtractRegressionResultInputV1"
+        },
+        "name": "extract_regression_result",
+        "outputContract": {
+          "produces": [
+            "evidenceItems",
+            "regressionResultCandidate"
+          ],
+          "properties": {
+            "evidenceItems": "LogEvidenceV1[]",
+            "regressionResultCandidate": "RegressionResultArtifactV1"
+          },
+          "schema": "ExtractRegressionResultOutputV1"
+        },
+        "permission": "read",
+        "ref": "capability://phase3/extract_regression_result",
+        "schemaVersion": "capability-metadata-v1",
+        "sideEffect": false,
+        "timeoutMs": 1000
+      },
+      {
+        "inputContract": {
+          "properties": {
+            "emailDraftRef": "string:artifact-ref",
+            "evidenceRef": "string:artifact-ref",
+            "regressionResultRef": "string:artifact-ref",
+            "runRef": "string:run-json-pointer"
+          },
+          "required": [
+            "runRef",
+            "evidenceRef",
+            "regressionResultRef",
+            "emailDraftRef"
+          ],
+          "schema": "WriteArtifactInputV1"
+        },
+        "name": "write_artifact",
+        "outputContract": {
+          "effectBoundary": "local_artifact_output_only",
+          "produces": [
+            "artifactPaths"
+          ],
+          "properties": {
+            "artifactPaths": "string:path[]"
+          },
+          "schema": "WriteArtifactOutputV1"
+        },
+        "permission": "write",
+        "ref": "capability://phase3/write_artifact",
+        "schemaVersion": "capability-metadata-v1",
+        "sideEffect": false,
+        "timeoutMs": 1000
+      },
+      {
+        "inputContract": {
+          "properties": {
+            "emailDraftRef": "string:artifact-ref",
+            "evidenceRef": "string:artifact-ref",
+            "regressionResultRef": "string:artifact-ref",
+            "taskSpecRef": "string:run-json-pointer"
+          },
+          "required": [
+            "taskSpecRef",
+            "evidenceRef",
+            "regressionResultRef",
+            "emailDraftRef"
+          ],
+          "schema": "RuleVerifierInputV1"
+        },
+        "name": "rule_verifier",
+        "outputContract": {
+          "produces": [
+            "verifierReport"
+          ],
+          "properties": {
+            "verifierReport": "VerifierReportV1"
+          },
+          "schema": "RuleVerifierOutputV1"
+        },
+        "permission": "read",
+        "ref": "capability://phase3/rule_verifier",
+        "schemaVersion": "capability-metadata-v1",
+        "sideEffect": false,
+        "timeoutMs": 1000
+      }
+    ],
+    "schemaVersion": "capability-envelope-v1"
+  },
+  "events": [
+    "event-interrupted_after_extract-001",
+    "event-interrupted_after_extract-002",
+    "event-interrupted_after_extract-003",
+    "event-interrupted_after_extract-004"
+  ],
+  "fixtureId": "interrupted_after_extract",
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "run-interrupted_after_extract-988940c2",
+  "runControl": {
+    "currentState": "running",
+    "permissionPolicy": {
+      "approvalRequiredFor": [
+        "dangerous",
+        "external_side_effect",
+        "send_email"
+      ],
+      "capabilities": [
+        {
+          "approvalRequired": false,
+          "capability": "read_log",
+          "capabilityRef": "capability://phase3/read_log",
+          "effectBoundary": "same_process_readonly",
+          "permission": "read",
+          "sideEffect": false
+        },
+        {
+          "approvalRequired": false,
+          "capability": "extract_regression_result",
+          "capabilityRef": "capability://phase3/extract_regression_result",
+          "effectBoundary": "same_process_readonly",
+          "permission": "read",
+          "sideEffect": false
+        },
+        {
+          "approvalRequired": false,
+          "capability": "write_artifact",
+          "capabilityRef": "capability://phase3/write_artifact",
+          "effectBoundary": "local_artifact_output_only",
+          "permission": "write",
+          "sideEffect": false
+        },
+        {
+          "approvalRequired": false,
+          "capability": "rule_verifier",
+          "capabilityRef": "capability://phase3/rule_verifier",
+          "effectBoundary": "same_process_readonly",
+          "permission": "read",
+          "sideEffect": false
+        }
+      ],
+      "externalSideEffectsAllowed": false,
+      "id": "permission-policy-interrupted_after_extract",
+      "localWriteBoundary": "artifacts/recovery/interrupted_after_extract",
+      "mode": "readonly_regression_mvp",
+      "schemaVersion": "permission-policy-v1"
+    },
+    "recoverySnapshot": {
+      "currentState": "running",
+      "fixtureId": "interrupted_after_extract",
+      "id": "recovery-snapshot-interrupted_after_extract",
+      "lastEventId": "event-interrupted_after_extract-004",
+      "nextAction": "resume_step",
+      "replayArtifactRefs": [
+        {
+          "path": "artifacts/recovery/interrupted_after_extract/run.json",
+          "required": true
+        },
+        {
+          "path": "artifacts/recovery/interrupted_after_extract/events.jsonl",
+          "required": true
+        }
+      ],
+      "resumeFromEventId": "event-interrupted_after_extract-004",
+      "resumeMode": "from_last_event",
+      "resumeTarget": {
+        "capability": "write_artifact",
+        "capabilityRef": "capability://phase3/write_artifact",
+        "inputRef": "regression_result_candidate",
+        "reason": "resume_after_last_completed_event",
+        "stepId": "step-write-artifact"
+      },
+      "runId": "run-interrupted_after_extract-988940c2",
+      "schemaVersion": "recovery-snapshot-v1"
+    },
+    "schemaVersion": "run-control-v1",
+    "stateHistory": [
+      {
+        "eventRef": "event-interrupted_after_extract-001",
+        "eventType": "run.created",
+        "state": "created"
+      },
+      {
+        "eventRef": "event-interrupted_after_extract-002",
+        "eventType": "task_spec.generated",
+        "state": "planning"
+      },
+      {
+        "eventRef": "event-interrupted_after_extract-003",
+        "eventType": "capability.read_log.completed",
+        "state": "waiting_context"
+      },
+      {
+        "eventRef": "event-interrupted_after_extract-004",
+        "eventType": "capability.extract_regression_result.completed",
+        "state": "running"
+      }
+    ],
+    "stateMachine": {
+      "allowedTransitions": [
+        {
+          "from": "created",
+          "to": "planning"
+        },
+        {
+          "from": "planning",
+          "to": "waiting_context"
+        },
+        {
+          "from": "waiting_context",
+          "to": "running"
+        },
+        {
+          "from": "running",
+          "to": "running"
+        },
+        {
+          "from": "running",
+          "to": "verifying"
+        },
+        {
+          "from": "verifying",
+          "to": "completed"
+        },
+        {
+          "from": "verifying",
+          "to": "failed"
+        }
+      ],
+      "initialState": "created",
+      "schemaVersion": "run-state-machine-v1",
+      "states": [
+        "created",
+        "planning",
+        "waiting_context",
+        "running",
+        "verifying",
+        "completed",
+        "failed"
+      ],
+      "terminalStates": [
+        "completed",
+        "failed"
+      ]
+    },
+    "stepAttempts": [
+      {
+        "attempt": 1,
+        "capability": "read_log",
+        "capabilityRef": "capability://phase3/read_log",
+        "inputRef": "fixtures/regression/all_passed/input.log",
+        "lastError": null,
+        "maxRetries": 0,
+        "outputRef": "log_text",
+        "permission": "read",
+        "status": "completed",
+        "stepId": "step-read-log",
+        "timeoutMs": 1000
+      },
+      {
+        "attempt": 1,
+        "capability": "extract_regression_result",
+        "capabilityRef": "capability://phase3/extract_regression_result",
+        "inputRef": "log_text",
+        "lastError": null,
+        "maxRetries": 0,
+        "outputRef": "regression_result_candidate",
+        "permission": "read",
+        "status": "completed",
+        "stepId": "step-extract-regression-result",
+        "timeoutMs": 1000
+      },
+      {
+        "attempt": 1,
+        "capability": "write_artifact",
+        "capabilityRef": "capability://phase3/write_artifact",
+        "inputRef": null,
+        "lastError": null,
+        "maxRetries": 0,
+        "outputRef": null,
+        "permission": "write",
+        "status": "pending",
+        "stepId": "step-write-artifact",
+        "timeoutMs": 1000
+      },
+      {
+        "attempt": 1,
+        "capability": "rule_verifier",
+        "capabilityRef": "capability://phase3/rule_verifier",
+        "inputRef": null,
+        "lastError": null,
+        "maxRetries": 0,
+        "outputRef": null,
+        "permission": "read",
+        "status": "pending",
+        "stepId": "step-verify",
+        "timeoutMs": 1000
+      }
+    ]
+  },
+  "schemaVersion": "run-v1",
+  "status": "interrupted",
+  "steps": [
+    {
+      "capability": "read_log",
+      "capabilityRef": "capability://phase3/read_log",
+      "id": "step-read-log",
+      "status": "completed"
+    },
+    {
+      "capability": "extract_regression_result",
+      "capabilityRef": "capability://phase3/extract_regression_result",
+      "id": "step-extract-regression-result",
+      "status": "completed"
+    },
+    {
+      "capability": "write_artifact",
+      "capabilityRef": "capability://phase3/write_artifact",
+      "id": "step-write-artifact",
+      "status": "pending"
+    },
+    {
+      "capability": "rule_verifier",
+      "capabilityRef": "capability://phase3/rule_verifier",
+      "id": "step-verify",
+      "status": "pending"
+    }
+  ],
+  "task": "Resume an interrupted read-only regression run after result extraction.",
+  "taskSpec": {
+    "allowedActions": [
+      "read_log",
+      "extract_regression_result",
+      "write_artifact"
+    ],
+    "approvalPoints": [
+      "send_email_requires_human_approval"
+    ],
+    "expectedArtifacts": [
+      "evidence.json",
+      "regression_result.json",
+      "email_draft.md"
+    ],
+    "forbiddenActions": [
+      "modify_repo_or_log",
+      "execute_external_side_effect",
+      "send_email",
+      "call_gui_desktop_cua_or_browser_capability",
+      "claim_all_passed_without_sufficient_evidence"
+    ],
+    "goal": "Resume an interrupted read-only regression run after result extraction.",
+    "id": "task-spec-interrupted_after_extract",
+    "inputLogPath": "fixtures/regression/all_passed/input.log",
+    "requiredEvidence": [
+      "sourcePath",
+      "exact log excerpt",
+      "classification",
+      "evidence id referenced by artifacts"
+    ],
+    "schemaVersion": "regression-task-spec-v1",
+    "successCriteria": [
+      "Read the regression log path without modifying it.",
+      "Extract a safe structured verdict from log markers.",
+      "Write evidence-linked artifacts without external side effects.",
+      "Verify schema, evidence references, classification precedence, and email grounding."
+    ]
+  }
+}
