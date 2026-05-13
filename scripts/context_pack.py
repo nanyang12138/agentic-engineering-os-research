@@ -11,7 +11,10 @@ from capability_contract import PHASE3_CAPABILITY_NAMES, validate_capability_cat
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTEXT_PACK_SCHEMA_VERSION = "context-pack-v1"
+CONTEXT_BUDGET_SCHEMA_VERSION = "context-budget-v1"
 DEFAULT_CONTEXT_PURPOSE = "Bounded regression context for evidence extraction and verification."
+MAX_LOG_EXCERPT_ITEMS = 8
+MAX_LOG_EXCERPT_LINES = 8
 REQUIRED_ARTIFACTS = [
     "run.json",
     "events.jsonl",
@@ -123,6 +126,24 @@ def log_excerpt_text(log_path: Path, line_range: list[int]) -> str:
     return "\n".join(lines[start - 1 : end])
 
 
+def log_excerpt_line_count(line_range: list[int]) -> int:
+    return line_range[1] - line_range[0] + 1
+
+
+def build_context_budget(log_excerpt_items: list[dict[str, Any]]) -> dict[str, Any]:
+    total_lines = sum(log_excerpt_line_count(item["lineRange"]) for item in log_excerpt_items)
+    return {
+        "actualLogExcerptItems": len(log_excerpt_items),
+        "actualLogExcerptLines": total_lines,
+        "maxLogExcerptItems": MAX_LOG_EXCERPT_ITEMS,
+        "maxLogExcerptLines": MAX_LOG_EXCERPT_LINES,
+        "overflowBehavior": "reject_context_pack",
+        "policy": "regression-log-evidence-v1",
+        "schemaVersion": CONTEXT_BUDGET_SCHEMA_VERSION,
+        "selectionRule": "ordered_unique_log_evidence_markers",
+    }
+
+
 def build_context_pack(
     run_dir: Path,
     fixture_dir: Path,
@@ -223,23 +244,24 @@ def build_context_pack(
         },
     ]
 
+    log_excerpt_items = []
     for index, item in enumerate(evidence["items"], start=1):
         line_range = item.get("lineRange")
         excerpt = item["excerpt"]
         if isinstance(line_range, list) and len(line_range) == 2:
             excerpt = log_excerpt_text(log_path, line_range)
-        context_items.append(
-            {
-                "classification": item["classification"],
-                "confidence": item["confidence"],
-                "evidenceId": item["id"],
-                "id": f"ctx-log-evidence-{index:03d}",
-                "kind": "log_excerpt",
-                "lineRange": line_range,
-                "sourceId": "source-regression-log",
-                "text": excerpt,
-            }
-        )
+        log_excerpt_item = {
+            "classification": item["classification"],
+            "confidence": item["confidence"],
+            "evidenceId": item["id"],
+            "id": f"ctx-log-evidence-{index:03d}",
+            "kind": "log_excerpt",
+            "lineRange": line_range,
+            "sourceId": "source-regression-log",
+            "text": excerpt,
+        }
+        context_items.append(log_excerpt_item)
+        log_excerpt_items.append(log_excerpt_item)
 
     context_items.append(
         {
@@ -254,6 +276,7 @@ def build_context_pack(
 
     pack = {
         "artifactRefs": artifact_refs,
+        "budget": build_context_budget(log_excerpt_items),
         "capabilityCatalogRef": repo_path(catalog_path),
         "contextItems": context_items,
         "fixtureId": fixture_id,
@@ -277,6 +300,7 @@ def validate_context_pack(pack: dict[str, Any], root: Path = ROOT) -> None:
         "runRef",
         "taskSpecRef",
         "capabilityCatalogRef",
+        "budget",
         "sources",
         "contextItems",
         "artifactRefs",
@@ -340,6 +364,7 @@ def validate_context_pack(pack: dict[str, Any], root: Path = ROOT) -> None:
         for source_item in pack["sources"]
         if source_item["role"] == "regression_log"
     }
+    log_excerpt_items = []
     for context_item in pack["contextItems"]:
         for field in ["id", "kind", "sourceId"]:
             if field not in context_item:
@@ -361,6 +386,53 @@ def validate_context_pack(pack: dict[str, Any], root: Path = ROOT) -> None:
             expected_text = log_excerpt_text(resolve_repo_path(log_source["path"], root), line_range)
             if context_item.get("text") != expected_text:
                 raise ValueError("ContextPack log_excerpt text must match source log lines")
+            log_excerpt_items.append(context_item)
+
+    validate_context_budget(pack["budget"], log_excerpt_items)
+
+
+def validate_context_budget(budget: dict[str, Any], log_excerpt_items: list[dict[str, Any]]) -> None:
+    if not isinstance(budget, dict):
+        raise ValueError("ContextPack budget must be an object")
+    required_fields = [
+        "schemaVersion",
+        "policy",
+        "selectionRule",
+        "overflowBehavior",
+        "maxLogExcerptItems",
+        "maxLogExcerptLines",
+        "actualLogExcerptItems",
+        "actualLogExcerptLines",
+    ]
+    missing = [field for field in required_fields if field not in budget]
+    if missing:
+        raise ValueError(f"ContextPack budget is missing required fields: {missing}")
+    if budget["schemaVersion"] != CONTEXT_BUDGET_SCHEMA_VERSION:
+        raise ValueError(f"ContextPack budget schemaVersion must be {CONTEXT_BUDGET_SCHEMA_VERSION}")
+    if budget["policy"] != "regression-log-evidence-v1":
+        raise ValueError("ContextPack budget policy must be regression-log-evidence-v1")
+    if budget["selectionRule"] != "ordered_unique_log_evidence_markers":
+        raise ValueError("ContextPack budget selectionRule must be ordered_unique_log_evidence_markers")
+    if budget["overflowBehavior"] != "reject_context_pack":
+        raise ValueError("ContextPack budget overflowBehavior must be reject_context_pack")
+    for field in ["maxLogExcerptItems", "maxLogExcerptLines", "actualLogExcerptItems", "actualLogExcerptLines"]:
+        if not isinstance(budget[field], int) or budget[field] < 0:
+            raise ValueError(f"ContextPack budget {field} must be a non-negative integer")
+    if budget["maxLogExcerptItems"] != MAX_LOG_EXCERPT_ITEMS:
+        raise ValueError(f"ContextPack maxLogExcerptItems must be {MAX_LOG_EXCERPT_ITEMS}")
+    if budget["maxLogExcerptLines"] != MAX_LOG_EXCERPT_LINES:
+        raise ValueError(f"ContextPack maxLogExcerptLines must be {MAX_LOG_EXCERPT_LINES}")
+
+    actual_items = len(log_excerpt_items)
+    actual_lines = sum(log_excerpt_line_count(item["lineRange"]) for item in log_excerpt_items)
+    if budget["actualLogExcerptItems"] != actual_items:
+        raise ValueError("ContextPack actualLogExcerptItems must match log_excerpt context items")
+    if budget["actualLogExcerptLines"] != actual_lines:
+        raise ValueError("ContextPack actualLogExcerptLines must match log_excerpt line ranges")
+    if actual_items > budget["maxLogExcerptItems"]:
+        raise ValueError("ContextPack log excerpt item count exceeds ContextPack budget")
+    if actual_lines > budget["maxLogExcerptLines"]:
+        raise ValueError("ContextPack log excerpt line count exceeds ContextPack budget")
 
 
 def validate_context_pack_for_request(pack: dict[str, Any], log_path: Path, goal: str, root: Path = ROOT) -> None:
