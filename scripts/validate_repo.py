@@ -48,6 +48,11 @@ from ide_adapter import (
     validate_ide_adapter_contract,
     validate_workspace_observation,
 )
+from multi_agent_delivery import (
+    MANIFEST_ARTIFACT_PATH as MULTI_AGENT_DELIVERY_MANIFEST_ARTIFACT_PATH,
+    build_multi_agent_delivery_manifest,
+    validate_multi_agent_delivery_manifest,
+)
 from run_control import validate_run_control
 from task_spec import TASK_SPEC_SCHEMA_VERSION, build_regression_task_spec, validate_regression_task_spec
 from verifier_runtime import (
@@ -74,6 +79,7 @@ OBSERVATION_REDACTION_POLICY_PATH = ROOT / REDACTION_POLICY_ARTIFACT_PATH
 IDE_ADAPTER_CONTRACT_PATH = ROOT / IDE_CONTRACT_ARTIFACT_PATH
 IDE_WORKSPACE_OBSERVATION_PATH = ROOT / IDE_OBSERVATION_ARTIFACT_PATH
 IDE_APPROVAL_HANDOFF_MANIFEST_PATH = ROOT / IDE_APPROVAL_HANDOFF_ARTIFACT_PATH
+MULTI_AGENT_DELIVERY_MANIFEST_PATH = ROOT / MULTI_AGENT_DELIVERY_MANIFEST_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -128,6 +134,7 @@ REQUIRED_FILES = [
     "scripts/verifier_runtime.py",
     "scripts/computer_runtime.py",
     "scripts/ide_adapter.py",
+    "scripts/multi_agent_delivery.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
     "artifacts/recovery/interrupted_after_extract/run.json",
@@ -139,6 +146,7 @@ REQUIRED_FILES = [
     "artifacts/ide_adapter/phase8_ide_adapter_contract.json",
     "artifacts/ide_adapter/phase8_workspace_observation.json",
     "artifacts/ide_adapter/phase8_ide_approval_handoff_manifest.json",
+    "artifacts/delivery/phase9_multi_agent_delivery_manifest.json",
 ]
 
 PLAN_REQUIRED_MARKERS = [
@@ -181,6 +189,10 @@ PLAN_REQUIRED_MARKERS = [
     "IDEApprovalHandoffManifestV1",
     "ide-approval-handoff-manifest-v1",
     "phase8_ide_approval_handoff_manifest.json",
+    "MultiAgentDeliveryManifestV1",
+    "multi-agent-delivery-manifest-v1",
+    "agent-handoff-v1",
+    "phase9_multi_agent_delivery_manifest.json",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -1451,6 +1463,115 @@ def run_ide_adapter_builder(contract_out: Path, observation_out: Path, approval_
         )
 
 
+def expect_multi_agent_delivery_validation_failure(
+    label: str,
+    manifest: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_multi_agent_delivery_manifest(manifest, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"MultiAgentDeliveryManifest forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"MultiAgentDeliveryManifest forced-failure case {label} unexpectedly passed validation")
+
+
+def validate_committed_multi_agent_delivery_artifact() -> None:
+    manifest = load_json(MULTI_AGENT_DELIVERY_MANIFEST_PATH)
+    try:
+        validate_multi_agent_delivery_manifest(manifest, ROOT)
+    except ValueError as exc:
+        raise AssertionError(f"Committed MultiAgentDeliveryManifestV1 artifact failed validation: {exc}") from exc
+
+    expected_manifest = build_multi_agent_delivery_manifest(
+        ARTIFACT_DIR / "all_passed/run.json",
+        CONTEXT_PACK_DIR / "all_passed/context_pack.json",
+        ARTIFACT_DIR / "all_passed/evidence.json",
+        ARTIFACT_DIR / "all_passed/regression_result.json",
+        ARTIFACT_DIR / "all_passed/verifier_report.json",
+        ARTIFACT_DIR / "all_passed/email_draft.md",
+        IDE_APPROVAL_HANDOFF_MANIFEST_PATH,
+        ROOT,
+    )
+    if manifest != expected_manifest:
+        raise AssertionError("Committed MultiAgentDeliveryManifestV1 artifact differs from deterministic builder output")
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    tampered_manifest["agentRoles"] = [
+        agent
+        for agent in tampered_manifest["agentRoles"]
+        if agent["name"] != "reviewer_agent"
+    ]
+    expect_multi_agent_delivery_validation_failure(
+        "missing_reviewer_agent",
+        tampered_manifest,
+        "agentRoles must equal",
+    )
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    tampered_manifest["ownership"]["taskVerdictOwner"] = "reporter_agent"
+    expect_multi_agent_delivery_validation_failure(
+        "reporter_owns_task_verdict",
+        tampered_manifest,
+        "task verdict owner must remain verifier-runtime-v1",
+    )
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    tampered_manifest["handoffs"][1]["sideEffectAllowed"] = True
+    expect_multi_agent_delivery_validation_failure(
+        "handoff_side_effect_allowed",
+        tampered_manifest,
+        "handoffs must not allow side effects",
+    )
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    tampered_manifest["deliveryReview"]["verifierStatus"] = "failed"
+    expect_multi_agent_delivery_validation_failure(
+        "verifier_not_passed",
+        tampered_manifest,
+        "verifierStatus must match verifier_report",
+    )
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    tampered_manifest["deliveryArtifact"]["sendEmailAllowed"] = True
+    expect_multi_agent_delivery_validation_failure(
+        "delivery_email_send_allowed",
+        tampered_manifest,
+        "must not send email",
+    )
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    tampered_manifest["deliveryArtifact"]["humanApprovalSatisfied"] = True
+    expect_multi_agent_delivery_validation_failure(
+        "human_approval_synthesized",
+        tampered_manifest,
+        "must not synthesize human approval",
+    )
+
+
+def run_multi_agent_delivery_builder(manifest_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/multi_agent_delivery.py"),
+        "--manifest-out",
+        str(manifest_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "MultiAgentDeliveryManifestV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def compare_artifact_packets(expected_dir: Path, actual_dir: Path) -> None:
     for fixture_id in FIXTURE_IDS:
         for filename in ARTIFACT_FILES:
@@ -1728,6 +1849,7 @@ def main() -> None:
     validate_interrupted_recovery_fixture(RECOVERY_FIXTURE_DIR)
     validate_committed_computer_runtime_artifacts()
     validate_committed_ide_adapter_artifacts()
+    validate_committed_multi_agent_delivery_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_root = Path(temp_dir)
@@ -1784,6 +1906,10 @@ def main() -> None:
             raise AssertionError("Committed WorkspaceObservationV1 artifact differs from deterministic CLI output")
         if load_json(generated_approval_handoff_manifest) != load_json(IDE_APPROVAL_HANDOFF_MANIFEST_PATH):
             raise AssertionError("Committed IDEApprovalHandoffManifestV1 artifact differs from deterministic CLI output")
+        generated_multi_agent_delivery_manifest = temp_root / "phase9_multi_agent_delivery_manifest.json"
+        run_multi_agent_delivery_builder(generated_multi_agent_delivery_manifest)
+        if load_json(generated_multi_agent_delivery_manifest) != load_json(MULTI_AGENT_DELIVERY_MANIFEST_PATH):
+            raise AssertionError("Committed MultiAgentDeliveryManifestV1 artifact differs from deterministic CLI output")
 
     print("Repository validation passed.")
 

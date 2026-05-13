@@ -1,0 +1,368 @@
+{
+  "agentRoles": [
+    {
+      "allowedActions": [
+        "read_task_spec",
+        "propose_handoff_plan"
+      ],
+      "forbiddenActions": [
+        "call_tools",
+        "emit_task_verdict",
+        "send_email",
+        "mutate_workspace"
+      ],
+      "inputRefs": [
+        "artifacts/runs/all_passed/run.json#taskSpec"
+      ],
+      "name": "planner_agent",
+      "outputRefs": [
+        "artifacts/delivery/phase9_multi_agent_delivery_manifest.json#handoffs/planner_to_context"
+      ],
+      "owns": [
+        "task_decomposition",
+        "step_strategy"
+      ],
+      "role": "planner"
+    },
+    {
+      "allowedActions": [
+        "read_context_pack",
+        "select_source_bound_context"
+      ],
+      "forbiddenActions": [
+        "call_write_tools",
+        "emit_task_verdict",
+        "send_email",
+        "mutate_workspace"
+      ],
+      "inputRefs": [
+        "artifacts/runs/all_passed/run.json#taskSpec"
+      ],
+      "name": "context_agent",
+      "outputRefs": [
+        "artifacts/context/all_passed/context_pack.json"
+      ],
+      "owns": [
+        "context_selection"
+      ],
+      "role": "context"
+    },
+    {
+      "allowedActions": [
+        "read_log",
+        "extract_regression_result",
+        "write_local_artifact"
+      ],
+      "forbiddenActions": [
+        "run_terminal",
+        "call_ide",
+        "call_cua",
+        "send_email",
+        "mutate_workspace"
+      ],
+      "inputRefs": [
+        "artifacts/runs/all_passed/run.json#taskSpec",
+        "artifacts/context/all_passed/context_pack.json"
+      ],
+      "name": "executor_agent",
+      "outputRefs": [
+        "artifacts/runs/all_passed/run.json",
+        "artifacts/runs/all_passed/evidence.json",
+        "artifacts/runs/all_passed/regression_result.json",
+        "artifacts/runs/all_passed/email_draft.md"
+      ],
+      "owns": [
+        "capability_invocation_record"
+      ],
+      "role": "executor"
+    },
+    {
+      "allowedActions": [
+        "read_verifier_report",
+        "read_evidence",
+        "flag_risks"
+      ],
+      "forbiddenActions": [
+        "override_verifier",
+        "emit_unverified_task_verdict",
+        "send_email",
+        "mutate_workspace"
+      ],
+      "inputRefs": [
+        "artifacts/runs/all_passed/evidence.json",
+        "artifacts/runs/all_passed/regression_result.json",
+        "artifacts/runs/all_passed/verifier_report.json"
+      ],
+      "name": "reviewer_agent",
+      "outputRefs": [
+        "artifacts/delivery/phase9_multi_agent_delivery_manifest.json#deliveryReview"
+      ],
+      "owns": [
+        "risk_review",
+        "verifier_result_interpretation"
+      ],
+      "role": "reviewer"
+    },
+    {
+      "allowedActions": [
+        "summarize_verified_artifacts",
+        "prepare_delivery_draft"
+      ],
+      "forbiddenActions": [
+        "synthesize_new_facts",
+        "send_email",
+        "mark_human_approval_complete",
+        "mutate_workspace"
+      ],
+      "inputRefs": [
+        "artifacts/runs/all_passed/verifier_report.json",
+        "artifacts/runs/all_passed/email_draft.md"
+      ],
+      "name": "reporter_agent",
+      "outputRefs": [
+        "artifacts/delivery/phase9_multi_agent_delivery_manifest.json#deliveryArtifact"
+      ],
+      "owns": [
+        "delivery_summary",
+        "artifact_packaging"
+      ],
+      "role": "reporter"
+    }
+  ],
+  "deliveryArtifact": {
+    "approvalPoint": "send_email_requires_human_approval",
+    "artifactHash": "dc3f7d5b17d569e2acd9247fae6f0d6cb08638132e8fcfd1dd0b77b75b464bcd",
+    "artifactRef": "artifacts/runs/all_passed/email_draft.md",
+    "artifactTextHash": "dc3f7d5b17d569e2acd9247fae6f0d6cb08638132e8fcfd1dd0b77b75b464bcd",
+    "artifactType": "email_draft",
+    "deliveryState": "draft_only_blocked_until_human_approval",
+    "evidenceListRef": "artifacts/runs/all_passed/evidence.json",
+    "humanApprovalRequired": true,
+    "humanApprovalSatisfied": false,
+    "ideApprovalHandoffRef": "artifacts/ide_adapter/phase8_ide_approval_handoff_manifest.json",
+    "regressionResultRef": "artifacts/runs/all_passed/regression_result.json",
+    "sendEmailAllowed": false,
+    "verifierReportRef": "artifacts/runs/all_passed/verifier_report.json"
+  },
+  "deliveryReview": {
+    "blockingFailures": [],
+    "evidenceIds": [
+      "ev-all_passed-001",
+      "ev-all_passed-002",
+      "ev-all_passed-003",
+      "ev-all_passed-004"
+    ],
+    "evidenceItemCount": 4,
+    "reviewerDecision": "delivery_draft_allowed",
+    "verifierReportRef": "artifacts/runs/all_passed/verifier_report.json",
+    "verifierStatus": "passed"
+  },
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "handoffs": [
+    {
+      "deliveryRefs": [],
+      "evidenceRefs": [],
+      "executionAllowed": false,
+      "fromAgent": "planner_agent",
+      "id": "planner_to_context",
+      "inputRefs": [
+        "artifacts/runs/all_passed/run.json#taskSpec"
+      ],
+      "outputRefs": [
+        "artifacts/context/all_passed/context_pack.json"
+      ],
+      "policyDecision": "contract_only_plan_ready",
+      "schemaVersion": "agent-handoff-v1",
+      "sideEffectAllowed": false,
+      "taskVerdictOwner": "verifier-runtime-v1",
+      "toAgent": "context_agent",
+      "verifierRefs": []
+    },
+    {
+      "deliveryRefs": [
+        "artifacts/runs/all_passed/email_draft.md"
+      ],
+      "evidenceRefs": [
+        "artifacts/runs/all_passed/evidence.json"
+      ],
+      "executionAllowed": false,
+      "fromAgent": "context_agent",
+      "id": "context_to_executor",
+      "inputRefs": [
+        "artifacts/runs/all_passed/run.json#taskSpec",
+        "artifacts/context/all_passed/context_pack.json"
+      ],
+      "outputRefs": [
+        "artifacts/runs/all_passed/run.json",
+        "artifacts/runs/all_passed/evidence.json",
+        "artifacts/runs/all_passed/regression_result.json",
+        "artifacts/runs/all_passed/email_draft.md"
+      ],
+      "policyDecision": "readonly_execution_artifacts_ready",
+      "schemaVersion": "agent-handoff-v1",
+      "sideEffectAllowed": false,
+      "taskVerdictOwner": "verifier-runtime-v1",
+      "toAgent": "executor_agent",
+      "verifierRefs": []
+    },
+    {
+      "deliveryRefs": [
+        "artifacts/runs/all_passed/email_draft.md"
+      ],
+      "evidenceRefs": [
+        "artifacts/runs/all_passed/evidence.json"
+      ],
+      "executionAllowed": false,
+      "fromAgent": "executor_agent",
+      "id": "executor_to_reviewer",
+      "inputRefs": [
+        "artifacts/runs/all_passed/run.json",
+        "artifacts/runs/all_passed/evidence.json",
+        "artifacts/runs/all_passed/regression_result.json",
+        "artifacts/runs/all_passed/email_draft.md"
+      ],
+      "outputRefs": [
+        "artifacts/runs/all_passed/verifier_report.json"
+      ],
+      "policyDecision": "requires_verifier_review",
+      "schemaVersion": "agent-handoff-v1",
+      "sideEffectAllowed": false,
+      "taskVerdictOwner": "verifier-runtime-v1",
+      "toAgent": "reviewer_agent",
+      "verifierRefs": [
+        "artifacts/runs/all_passed/verifier_report.json"
+      ]
+    },
+    {
+      "deliveryRefs": [
+        "artifacts/runs/all_passed/email_draft.md"
+      ],
+      "evidenceRefs": [
+        "artifacts/runs/all_passed/evidence.json"
+      ],
+      "executionAllowed": false,
+      "fromAgent": "reviewer_agent",
+      "id": "reviewer_to_reporter",
+      "inputRefs": [
+        "artifacts/runs/all_passed/evidence.json",
+        "artifacts/runs/all_passed/regression_result.json",
+        "artifacts/runs/all_passed/verifier_report.json"
+      ],
+      "outputRefs": [
+        "artifacts/delivery/phase9_multi_agent_delivery_manifest.json#deliveryReview"
+      ],
+      "policyDecision": "verified_artifacts_can_be_reported_as_draft",
+      "schemaVersion": "agent-handoff-v1",
+      "sideEffectAllowed": false,
+      "taskVerdictOwner": "verifier-runtime-v1",
+      "toAgent": "reporter_agent",
+      "verifierRefs": [
+        "artifacts/runs/all_passed/verifier_report.json"
+      ]
+    },
+    {
+      "deliveryRefs": [
+        "artifacts/runs/all_passed/email_draft.md"
+      ],
+      "evidenceRefs": [
+        "artifacts/runs/all_passed/evidence.json"
+      ],
+      "executionAllowed": false,
+      "fromAgent": "reporter_agent",
+      "id": "reporter_to_delivery_gate",
+      "inputRefs": [
+        "artifacts/runs/all_passed/verifier_report.json",
+        "artifacts/runs/all_passed/email_draft.md"
+      ],
+      "outputRefs": [
+        "artifacts/delivery/phase9_multi_agent_delivery_manifest.json#deliveryArtifact"
+      ],
+      "policyDecision": "blocked_until_human_approval",
+      "schemaVersion": "agent-handoff-v1",
+      "sideEffectAllowed": false,
+      "taskVerdictOwner": "verifier-runtime-v1",
+      "toAgent": "delivery_gate",
+      "verifierRefs": [
+        "artifacts/runs/all_passed/verifier_report.json"
+      ]
+    }
+  ],
+  "id": "phase9-static-multi-agent-delivery-all_passed",
+  "invariants": [
+    "Planner, Context, Executor, Reviewer, and Reporter communicate through source-bound handoff refs.",
+    "Agents may package verified artifacts, but task verdicts remain owned by VerifierRuntimeV1.",
+    "Delivery remains a draft until the permission policy records explicit human approval.",
+    "Phase 9 MVP does not run a real multi-agent framework, mutate a workspace, open a PR, or send email."
+  ],
+  "mode": "static_contract_only",
+  "ownership": {
+    "contextOwner": "context_agent",
+    "deliveryOwner": "reporter_agent",
+    "evidenceOwner": "evidence-list-v1",
+    "executionRecordOwner": "executor_agent",
+    "humanApprovalOwner": "permission-policy-v1",
+    "riskReviewOwner": "reviewer_agent",
+    "taskSpecOwner": "planner_agent",
+    "taskVerdictOwner": "verifier-runtime-v1"
+  },
+  "phase": "phase9",
+  "policy": {
+    "externalSideEffectsAllowed": false,
+    "ideApprovalHandoffMode": "static_fixture_only",
+    "permissionPolicyRef": "permission-policy-all_passed",
+    "prCreationAllowed": false,
+    "realMultiAgentRuntimeAllowed": false,
+    "requiresHumanApprovalForDelivery": true,
+    "requiresVerifierPassed": true,
+    "sendEmailAllowed": false,
+    "workspaceMutationAllowed": false
+  },
+  "schemaVersion": "multi-agent-delivery-manifest-v1",
+  "scope": "multi_agent_delivery_loop_contract",
+  "sourceArtifacts": [
+    {
+      "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
+      "path": "artifacts/runs/all_passed/run.json",
+      "role": "run"
+    },
+    {
+      "contentHash": "66316ecb6dc942efe906c562f63fe9603f13a953ba85cd345d7c19fbc7827950",
+      "path": "artifacts/context/all_passed/context_pack.json",
+      "role": "context_pack"
+    },
+    {
+      "contentHash": "0c0e9342e6e4442566e94a3ca639cde78ef2ff3c6581f75f3fe99e082132690c",
+      "path": "artifacts/runs/all_passed/evidence.json",
+      "role": "evidence_list"
+    },
+    {
+      "contentHash": "787c47a02d5a6303113d757693a5d70f97f806e0f74dbb078d0f91f34c23d5e1",
+      "path": "artifacts/runs/all_passed/regression_result.json",
+      "role": "regression_result"
+    },
+    {
+      "contentHash": "f6ec06f8bcc35f325451778d8b3d4985b5e75242b2d7ac9cad20bde244676f66",
+      "path": "artifacts/runs/all_passed/verifier_report.json",
+      "role": "verifier_report"
+    },
+    {
+      "contentHash": "dc3f7d5b17d569e2acd9247fae6f0d6cb08638132e8fcfd1dd0b77b75b464bcd",
+      "path": "artifacts/runs/all_passed/email_draft.md",
+      "role": "email_draft"
+    },
+    {
+      "contentHash": "94c54703ba84302b8e1146150d0f2d768b4d19ae1b16605ea8a4b52839d9ef39",
+      "path": "artifacts/ide_adapter/phase8_ide_approval_handoff_manifest.json",
+      "role": "ide_approval_handoff"
+    }
+  ],
+  "taskSpecBinding": {
+    "approvalPoints": [
+      "send_email_requires_human_approval"
+    ],
+    "goal": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",
+    "requiredDeliveryApprovalPoint": "send_email_requires_human_approval",
+    "runId": "run-all_passed-988940c2",
+    "taskSpecId": "task-spec-all_passed"
+  }
+}
