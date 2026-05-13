@@ -50,10 +50,20 @@ jobs:
           echo "$PR_JSON"
 
           AUTHOR=$(echo "$PR_JSON" | jq -r '.author.login')
-          if [ "$AUTHOR" != "cursor[bot]" ] && [ "$AUTHOR" != "nanyang12138" ]; then
+          HEAD_REF=$(echo "$PR_JSON" | jq -r '.headRefName')
+
+          if [ "$AUTHOR" != "cursor[bot]" ] && [ "$AUTHOR" != "app/cursor" ] && [ "$AUTHOR" != "nanyang12138" ]; then
             echo "Refusing to auto-merge PR authored by ${AUTHOR}"
             exit 1
           fi
+
+          case "$HEAD_REF" in
+            cursor/*) ;;
+            *)
+              echo "Refusing to auto-merge non-Cursor branch: ${HEAD_REF}"
+              exit 1
+              ;;
+          esac
 
           echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "is_draft=$(echo "$PR_JSON" | jq -r '.isDraft')" >> "$GITHUB_OUTPUT"
