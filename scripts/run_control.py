@@ -116,6 +116,14 @@ def build_state_history(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def build_permission_policy(fixture_id: str, capability_envelope: dict[str, Any]) -> dict[str, Any]:
+    return build_permission_policy_for_artifact_root(fixture_id, capability_envelope, "artifacts/runs")
+
+
+def build_permission_policy_for_artifact_root(
+    fixture_id: str,
+    capability_envelope: dict[str, Any],
+    artifact_root: str,
+) -> dict[str, Any]:
     capabilities = []
     for metadata in capability_envelope["items"]:
         output_contract = metadata.get("outputContract", {})
@@ -140,7 +148,7 @@ def build_permission_policy(fixture_id: str, capability_envelope: dict[str, Any]
         "id": f"permission-policy-{fixture_id}",
         "mode": "readonly_regression_mvp",
         "externalSideEffectsAllowed": False,
-        "localWriteBoundary": f"artifacts/runs/{fixture_id}",
+        "localWriteBoundary": f"{artifact_root}/{fixture_id}",
         "approvalRequiredFor": list(APPROVAL_REQUIRED_FOR),
         "capabilities": capabilities,
     }
@@ -182,9 +190,17 @@ def build_recovery_snapshot(
     current_state: str,
     events: list[dict[str, Any]],
     artifacts: list[str],
+    artifact_root: str = "artifacts/runs",
+    resume_target: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     last_event = events[-1]
-    return {
+    if current_state == "completed":
+        next_action = "none_terminal"
+    elif current_state == "failed":
+        next_action = "inspect_verifier_report"
+    else:
+        next_action = "resume_step"
+    snapshot = {
         "schemaVersion": RECOVERY_SNAPSHOT_SCHEMA_VERSION,
         "id": f"recovery-snapshot-{fixture_id}",
         "runId": run_id,
@@ -193,15 +209,18 @@ def build_recovery_snapshot(
         "lastEventId": last_event["id"],
         "resumeFromEventId": last_event["id"],
         "resumeMode": "terminal_replay_only" if current_state in TERMINAL_STATES else "from_last_event",
-        "nextAction": "none_terminal" if current_state == "completed" else "inspect_verifier_report",
+        "nextAction": next_action,
         "replayArtifactRefs": [
             {
-                "path": f"artifacts/runs/{fixture_id}/{artifact}",
+                "path": f"{artifact_root}/{fixture_id}/{artifact}",
                 "required": True,
             }
             for artifact in artifacts
         ],
     }
+    if resume_target is not None:
+        snapshot["resumeTarget"] = resume_target
+    return snapshot
 
 
 def build_run_control(
@@ -212,9 +231,11 @@ def build_run_control(
     steps: list[dict[str, Any]],
     events: list[dict[str, Any]],
     artifacts: list[str],
+    artifact_root: str = "artifacts/runs",
+    resume_target: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     state_history = build_state_history(events)
-    current_state = "completed" if run_status == "completed" else "failed"
+    current_state = current_state_for_run_status(run_status)
     control = {
         "schemaVersion": RUN_CONTROL_SCHEMA_VERSION,
         "currentState": current_state,
@@ -229,12 +250,40 @@ def build_run_control(
             ],
         },
         "stateHistory": state_history,
-        "permissionPolicy": build_permission_policy(fixture_id, capability_envelope),
+        "permissionPolicy": build_permission_policy_for_artifact_root(fixture_id, capability_envelope, artifact_root),
         "stepAttempts": build_step_attempts(steps, events, capability_envelope),
-        "recoverySnapshot": build_recovery_snapshot(fixture_id, run_id, current_state, events, artifacts),
+        "recoverySnapshot": build_recovery_snapshot(fixture_id, run_id, current_state, events, artifacts, artifact_root, resume_target),
     }
-    validate_run_control({"runControl": control, "id": run_id, "fixtureId": fixture_id, "status": run_status, "steps": steps, "artifacts": artifacts, "capabilityEnvelope": capability_envelope}, events)
+    validate_run_control(
+        {
+            "runControl": control,
+            "id": run_id,
+            "fixtureId": fixture_id,
+            "status": run_status,
+            "steps": steps,
+            "artifacts": artifacts,
+            "artifactRoot": artifact_root,
+            "capabilityEnvelope": capability_envelope,
+        },
+        events,
+    )
     return control
+
+
+def current_state_for_run_status(run_status: str) -> str:
+    if run_status in TERMINAL_STATES:
+        return run_status
+    if run_status in RUN_STATES:
+        return run_status
+    raise ValueError(f"RunControlV1 run.status is not a supported state: {run_status}")
+
+
+def artifact_root_for_run(run: dict[str, Any]) -> str:
+    artifact_root = run.get("artifactRoot", "artifacts/runs")
+    if not isinstance(artifact_root, str) or not artifact_root:
+        raise ValueError("RunControlV1 artifactRoot must be a non-empty string when provided")
+    _validate_relative_path(artifact_root)
+    return artifact_root
 
 
 def validate_run_control(run: dict[str, Any], events: list[dict[str, Any]]) -> None:
@@ -247,15 +296,16 @@ def validate_run_control(run: dict[str, Any], events: list[dict[str, Any]]) -> N
     )
     if control["schemaVersion"] != RUN_CONTROL_SCHEMA_VERSION:
         raise ValueError(f"RunControlV1 schemaVersion must be {RUN_CONTROL_SCHEMA_VERSION}")
-    expected_current_state = "completed" if run["status"] == "completed" else "failed"
+    expected_current_state = current_state_for_run_status(run["status"])
     if control["currentState"] != expected_current_state:
         raise ValueError("RunControlV1 currentState must match run.status")
 
+    artifact_root = artifact_root_for_run(run)
     validate_state_machine(control["stateMachine"])
     validate_state_history(control["stateHistory"], control["currentState"], events)
-    validate_permission_policy(run["fixtureId"], control["permissionPolicy"], run["capabilityEnvelope"])
+    validate_permission_policy(run["fixtureId"], control["permissionPolicy"], run["capabilityEnvelope"], artifact_root)
     validate_step_attempts(control["stepAttempts"], run["steps"], run["capabilityEnvelope"])
-    validate_recovery_snapshot(run, control["recoverySnapshot"], control["currentState"], events)
+    validate_recovery_snapshot(run, control["recoverySnapshot"], control["currentState"], events, artifact_root)
 
 
 def validate_state_machine(machine: dict[str, Any]) -> None:
@@ -290,7 +340,12 @@ def validate_state_history(history: list[dict[str, Any]], current_state: str, ev
             raise ValueError(f"RunControlV1 illegal state transition: {transition[0]} -> {transition[1]}")
 
 
-def validate_permission_policy(fixture_id: str, policy: dict[str, Any], capability_envelope: dict[str, Any]) -> None:
+def validate_permission_policy(
+    fixture_id: str,
+    policy: dict[str, Any],
+    capability_envelope: dict[str, Any],
+    artifact_root: str = "artifacts/runs",
+) -> None:
     _require_fields(
         "PermissionPolicyV1",
         policy,
@@ -304,7 +359,7 @@ def validate_permission_policy(fixture_id: str, policy: dict[str, Any], capabili
         raise ValueError("PermissionPolicyV1 mode must be readonly_regression_mvp")
     if policy["externalSideEffectsAllowed"] is not False:
         raise ValueError("PermissionPolicyV1 must disallow external side effects")
-    if policy["localWriteBoundary"] != f"artifacts/runs/{fixture_id}":
+    if policy["localWriteBoundary"] != f"{artifact_root}/{fixture_id}":
         raise ValueError("PermissionPolicyV1 localWriteBoundary must be the fixture artifact directory")
     if policy["approvalRequiredFor"] != APPROVAL_REQUIRED_FOR:
         raise ValueError("PermissionPolicyV1 approvalRequiredFor must match Phase 6 contract")
@@ -379,6 +434,7 @@ def validate_recovery_snapshot(
     snapshot: dict[str, Any],
     current_state: str,
     events: list[dict[str, Any]],
+    artifact_root: str = "artifacts/runs",
 ) -> None:
     _require_fields(
         "RecoverySnapshotV1",
@@ -399,10 +455,20 @@ def validate_recovery_snapshot(
     expected_resume_mode = "terminal_replay_only" if current_state in TERMINAL_STATES else "from_last_event"
     if snapshot["resumeMode"] != expected_resume_mode:
         raise ValueError("RecoverySnapshotV1 resumeMode does not match current state")
-    expected_next_action = "none_terminal" if current_state == "completed" else "inspect_verifier_report"
+    if current_state == "completed":
+        expected_next_action = "none_terminal"
+    elif current_state == "failed":
+        expected_next_action = "inspect_verifier_report"
+    else:
+        expected_next_action = "resume_step"
     if snapshot["nextAction"] != expected_next_action:
         raise ValueError("RecoverySnapshotV1 nextAction does not match current state")
-    expected_paths = [f"artifacts/runs/{run['fixtureId']}/{artifact}" for artifact in run["artifacts"]]
+    if current_state in TERMINAL_STATES:
+        if "resumeTarget" in snapshot:
+            raise ValueError("RecoverySnapshotV1 terminal snapshots must not declare resumeTarget")
+    else:
+        validate_resume_target(snapshot.get("resumeTarget"), run)
+    expected_paths = [f"{artifact_root}/{run['fixtureId']}/{artifact}" for artifact in run["artifacts"]]
     refs = snapshot["replayArtifactRefs"]
     if not isinstance(refs, list) or [ref.get("path") for ref in refs if isinstance(ref, dict)] != expected_paths:
         raise ValueError("RecoverySnapshotV1 replayArtifactRefs must mirror run.artifacts")
@@ -411,6 +477,19 @@ def validate_recovery_snapshot(
         _validate_relative_path(ref["path"])
         if ref["required"] is not True:
             raise ValueError("RecoverySnapshotV1 replayArtifactRefs must be required")
+
+
+def validate_resume_target(target: Any, run: dict[str, Any]) -> None:
+    if not isinstance(target, dict):
+        raise ValueError("RecoverySnapshotV1 non-terminal snapshots must declare resumeTarget")
+    _require_fields("RecoverySnapshotV1 resumeTarget", target, ["stepId", "capability", "capabilityRef", "inputRef", "outputRef"])
+    if target["capabilityRef"] != capability_ref(target["capability"]):
+        raise ValueError("RecoverySnapshotV1 resumeTarget capabilityRef must match capability")
+    if target["capabilityRef"] not in _metadata_by_ref(run["capabilityEnvelope"]):
+        raise ValueError("RecoverySnapshotV1 resumeTarget capabilityRef must exist in capabilityEnvelope")
+    completed_step_ids = {step.get("id") for step in run["steps"] if step.get("status") in {"completed", "passed"}}
+    if target["stepId"] in completed_step_ids:
+        raise ValueError("RecoverySnapshotV1 resumeTarget must point to a not-yet-completed step")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
