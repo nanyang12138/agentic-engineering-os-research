@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -24,7 +23,11 @@ RUN_STATES = [
     "failed",
 ]
 TERMINAL_STATES = ["completed", "failed"]
-NON_TERMINAL_RUN_STATUSES = {"running"}
+TERMINAL_RUN_STATUS_TO_STATE = {
+    "completed": "completed",
+    "failed": "failed",
+}
+NON_TERMINAL_RUN_STATUSES = ["interrupted"]
 ALLOWED_TRANSITIONS = [
     ("created", "planning"),
     ("planning", "waiting_context"),
@@ -55,9 +58,15 @@ APPROVAL_REQUIRED_FOR = [
     "external_side_effect",
     "send_email",
 ]
-INTERRUPTED_RECOVERY_FIXTURE_ID = "interrupted_after_read_log"
-INTERRUPTED_RECOVERY_LAST_EVENT_ID = "event-all_passed-003"
-INTERRUPTED_RECOVERY_ARTIFACT_BASE_PATH = "artifacts/recovery/interrupted_after_read_log"
+NEXT_ACTION_BY_STATE = {
+    "created": "resume_planning",
+    "planning": "resume_task_spec_generation",
+    "waiting_context": "resume_context_collection",
+    "running": "resume_step",
+    "verifying": "resume_verifier",
+    "completed": "none_terminal",
+    "failed": "inspect_verifier_report",
+}
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -78,16 +87,6 @@ def load_events(path: Path) -> list[dict[str, Any]]:
             raise ValueError(f"{path} must contain JSON object lines")
         events.append(event)
     return events
-
-
-def write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-
-def write_events(path: Path, events: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(json.dumps(event, sort_keys=True) for event in events) + "\n", encoding="utf-8")
 
 
 def _require_fields(label: str, payload: dict[str, Any], fields: list[str]) -> None:
@@ -130,7 +129,7 @@ def build_state_history(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return history
 
 
-def build_permission_policy(fixture_id: str, capability_envelope: dict[str, Any]) -> dict[str, Any]:
+def build_permission_policy(fixture_id: str, capability_envelope: dict[str, Any], artifact_root: str = "artifacts/runs") -> dict[str, Any]:
     capabilities = []
     for metadata in capability_envelope["items"]:
         output_contract = metadata.get("outputContract", {})
@@ -155,7 +154,7 @@ def build_permission_policy(fixture_id: str, capability_envelope: dict[str, Any]
         "id": f"permission-policy-{fixture_id}",
         "mode": "readonly_regression_mvp",
         "externalSideEffectsAllowed": False,
-        "localWriteBoundary": f"artifacts/runs/{fixture_id}",
+        "localWriteBoundary": f"{artifact_root}/{fixture_id}",
         "approvalRequiredFor": list(APPROVAL_REQUIRED_FOR),
         "capabilities": capabilities,
     }
@@ -179,7 +178,7 @@ def build_step_attempts(
                 "capability": capability,
                 "capabilityRef": step["capabilityRef"],
                 "inputRef": event.get("inputRef") if event else None,
-                "lastError": None if step["status"] in {"completed", "passed"} else f"{capability} reported {step['status']}",
+                "lastError": None if step["status"] in {"completed", "passed", "pending"} else f"{capability} reported {step['status']}",
                 "maxRetries": 0,
                 "outputRef": event.get("outputRef") if event else None,
                 "permission": capability_metadata["permission"],
@@ -197,10 +196,10 @@ def build_recovery_snapshot(
     current_state: str,
     events: list[dict[str, Any]],
     artifacts: list[str],
-    artifact_base_path: str | None = None,
+    resume_target: dict[str, Any] | None = None,
+    artifact_root: str = "artifacts/runs",
 ) -> dict[str, Any]:
     last_event = events[-1]
-    base_path = artifact_base_path or f"artifacts/runs/{fixture_id}"
     snapshot = {
         "schemaVersion": RECOVERY_SNAPSHOT_SCHEMA_VERSION,
         "id": f"recovery-snapshot-{fixture_id}",
@@ -210,17 +209,17 @@ def build_recovery_snapshot(
         "lastEventId": last_event["id"],
         "resumeFromEventId": last_event["id"],
         "resumeMode": "terminal_replay_only" if current_state in TERMINAL_STATES else "from_last_event",
-        "nextAction": recovery_next_action(current_state),
+        "nextAction": NEXT_ACTION_BY_STATE[current_state],
         "replayArtifactRefs": [
             {
-                "path": f"{base_path}/{artifact}",
+                "path": f"{artifact_root}/{fixture_id}/{artifact}",
                 "required": True,
             }
             for artifact in artifacts
         ],
     }
-    if artifact_base_path is not None:
-        snapshot["artifactBasePath"] = base_path
+    if resume_target is not None:
+        snapshot["resumeTarget"] = resume_target
     return snapshot
 
 
@@ -233,11 +232,14 @@ def build_run_control(
     events: list[dict[str, Any]],
     artifacts: list[str],
     current_state: str | None = None,
-    artifact_base_path: str | None = None,
+    resume_target: dict[str, Any] | None = None,
+    artifact_root: str = "artifacts/runs",
 ) -> dict[str, Any]:
     state_history = build_state_history(events)
     if current_state is None:
-        current_state = "completed" if run_status == "completed" else "failed"
+        if run_status not in TERMINAL_RUN_STATUS_TO_STATE:
+            raise ValueError("RunControlV1 non-terminal builders must pass current_state explicitly")
+        current_state = TERMINAL_RUN_STATUS_TO_STATE[run_status]
     control = {
         "schemaVersion": RUN_CONTROL_SCHEMA_VERSION,
         "currentState": current_state,
@@ -252,44 +254,23 @@ def build_run_control(
             ],
         },
         "stateHistory": state_history,
-        "permissionPolicy": build_permission_policy(fixture_id, capability_envelope),
+        "permissionPolicy": build_permission_policy(fixture_id, capability_envelope, artifact_root),
         "stepAttempts": build_step_attempts(steps, events, capability_envelope),
-        "recoverySnapshot": build_recovery_snapshot(fixture_id, run_id, current_state, events, artifacts, artifact_base_path),
+        "recoverySnapshot": build_recovery_snapshot(fixture_id, run_id, current_state, events, artifacts, resume_target, artifact_root),
     }
-    validate_run_control({"runControl": control, "id": run_id, "fixtureId": fixture_id, "status": run_status, "steps": steps, "artifacts": artifacts, "capabilityEnvelope": capability_envelope}, events)
+    validation_run = {
+        "runControl": control,
+        "id": run_id,
+        "fixtureId": fixture_id,
+        "status": run_status,
+        "steps": steps,
+        "artifacts": artifacts,
+        "capabilityEnvelope": capability_envelope,
+    }
+    if artifact_root != "artifacts/runs":
+        validation_run["artifactRoot"] = artifact_root
+    validate_run_control(validation_run, events)
     return control
-
-
-def recovery_next_action(current_state: str) -> str:
-    actions = {
-        "created": "resume_planning",
-        "planning": "resume_context_collection",
-        "waiting_context": "resume_extract_regression_result",
-        "running": "resume_artifact_write_or_verification",
-        "verifying": "resume_rule_verifier",
-        "completed": "none_terminal",
-        "failed": "inspect_verifier_report",
-    }
-    if current_state not in actions:
-        raise ValueError(f"Unknown RunControlV1 current state: {current_state}")
-    return actions[current_state]
-
-
-def expected_current_state_for_run(run: dict[str, Any], events: list[dict[str, Any]]) -> str:
-    status = run["status"]
-    if status == "completed":
-        return "completed"
-    if status == "failed":
-        return "failed"
-    if status in NON_TERMINAL_RUN_STATUSES:
-        history = build_state_history(events)
-        if not history:
-            raise ValueError("RunControlV1 non-terminal run must have state-bearing events")
-        state = history[-1]["state"]
-        if state in TERMINAL_STATES:
-            raise ValueError("RunControlV1 running run cannot point at a terminal event")
-        return state
-    raise ValueError(f"RunControlV1 unsupported run.status: {status}")
 
 
 def validate_run_control(run: dict[str, Any], events: list[dict[str, Any]]) -> None:
@@ -302,13 +283,22 @@ def validate_run_control(run: dict[str, Any], events: list[dict[str, Any]]) -> N
     )
     if control["schemaVersion"] != RUN_CONTROL_SCHEMA_VERSION:
         raise ValueError(f"RunControlV1 schemaVersion must be {RUN_CONTROL_SCHEMA_VERSION}")
-    expected_current_state = expected_current_state_for_run(run, events)
-    if control["currentState"] != expected_current_state:
-        raise ValueError("RunControlV1 currentState must match run.status")
+    if run["status"] in TERMINAL_RUN_STATUS_TO_STATE:
+        expected_current_state = TERMINAL_RUN_STATUS_TO_STATE[run["status"]]
+        if control["currentState"] != expected_current_state:
+            raise ValueError("RunControlV1 currentState must match terminal run.status")
+    elif run["status"] in NON_TERMINAL_RUN_STATUSES:
+        if control["currentState"] in TERMINAL_STATES:
+            raise ValueError("RunControlV1 interrupted runs must use a non-terminal currentState")
+        expected_history = build_state_history(events)
+        if not expected_history or control["currentState"] != expected_history[-1]["state"]:
+            raise ValueError("RunControlV1 interrupted currentState must match the last event-derived state")
+    else:
+        raise ValueError(f"RunControlV1 unsupported run.status: {run['status']}")
 
     validate_state_machine(control["stateMachine"])
     validate_state_history(control["stateHistory"], control["currentState"], events)
-    validate_permission_policy(run["fixtureId"], control["permissionPolicy"], run["capabilityEnvelope"])
+    validate_permission_policy(run["fixtureId"], control["permissionPolicy"], run["capabilityEnvelope"], run.get("artifactRoot", "artifacts/runs"))
     validate_step_attempts(control["stepAttempts"], run["steps"], run["capabilityEnvelope"])
     validate_recovery_snapshot(run, control["recoverySnapshot"], control["currentState"], events)
 
@@ -345,7 +335,7 @@ def validate_state_history(history: list[dict[str, Any]], current_state: str, ev
             raise ValueError(f"RunControlV1 illegal state transition: {transition[0]} -> {transition[1]}")
 
 
-def validate_permission_policy(fixture_id: str, policy: dict[str, Any], capability_envelope: dict[str, Any]) -> None:
+def validate_permission_policy(fixture_id: str, policy: dict[str, Any], capability_envelope: dict[str, Any], artifact_root: str = "artifacts/runs") -> None:
     _require_fields(
         "PermissionPolicyV1",
         policy,
@@ -359,7 +349,10 @@ def validate_permission_policy(fixture_id: str, policy: dict[str, Any], capabili
         raise ValueError("PermissionPolicyV1 mode must be readonly_regression_mvp")
     if policy["externalSideEffectsAllowed"] is not False:
         raise ValueError("PermissionPolicyV1 must disallow external side effects")
-    if policy["localWriteBoundary"] != f"artifacts/runs/{fixture_id}":
+    if not isinstance(artifact_root, str) or not artifact_root.strip():
+        raise ValueError("PermissionPolicyV1 artifact_root must be a non-empty string")
+    _validate_relative_path(artifact_root)
+    if policy["localWriteBoundary"] != f"{artifact_root}/{fixture_id}":
         raise ValueError("PermissionPolicyV1 localWriteBoundary must be the fixture artifact directory")
     if policy["approvalRequiredFor"] != APPROVAL_REQUIRED_FOR:
         raise ValueError("PermissionPolicyV1 approvalRequiredFor must match Phase 6 contract")
@@ -454,14 +447,19 @@ def validate_recovery_snapshot(
     expected_resume_mode = "terminal_replay_only" if current_state in TERMINAL_STATES else "from_last_event"
     if snapshot["resumeMode"] != expected_resume_mode:
         raise ValueError("RecoverySnapshotV1 resumeMode does not match current state")
-    expected_next_action = recovery_next_action(current_state)
+    expected_next_action = NEXT_ACTION_BY_STATE[current_state]
     if snapshot["nextAction"] != expected_next_action:
         raise ValueError("RecoverySnapshotV1 nextAction does not match current state")
-    artifact_base_path = snapshot.get("artifactBasePath", f"artifacts/runs/{run['fixtureId']}")
-    if not isinstance(artifact_base_path, str):
-        raise ValueError("RecoverySnapshotV1 artifactBasePath must be a string when present")
-    _validate_relative_path(artifact_base_path)
-    expected_paths = [f"{artifact_base_path}/{artifact}" for artifact in run["artifacts"]]
+    if current_state in TERMINAL_STATES:
+        if "resumeTarget" in snapshot:
+            raise ValueError("RecoverySnapshotV1 terminal snapshots must not include resumeTarget")
+    else:
+        validate_resume_target(run, snapshot.get("resumeTarget"))
+    artifact_root = run.get("artifactRoot", "artifacts/runs")
+    if not isinstance(artifact_root, str) or not artifact_root.strip():
+        raise ValueError("RunControlV1 artifactRoot must be a non-empty string when provided")
+    _validate_relative_path(artifact_root)
+    expected_paths = [f"{artifact_root}/{run['fixtureId']}/{artifact}" for artifact in run["artifacts"]]
     refs = snapshot["replayArtifactRefs"]
     if not isinstance(refs, list) or [ref.get("path") for ref in refs if isinstance(ref, dict)] != expected_paths:
         raise ValueError("RecoverySnapshotV1 replayArtifactRefs must mirror run.artifacts")
@@ -472,148 +470,41 @@ def validate_recovery_snapshot(
             raise ValueError("RecoverySnapshotV1 replayArtifactRefs must be required")
 
 
-def _remap_events_for_interruption(source_events: list[dict[str, Any]], last_event_id: str, fixture_id: str, run_id: str) -> list[dict[str, Any]]:
-    selected: list[dict[str, Any]] = []
-    for source_event in source_events:
-        selected.append(source_event)
-        if source_event.get("id") == last_event_id:
-            break
-    if not selected or selected[-1].get("id") != last_event_id:
-        raise ValueError(f"Could not find interruption event id: {last_event_id}")
-
-    event_id_map = {
-        event["id"]: f"event-{fixture_id}-{index:03d}"
-        for index, event in enumerate(selected, start=1)
-    }
-    remapped = []
-    for event in selected:
-        copied = deepcopy(event)
-        copied["id"] = event_id_map[event["id"]]
-        copied["fixtureId"] = fixture_id
-        copied["runId"] = run_id
-        copied["causalRefs"] = [
-            event_id_map[ref]
-            for ref in copied.get("causalRefs", [])
-            if ref in event_id_map
-        ]
-        remapped.append(copied)
-    return remapped
-
-
-def _steps_attempted_by_events(source_steps: list[dict[str, Any]], events: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    completed_event_types = {event["type"] for event in events}
-    attempted_capabilities = {
-        capability
-        for capability, event_type in STEP_EVENT_TYPES.items()
-        if event_type in completed_event_types
-    }
-    steps = [
-        deepcopy(step)
-        for step in source_steps
-        if step.get("capability") in attempted_capabilities
-    ]
-    if not steps:
-        raise ValueError("Interrupted RunControl fixture must include at least one attempted step")
-    return steps
-
-
-def build_interrupted_run_control_fixture(
-    source_run: dict[str, Any],
-    source_events: list[dict[str, Any]],
-    fixture_id: str = INTERRUPTED_RECOVERY_FIXTURE_ID,
-    last_event_id: str = INTERRUPTED_RECOVERY_LAST_EVENT_ID,
-    artifact_base_path: str = INTERRUPTED_RECOVERY_ARTIFACT_BASE_PATH,
-) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    run_id = f"run-{fixture_id}-001"
-    events = _remap_events_for_interruption(source_events, last_event_id, fixture_id, run_id)
-    state_history = build_state_history(events)
-    if not state_history:
-        raise ValueError("Interrupted RunControl fixture must contain state-bearing events")
-    current_state = state_history[-1]["state"]
-    if current_state in TERMINAL_STATES:
-        raise ValueError("Interrupted RunControl fixture must stop before a terminal event")
-
-    steps = _steps_attempted_by_events(source_run["steps"], events)
-    artifacts = ["run.json", "events.jsonl"]
-    run = {
-        "schemaVersion": source_run["schemaVersion"],
-        "id": run_id,
-        "fixtureId": fixture_id,
-        "task": source_run["task"],
-        "taskSpec": deepcopy(source_run["taskSpec"]),
-        "capabilityEnvelope": deepcopy(source_run["capabilityEnvelope"]),
-        "steps": steps,
-        "events": [event["id"] for event in events],
-        "artifacts": artifacts,
-        "status": "running",
-        "generatedAt": source_run["generatedAt"],
-    }
-    run["runControl"] = build_run_control(
-        fixture_id,
-        run_id,
-        "running",
-        run["capabilityEnvelope"],
-        steps,
-        events,
-        artifacts,
-        current_state=current_state,
-        artifact_base_path=artifact_base_path,
+def validate_resume_target(run: dict[str, Any], resume_target: Any) -> None:
+    if not isinstance(resume_target, dict):
+        raise ValueError("RecoverySnapshotV1 non-terminal snapshots must include resumeTarget")
+    _require_fields(
+        "RecoverySnapshotV1 resumeTarget",
+        resume_target,
+        ["stepId", "capability", "capabilityRef", "inputRef", "reason"],
     )
-    return run, events
-
-
-def write_interrupted_run_control_fixture(
-    source_run_path: Path,
-    source_events_path: Path,
-    out_dir: Path,
-    fixture_id: str = INTERRUPTED_RECOVERY_FIXTURE_ID,
-    last_event_id: str = INTERRUPTED_RECOVERY_LAST_EVENT_ID,
-    artifact_base_path: str = INTERRUPTED_RECOVERY_ARTIFACT_BASE_PATH,
-) -> tuple[Path, Path]:
-    run, events = build_interrupted_run_control_fixture(
-        load_json(source_run_path),
-        load_events(source_events_path),
-        fixture_id,
-        last_event_id,
-        artifact_base_path,
-    )
-    run_path = out_dir / "run.json"
-    events_path = out_dir / "events.jsonl"
-    write_json(run_path, run)
-    write_events(events_path, events)
-    validate_run_control(run, events)
-    return run_path, events_path
+    steps_by_id = {step["id"]: step for step in run["steps"] if isinstance(step, dict) and "id" in step}
+    step = steps_by_id.get(resume_target["stepId"])
+    if step is None:
+        raise ValueError(f"RecoverySnapshotV1 resumeTarget references unknown stepId: {resume_target['stepId']}")
+    if step.get("status") in {"completed", "passed"}:
+        raise ValueError("RecoverySnapshotV1 resumeTarget must reference an incomplete step")
+    metadata = _metadata_by_ref(run["capabilityEnvelope"])
+    if resume_target["capability"] != step.get("capability"):
+        raise ValueError("RecoverySnapshotV1 resumeTarget capability must match run.steps")
+    if resume_target["capabilityRef"] != step.get("capabilityRef"):
+        raise ValueError("RecoverySnapshotV1 resumeTarget capabilityRef must match run.steps")
+    if resume_target["capabilityRef"] not in metadata:
+        raise ValueError(f"RecoverySnapshotV1 resumeTarget references unknown capabilityRef: {resume_target['capabilityRef']}")
+    for field in ["inputRef", "reason"]:
+        if not isinstance(resume_target[field], str) or not resume_target[field].strip():
+            raise ValueError(f"RecoverySnapshotV1 resumeTarget {field} must be a non-empty string")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="run-control")
-    parser.add_argument("--run", type=Path)
-    parser.add_argument("--events", type=Path)
-    parser.add_argument("--build-interrupted", action="store_true")
-    parser.add_argument("--source-run", type=Path)
-    parser.add_argument("--source-events", type=Path)
-    parser.add_argument("--last-event-id", default=INTERRUPTED_RECOVERY_LAST_EVENT_ID)
-    parser.add_argument("--out-dir", type=Path)
+    parser.add_argument("--run", required=True, type=Path)
+    parser.add_argument("--events", required=True, type=Path)
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    if args.build_interrupted:
-        if not args.source_run or not args.source_events or not args.out_dir:
-            raise SystemExit("--build-interrupted requires --source-run, --source-events, and --out-dir")
-        run_path, events_path = write_interrupted_run_control_fixture(
-            args.source_run,
-            args.source_events,
-            args.out_dir,
-            last_event_id=args.last_event_id,
-        )
-        print(f"Wrote interrupted RunControlV1 fixture to {run_path.parent}.")
-        print(f"RunControlV1 validation passed for {run_path}.")
-        return 0
-
-    if not args.run or not args.events:
-        raise SystemExit("RunControlV1 validation requires --run and --events")
     validate_run_control(load_json(args.run), load_events(args.events))
     print(f"RunControlV1 validation passed for {args.run}.")
     return 0
