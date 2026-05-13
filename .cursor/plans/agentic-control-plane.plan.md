@@ -4302,7 +4302,14 @@ git diff --check
 
 ```text
 - Python executable resolved for this run: /usr/bin/python3.
-- 待本轮本地验证后填写最终结果；本条日志随实现提交，若验证失败将在 repair commit 中更新。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 IDEApprovalHandoffManifestV1 committed artifact、deterministic builder output，以及 TaskSpec approval binding / terminal execution / real IDE execution forced-failure cases。
+- `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- `/usr/bin/python3 scripts/ide_adapter.py --validate-contract ... --validate-observation ... --validate-approval-handoff ...`：通过。
+- `/usr/bin/python3 scripts/ide_adapter.py --contract-out ... --observation-out ... --approval-handoff-out ...`：通过，可 deterministic 生成 Phase 8 IDE contract、workspace observation 和 approval handoff manifest artifacts。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase8-handoff-fixture-smoke`：通过。
+- `/usr/bin/python3 scripts/task_spec.py ... --out /tmp/phase8-handoff-task-spec.json`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json ...`：通过。
+- `git diff --check`：通过。
 ```
 
 剩余风险：
