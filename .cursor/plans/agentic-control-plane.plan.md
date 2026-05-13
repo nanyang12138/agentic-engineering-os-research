@@ -3830,10 +3830,10 @@ Add InterruptedRecoveryFixtureV1 so that python3 scripts/validate_repo.py proves
 
 验收标准：
 
-- Committed `artifacts/recovery/interrupted_after_extract` 包含 `run.json` 和 `events.jsonl`：待本地验证确认。
-- `run.status` / `runControl.currentState` 为 `running`，最后 event 停在 `capability.extract_regression_result.completed`：待本地验证确认。
-- `RecoverySnapshotV1` 使用 `resumeMode="from_last_event"`、`nextAction="resume_step"` 和 `resumeTarget=step-write-artifact`：待本地验证确认。
-- 缺失 non-terminal `resumeTarget` 会被 validation 拒绝：待本地验证确认。
+- Committed `artifacts/recovery/interrupted_after_extract` 包含 `run.json` 和 `events.jsonl`：通过。
+- `run.status` / `runControl.currentState` 为 `running`，最后 event 停在 `capability.extract_regression_result.completed`：通过。
+- `RecoverySnapshotV1` 使用 `resumeMode="from_last_event"`、`nextAction="resume_step"` 和 `resumeTarget=step-write-artifact`：通过。
+- 缺失 non-terminal `resumeTarget` 会被 validation 拒绝：通过。
 
 验证命令：
 
@@ -3852,7 +3852,14 @@ git diff --check
 
 ```text
 - Python executable resolved for this run: /usr/bin/python3.
-- 本 log 初次写入时尚未进入 verification step；完成本地验证后必须回填每条命令结果。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 Phase 1a/1b/2/3/4/5 gates、Phase 6 RunControlV1 terminal gate，以及 InterruptedRecoveryFixtureV1 deterministic builder / forced-failure validation。
+- `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- `/usr/bin/python3 scripts/recovery_fixture.py --out-dir /tmp/agentic-os-recovery-smoke`：通过。
+- `/usr/bin/python3 scripts/run_control.py --run artifacts/recovery/interrupted_after_extract/run.json --events artifacts/recovery/interrupted_after_extract/events.jsonl`：通过。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/agentic-os-fixture-smoke`：通过。
+- `/usr/bin/python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/agentic-os-task-spec.json`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --out-dir /tmp/agentic-os-local-smoke --task-spec-path /tmp/agentic-os-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json`：通过。
+- `git diff --check`：通过。
 ```
 
 剩余风险：
