@@ -628,6 +628,13 @@ schema validation
 
 成功标准：不用依赖 IDE，也不用修改任何代码，就能证明“结论来自哪里、是否被验证、交付物引用了哪些证据”。
 
+Phase 1 的边界：
+
+- Regression workflow 只是 bootstrap MVP 场景，用来验证 OS 抽象是否成立，不是产品边界。
+- 核心对象必须保持通用：`TaskSpec`、`Run`、`Step`、`Capability`、`Observation`、`Evidence`、`Artifact`、`Verifier`、`Policy`、`Delivery`。
+- Regression fixture 可以实例化这些通用 contract，但不能把整个系统硬编码成 regression verifier。
+- 所有 regression-specific 逻辑都应该放在 adapter、fixture、parser 或 artifact subtype 后面，核心 schema 和接口要能复用于 CI 诊断、代码修改、测试执行、文档生成、ticket/report delivery 等工程任务。
+
 ### Phase 2：Intent-to-Spec 和任务规格化
 
 先不要让 agent 直接行动。每个自然语言任务先生成 `TaskSpec`：
@@ -968,6 +975,8 @@ MVP verifier 只做三类检查：
 ```
 
 这个 demo 能证明系统不是聊天壳，而是一个可追踪的工程 workflow。
+
+注意：这个 demo 是最小可验证入口，不是最终任务范围。后续 phase 必须把 regression 场景抽象出的 `TaskSpec`、capability contract、context pack、evidence list、verifier rule 和 artifact contract 推广为通用工程任务 OS 原语，而不是继续扩大一个只会处理 regression log 的专用工具。
 
 ### 13.1 MVP Verification Contract
 

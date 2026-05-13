@@ -1,6 +1,8 @@
 # Cursor Cloud Automation Prompt
 
-Use this prompt in Cursor Automations with a scheduled trigger.
+Use this prompt in Cursor Automations with a scheduled trigger. The automation should make one bounded, reviewable improvement per run and keep running on future schedules until the plan reaches the completion criteria below.
+
+## Production Prompt
 
 ```text
 You are running unattended in Cursor Automation for:
@@ -290,13 +292,7 @@ At the end of the run, report:
 - whether the full plan is complete or still in progress
 ```
 
-Recommended cadence:
-
-```text
-Daily at first. Increase frequency only after PR quality is consistently good.
-```
-
-Recommended Cloud Automation settings:
+## Recommended Cadence
 
 ```text
 Trigger: Scheduled
