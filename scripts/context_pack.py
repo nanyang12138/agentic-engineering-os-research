@@ -12,6 +12,7 @@ from capability_contract import PHASE3_CAPABILITY_NAMES, validate_capability_cat
 ROOT = Path(__file__).resolve().parents[1]
 CONTEXT_PACK_SCHEMA_VERSION = "context-pack-v1"
 DEFAULT_CONTEXT_PURPOSE = "Bounded regression context for evidence extraction and verification."
+SOURCE_SELECTION_POLICY = "evidence_items_only_v1"
 REQUIRED_ARTIFACTS = [
     "run.json",
     "events.jsonl",
@@ -121,6 +122,11 @@ def log_excerpt_text(log_path: Path, line_range: list[int]) -> str:
     lines = normalized_text(log_path).splitlines()
     start, end = line_range
     return "\n".join(lines[start - 1 : end])
+
+
+def line_range_size(line_range: list[int]) -> int:
+    start, end = line_range
+    return end - start + 1
 
 
 def build_context_pack(
@@ -259,6 +265,7 @@ def build_context_pack(
         "fixtureId": fixture_id,
         "id": f"context-pack-{fixture_id}",
         "purpose": DEFAULT_CONTEXT_PURPOSE,
+        "budget": build_context_budget(context_items),
         "runRef": repo_path(run_path),
         "schemaVersion": CONTEXT_PACK_SCHEMA_VERSION,
         "sources": sources,
@@ -268,12 +275,31 @@ def build_context_pack(
     return pack
 
 
+def build_context_budget(context_items: list[dict[str, Any]]) -> dict[str, Any]:
+    log_excerpt_items = [
+        item
+        for item in context_items
+        if item.get("kind") == "log_excerpt"
+    ]
+    total_lines = 0
+    for item in log_excerpt_items:
+        line_range = item.get("lineRange")
+        if isinstance(line_range, list) and len(line_range) == 2:
+            total_lines += line_range_size(line_range)
+    return {
+        "maxLogExcerptItems": len(log_excerpt_items),
+        "maxLogExcerptLines": total_lines,
+        "sourceSelection": SOURCE_SELECTION_POLICY,
+    }
+
+
 def validate_context_pack(pack: dict[str, Any], root: Path = ROOT) -> None:
     required_fields = [
         "schemaVersion",
         "id",
         "fixtureId",
         "purpose",
+        "budget",
         "runRef",
         "taskSpecRef",
         "capabilityCatalogRef",
@@ -292,6 +318,7 @@ def validate_context_pack(pack: dict[str, Any], root: Path = ROOT) -> None:
         raise ValueError("ContextPack contextItems must be a non-empty list")
     if not isinstance(pack["artifactRefs"], list) or not pack["artifactRefs"]:
         raise ValueError("ContextPack artifactRefs must be a non-empty list")
+    validate_context_budget(pack["budget"])
 
     source_ids: set[str] = set()
     source_roles: set[str] = set()
@@ -340,6 +367,8 @@ def validate_context_pack(pack: dict[str, Any], root: Path = ROOT) -> None:
         for source_item in pack["sources"]
         if source_item["role"] == "regression_log"
     }
+    log_excerpt_items = 0
+    log_excerpt_lines = 0
     for context_item in pack["contextItems"]:
         for field in ["id", "kind", "sourceId"]:
             if field not in context_item:
@@ -361,6 +390,30 @@ def validate_context_pack(pack: dict[str, Any], root: Path = ROOT) -> None:
             expected_text = log_excerpt_text(resolve_repo_path(log_source["path"], root), line_range)
             if context_item.get("text") != expected_text:
                 raise ValueError("ContextPack log_excerpt text must match source log lines")
+            if "evidenceId" not in context_item:
+                raise ValueError("ContextPack log_excerpt must reference an evidenceId")
+            log_excerpt_items += 1
+            log_excerpt_lines += line_range_size(line_range)
+
+    budget = pack["budget"]
+    if log_excerpt_items > budget["maxLogExcerptItems"]:
+        raise ValueError("ContextPack log_excerpt item budget exceeded")
+    if log_excerpt_lines > budget["maxLogExcerptLines"]:
+        raise ValueError("ContextPack log_excerpt line budget exceeded")
+
+
+def validate_context_budget(budget: dict[str, Any]) -> None:
+    if not isinstance(budget, dict):
+        raise ValueError("ContextPack budget must be an object")
+    required_fields = ["maxLogExcerptItems", "maxLogExcerptLines", "sourceSelection"]
+    missing = [field for field in required_fields if field not in budget]
+    if missing:
+        raise ValueError(f"ContextPack budget is missing required fields: {missing}")
+    for field in ["maxLogExcerptItems", "maxLogExcerptLines"]:
+        if not isinstance(budget[field], int) or budget[field] < 0:
+            raise ValueError(f"ContextPack budget {field} must be a non-negative integer")
+    if budget["sourceSelection"] != SOURCE_SELECTION_POLICY:
+        raise ValueError(f"ContextPack budget sourceSelection must be {SOURCE_SELECTION_POLICY}")
 
 
 def validate_context_pack_for_request(pack: dict[str, Any], log_path: Path, goal: str, root: Path = ROOT) -> None:
