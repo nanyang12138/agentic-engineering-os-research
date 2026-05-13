@@ -363,6 +363,71 @@ def validate_context_pack(pack: dict[str, Any], root: Path = ROOT) -> None:
                 raise ValueError("ContextPack log_excerpt text must match source log lines")
 
 
+def validate_context_pack_for_request(pack: dict[str, Any], log_path: Path, goal: str, root: Path = ROOT) -> None:
+    validate_context_pack(pack, root)
+    goal_items = [
+        item
+        for item in pack["contextItems"]
+        if item.get("kind") == "task_goal"
+    ]
+    if len(goal_items) != 1 or goal_items[0].get("text", "").strip() != goal.strip():
+        raise ValueError("ContextPack task goal must match requested goal")
+
+    regression_log_sources = [
+        source_item
+        for source_item in pack["sources"]
+        if source_item.get("role") == "regression_log"
+    ]
+    if len(regression_log_sources) != 1:
+        raise ValueError("ContextPack must contain exactly one regression_log source")
+    requested_log = log_path.resolve(strict=False)
+    context_log = resolve_repo_path(regression_log_sources[0]["path"], root).resolve(strict=False)
+    if requested_log != context_log:
+        raise ValueError("ContextPack regression_log source must match requested log path")
+
+
+def validate_evidence_with_context_pack(evidence_items: list[dict[str, Any]], pack: dict[str, Any], root: Path = ROOT) -> None:
+    log_sources = {
+        source_item["id"]: source_item
+        for source_item in pack["sources"]
+        if source_item.get("role") == "regression_log"
+    }
+    allowed_excerpts = set()
+    for item in pack["contextItems"]:
+        if item.get("kind") != "log_excerpt":
+            continue
+        source_id = item.get("sourceId")
+        if source_id not in log_sources:
+            raise ValueError("ContextPack log_excerpt must reference a declared regression_log source")
+        line_range = item.get("lineRange")
+        if not isinstance(line_range, list) or len(line_range) != 2:
+            raise ValueError("ContextPack log_excerpt lineRange must be [start, end] positive integers")
+        allowed_excerpts.add(
+            (
+                log_sources[source_id]["path"],
+                tuple(line_range),
+                item.get("text", ""),
+            )
+        )
+
+    if not allowed_excerpts:
+        raise ValueError("ContextPack must declare at least one log_excerpt context item")
+
+    for evidence in evidence_items:
+        if evidence.get("type") != "log":
+            raise ValueError("ContextPack runtime enforcement currently supports only log evidence")
+        source_path = evidence.get("sourcePath")
+        line_range = evidence.get("lineRange")
+        excerpt = evidence.get("excerpt")
+        if not isinstance(source_path, str) or not isinstance(line_range, list) or len(line_range) != 2:
+            raise ValueError("Evidence item must include sourcePath and lineRange for ContextPack enforcement")
+        validate_relative_path(source_path)
+        evidence_source = repo_path(resolve_repo_path(source_path, root), root)
+        key = (evidence_source, tuple(line_range), excerpt)
+        if key not in allowed_excerpts:
+            raise ValueError(f"Evidence item {evidence.get('id', '<missing-id>')} is not declared by ContextPack")
+
+
 def validate_relative_path(path: str) -> None:
     if Path(path).is_absolute() or "\\" in path or path.startswith("../") or "/../" in path:
         raise ValueError(f"ContextPack paths must be POSIX relative paths under the repository: {path}")
