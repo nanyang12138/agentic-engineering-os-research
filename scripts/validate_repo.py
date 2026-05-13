@@ -37,6 +37,14 @@ from evidence_list import (
     validate_evidence_list,
 )
 from fixture_runner import load_fixture
+from ide_adapter import (
+    CONTRACT_ARTIFACT_PATH as IDE_CONTRACT_ARTIFACT_PATH,
+    OBSERVATION_ARTIFACT_PATH as IDE_OBSERVATION_ARTIFACT_PATH,
+    build_ide_adapter_contract,
+    build_workspace_observation,
+    validate_ide_adapter_contract,
+    validate_workspace_observation,
+)
 from run_control import validate_run_control
 from task_spec import TASK_SPEC_SCHEMA_VERSION, build_regression_task_spec, validate_regression_task_spec
 from verifier_runtime import (
@@ -60,6 +68,8 @@ COMPUTER_RUNTIME_CONTRACT_PATH = ROOT / CONTRACT_ARTIFACT_PATH
 TRAJECTORY_OBSERVATION_PATH = ROOT / OBSERVATION_ARTIFACT_PATH
 ADAPTER_POLICY_MANIFEST_PATH = ROOT / POLICY_MANIFEST_ARTIFACT_PATH
 OBSERVATION_REDACTION_POLICY_PATH = ROOT / REDACTION_POLICY_ARTIFACT_PATH
+IDE_ADAPTER_CONTRACT_PATH = ROOT / IDE_CONTRACT_ARTIFACT_PATH
+IDE_WORKSPACE_OBSERVATION_PATH = ROOT / IDE_OBSERVATION_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -113,6 +123,7 @@ REQUIRED_FILES = [
     "scripts/recovery_fixture.py",
     "scripts/verifier_runtime.py",
     "scripts/computer_runtime.py",
+    "scripts/ide_adapter.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
     "artifacts/recovery/interrupted_after_extract/run.json",
@@ -121,6 +132,8 @@ REQUIRED_FILES = [
     "artifacts/computer_runtime/phase7_trajectory_observation.json",
     "artifacts/computer_runtime/phase7_adapter_policy_manifest.json",
     "artifacts/computer_runtime/phase7_observation_redaction_policy.json",
+    "artifacts/ide_adapter/phase8_ide_adapter_contract.json",
+    "artifacts/ide_adapter/phase8_workspace_observation.json",
 ]
 
 PLAN_REQUIRED_MARKERS = [
@@ -154,6 +167,12 @@ PLAN_REQUIRED_MARKERS = [
     "ObservationRedactionPolicyV1",
     "observation-redaction-policy-v1",
     "phase7_observation_redaction_policy.json",
+    "IDEAdapterContractV1",
+    "ide-adapter-contract-v1",
+    "WorkspaceObservationV1",
+    "workspace-observation-v1",
+    "phase8_ide_adapter_contract.json",
+    "phase8_workspace_observation.json",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -1205,6 +1224,159 @@ def run_computer_runtime_builder(contract_out: Path, observation_out: Path, poli
         )
 
 
+def expect_ide_adapter_validation_failure(label: str, payload: dict, validator, expected_message_fragment: str) -> None:
+    try:
+        validator(payload)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"IDEAdapter forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"IDEAdapter forced-failure case {label} unexpectedly passed validation")
+
+
+def expect_workspace_observation_validation_failure(
+    label: str,
+    observation: dict,
+    contract: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_workspace_observation(observation, contract, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"WorkspaceObservation forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"WorkspaceObservation forced-failure case {label} unexpectedly passed validation")
+
+
+def validate_committed_ide_adapter_artifacts() -> None:
+    contract = load_json(IDE_ADAPTER_CONTRACT_PATH)
+    observation = load_json(IDE_WORKSPACE_OBSERVATION_PATH)
+    try:
+        validate_ide_adapter_contract(contract)
+    except ValueError as exc:
+        raise AssertionError(f"Committed IDEAdapterContractV1 contract failed validation: {exc}") from exc
+    try:
+        validate_workspace_observation(observation, contract, ROOT)
+    except ValueError as exc:
+        raise AssertionError(f"Committed WorkspaceObservationV1 artifact failed validation: {exc}") from exc
+
+    expected_contract = build_ide_adapter_contract()
+    if contract != expected_contract:
+        raise AssertionError("Committed IDEAdapterContractV1 contract differs from deterministic builder output")
+
+    expected_observation = build_workspace_observation(
+        IDE_ADAPTER_CONTRACT_PATH,
+        CONTEXT_PACK_DIR / "all_passed/context_pack.json",
+        ARTIFACT_DIR / "all_passed/run.json",
+        ROOT,
+    )
+    if observation != expected_observation:
+        raise AssertionError("Committed WorkspaceObservationV1 artifact differs from deterministic builder output")
+
+    tampered_contract = json.loads(json.dumps(contract))
+    tampered_contract["policy"]["externalSideEffectsAllowed"] = True
+    expect_ide_adapter_validation_failure(
+        "external_side_effects_allowed",
+        tampered_contract,
+        validate_ide_adapter_contract,
+        "must disallow external side effects",
+    )
+
+    tampered_contract = json.loads(json.dumps(contract))
+    for capability in tampered_contract["capabilities"]:
+        if capability["name"] == "ide.open_file":
+            capability["externalSideEffectAllowed"] = True
+            break
+    expect_ide_adapter_validation_failure(
+        "open_file_external_side_effect",
+        tampered_contract,
+        validate_ide_adapter_contract,
+        "must not allow external side effects",
+    )
+
+    tampered_contract = json.loads(json.dumps(contract))
+    for capability in tampered_contract["capabilities"]:
+        if capability["name"] == "ide.terminal.request":
+            capability["approvalRequired"] = False
+            break
+    expect_ide_adapter_validation_failure(
+        "terminal_without_approval",
+        tampered_contract,
+        validate_ide_adapter_contract,
+        "must require approval",
+    )
+
+    tampered_observation = json.loads(json.dumps(observation))
+    tampered_observation["externalSideEffect"] = True
+    expect_workspace_observation_validation_failure(
+        "workspace_external_side_effect",
+        tampered_observation,
+        contract,
+        "must not declare external side effects",
+    )
+
+    tampered_observation = json.loads(json.dumps(observation))
+    del tampered_observation["observations"][0]["sourceRef"]
+    expect_workspace_observation_validation_failure(
+        "workspace_missing_source_ref",
+        tampered_observation,
+        contract,
+        "missing required fields",
+    )
+
+    tampered_observation = json.loads(json.dumps(observation))
+    tampered_observation["observations"][0]["taskVerdict"] = "passed"
+    expect_workspace_observation_validation_failure(
+        "workspace_declares_task_verdict",
+        tampered_observation,
+        contract,
+        "must not declare task verdicts",
+    )
+
+    tampered_observation = json.loads(json.dumps(observation))
+    tampered_observation["workspace"]["currentFileHash"] = "0" * 64
+    expect_workspace_observation_validation_failure(
+        "workspace_current_file_hash_mismatch",
+        tampered_observation,
+        contract,
+        "currentFile source hash mismatch",
+    )
+
+
+def run_ide_adapter_builder(contract_out: Path, observation_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/ide_adapter.py"),
+        "--contract-out",
+        str(contract_out),
+        "--observation-out",
+        str(observation_out),
+        "--context-pack",
+        str(CONTEXT_PACK_DIR / "all_passed/context_pack.json"),
+        "--run",
+        str(ARTIFACT_DIR / "all_passed/run.json"),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "IDEAdapterContractV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def compare_artifact_packets(expected_dir: Path, actual_dir: Path) -> None:
     for fixture_id in FIXTURE_IDS:
         for filename in ARTIFACT_FILES:
@@ -1481,6 +1653,7 @@ def main() -> None:
     validate_committed_context_packs()
     validate_interrupted_recovery_fixture(RECOVERY_FIXTURE_DIR)
     validate_committed_computer_runtime_artifacts()
+    validate_committed_ide_adapter_artifacts()
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_root = Path(temp_dir)
@@ -1527,6 +1700,13 @@ def main() -> None:
             raise AssertionError("Committed AdapterPolicyManifestV1 artifact differs from deterministic CLI output")
         if load_json(generated_redaction_policy) != load_json(OBSERVATION_REDACTION_POLICY_PATH):
             raise AssertionError("Committed ObservationRedactionPolicyV1 artifact differs from deterministic CLI output")
+        generated_ide_contract = temp_root / "phase8_ide_adapter_contract.json"
+        generated_workspace_observation = temp_root / "phase8_workspace_observation.json"
+        run_ide_adapter_builder(generated_ide_contract, generated_workspace_observation)
+        if load_json(generated_ide_contract) != load_json(IDE_ADAPTER_CONTRACT_PATH):
+            raise AssertionError("Committed IDEAdapterContractV1 contract differs from deterministic CLI output")
+        if load_json(generated_workspace_observation) != load_json(IDE_WORKSPACE_OBSERVATION_PATH):
+            raise AssertionError("Committed WorkspaceObservationV1 artifact differs from deterministic CLI output")
 
     print("Repository validation passed.")
 

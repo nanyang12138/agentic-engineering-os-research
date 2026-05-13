@@ -1097,6 +1097,25 @@ Build vs Integrate：
 
 成功标准：同一个 workflow 可以从 CLI 启动，在 IDE 里查看和批准，在 Web 里看历史。
 
+#### Phase 8 IDEAdapterContractV1 Static Workspace Observation Gate
+
+2026-05-13 16:03 UTC 自动化实现结论：Phase 8 的第一步不是接入真实 Cursor/VS Code extension、打开文件、运行 terminal 或展示 diff，而是先把 IDE 作为 Interaction Plane adapter 的边界固化为可机器校验的 contract-only artifact。IDE 可以提供 workspace/current file/diagnostics/diff/terminal/approval surface，但 TaskSpec、Policy、Evidence、Verifier 和 Delivery 仍由 Agentic Engineering OS 拥有。
+
+最小 IDE Adapter contract：
+
+- `artifacts/ide_adapter/phase8_ide_adapter_contract.json` 采用 `ide-adapter-contract-v1`，声明 `IDEAdapterContractV1` 的 adapter-only 边界。
+- contract 覆盖 `ide.workspace.inspect`、`ide.current_file.read`、`ide.diagnostics.read`、`ide.open_file`、`ide.diff_view.open`、`ide.terminal.request`、`ide.approval.request` 七类 IDE capability；全部保持 `executionMode="contract_only"`、`implemented=false`、`externalSideEffectAllowed=false`。
+- `ide.open_file`、`ide.diff_view.open` 和 `ide.terminal.request` 必须 `approvalRequired=true`；Phase 8 MVP 明确 `realIdeExecutionAllowed=false`、`workspaceMutationAllowed=false`、`terminalExecutionAllowed=false`。
+- `artifacts/ide_adapter/phase8_workspace_observation.json` 采用 `workspace-observation-v1`，绑定 existing `all_passed` ContextPack 和 run artifact，只记录 repo-relative workspace/current file/source refs，不打开 IDE、不运行 terminal、不修改 workspace。
+- validator 拒绝关键错误：IDE contract 允许外部副作用、IDE capability 绕过 approval、workspace observation 缺少 ContextPack source binding、声明 task verdict、currentFile hash 漂移。
+
+Build vs Integrate：
+
+- Build：Phase 8 最小 `IDEAdapterContractV1` schema、`WorkspaceObservationV1` artifact、deterministic builder/validator、repository validation gate 和 forced-failure cases。
+- Integrate later：真实 Cursor/VS Code extension bridge、workspace registry、diagnostics streaming、diff view UI、terminal execution approval flow、IDE/Web/CLI history synchronization。
+
+当前 Phase 8 已启动但未完成：本 gate 只证明 IDE adapter 的 contract-only workspace observation 边界。下一步应补 IDE approval handoff manifest，让 IDE approval request 与 Phase 6 permission policy / human gate 对齐，仍不执行真实 IDE UI 或 terminal side effect。
+
 ### Phase 9：多 agent 和交付闭环
 
 最后做多个 agent 的协作：
@@ -1736,10 +1755,11 @@ Add forced-failure verifier checks so that python3 scripts/validate_repo.py prov
 7. Local Read-only Runner：已实现 Phase 1b one-shot CLI `python3 scripts/local_readonly_runner.py --log-path <log> --goal <goal> --out-dir <out>`；该 runner 复用 Phase 1a schema、evidence list、email grounding 和 verifier report，`scripts/validate_repo.py` 已加入本地 read-only smoke gate。SQLite event store、daemon、正式 capability registry、真实外部 adapter 和更完整 run state 仍后移。
 8. Capability Metadata Gate：已实现 Phase 3 最小 `capability-envelope-v1` / `capability-metadata-v1`，覆盖 `read_log`、`extract_regression_result`、`write_artifact` 和 `rule_verifier` 的 permission、sideEffect、timeout、input/output contract；`run.json` 和 `events.jsonl` 引用 capability ref，`artifacts/capabilities/phase3_capability_catalog.json` 作为独立 catalogue artifact，`scripts/validate_repo.py` 会拒绝缺失 permission、声明外部 side effect、缺失 `step-verify.capabilityRef` 或 catalogue 缺失当前 capability 的契约。
 9. CUA Adapter Contract：Phase 7 contract-only MVP 已实现 `ComputerRuntimeAdapterV1`、`TrajectoryObservationV1`、`AdapterPolicyManifestV1` 和 `ObservationRedactionPolicyV1`，只定义 `computer.*` / `sandbox.*` / `trajectory.*` adapter boundary、permission overlay 与 redaction/source policy，不实际集成 GUI/CUA provider。
-10. Phase 1a Evidence Intake Review：在 fixture runner 输出完整 artifact packet 前，后续优化只允许维护评分、Decision Log、Open Questions 和 Research Sprint Log；只有 `verifier_report.json` 失败、grounded email 问题、真实脱敏日志差异或 Build vs Integrate 运行证据出现后，才修改正式设计章节。
-11. Evidence Packet Stop Rule：已由 2026-05-12 14:39 UTC artifact packet 解锁；后续修改必须基于 committed `artifacts/runs/*`、`verifier_report.json` failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据，不再无证据扩写 adapter mapping 或正式设计章节。
-12. Phase 1a Verifier Hardening：已实现 deterministic negative validation，`scripts/validate_repo.py` 会验证 malformed schema、missing evidence refs、failure-marker-to-passed tamper 和 pass-style email injection 均被拒绝或生成 failed verifier report。
-13. RunControlV1 State / Permission / Recovery：Phase 6 regression MVP gate 基本满足：`scripts/run_control.py` 提供 `RunControlV1` validator / CLI，`run.json#runControl` 使用 `run-control-v1`、`permission-policy-v1` 和 `recovery-snapshot-v1` 记录 stateHistory、permissionPolicy、stepAttempts 和 recoverySnapshot；`scripts/validate_repo.py` 会拒绝 state history 漂移、允许 external side effects、recovery last event 损坏或 non-terminal recovery 缺失 `resumeTarget` 的契约。`scripts/recovery_fixture.py` 生成 committed `artifacts/recovery/interrupted_after_extract/*`，证明 interrupted `running` 状态可以指向下一步 `write_artifact` resume action。
+10. IDE Adapter Contract：Phase 8 已启动，当前实现 `IDEAdapterContractV1` 和 `WorkspaceObservationV1`，只定义 IDE workspace/current file/diagnostics/diff/terminal/approval surface 的 contract-only boundary；`scripts/validate_repo.py` 会拒绝 IDE side effect、绕过 approval、workspace observation 缺失 source binding 或声明 task verdict。
+11. Phase 1a Evidence Intake Review：在 fixture runner 输出完整 artifact packet 前，后续优化只允许维护评分、Decision Log、Open Questions 和 Research Sprint Log；只有 `verifier_report.json` 失败、grounded email 问题、真实脱敏日志差异或 Build vs Integrate 运行证据出现后，才修改正式设计章节。
+12. Evidence Packet Stop Rule：已由 2026-05-12 14:39 UTC artifact packet 解锁；后续修改必须基于 committed `artifacts/runs/*`、`verifier_report.json` failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据，不再无证据扩写 adapter mapping 或正式设计章节。
+13. Phase 1a Verifier Hardening：已实现 deterministic negative validation，`scripts/validate_repo.py` 会验证 malformed schema、missing evidence refs、failure-marker-to-passed tamper 和 pass-style email injection 均被拒绝或生成 failed verifier report。
+14. RunControlV1 State / Permission / Recovery：Phase 6 regression MVP gate 基本满足：`scripts/run_control.py` 提供 `RunControlV1` validator / CLI，`run.json#runControl` 使用 `run-control-v1`、`permission-policy-v1` 和 `recovery-snapshot-v1` 记录 stateHistory、permissionPolicy、stepAttempts 和 recoverySnapshot；`scripts/validate_repo.py` 会拒绝 state history 漂移、允许 external side effects、recovery last event 损坏或 non-terminal recovery 缺失 `resumeTarget` 的契约。`scripts/recovery_fixture.py` 生成 committed `artifacts/recovery/interrupted_after_extract/*`，证明 interrupted `running` 状态可以指向下一步 `write_artifact` resume action。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -2032,6 +2052,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-13 08:00 UTC：Phase 5 EvidenceListV1 Provenance / Backlink Gate 已实现；决定将 `evidence.json` 固化为独立 `EvidenceListV1` contract，由 `scripts/evidence_list.py` 校验 sourcePath、lineRange、excerptHash、ContextPack provenance 和 artifact backlinks。数据库 Evidence Graph、跨任务 evidence store、review agent 和 human verifier backend 继续后移；下一轮进入 Phase 6 state, permission, and recovery。
 - 2026-05-13 09:27 UTC：Phase 6 InterruptedRecoveryFixtureV1 Non-terminal Resume Gate 已实现；决定先用 committed interrupted fixture 证明 `RunControlV1` 的 non-terminal recovery contract，`resumeTarget` 指向下一步 `write_artifact`，而不是提前引入 durable workflow backend、真实 resume executor、CUA 或 IDE adapter。Phase 6 regression MVP gate 视为基本满足；下一轮可以进入 Phase 7 adapter contract boundary。
 - 2026-05-13 15:02 UTC：Phase 7 ObservationRedactionPolicyV1 Source / Redaction Gate 已实现；决定将 Phase 7 contract-only MVP 收敛为 adapter boundary + trajectory observation + permission overlay + redaction/source policy 四件套。真实 trycua/cua provider、desktop automation、screen redaction engine、trajectory replay 和 IDE/CUA runtime scheduling 继续后移；下一轮可以进入 Phase 8 IDE Adapter contract。
+- 2026-05-13 16:03 UTC：Phase 8 IDEAdapterContractV1 Static Workspace Observation Gate 已实现；决定先把 IDE 接入收敛为 contract-only `IDEAdapterContractV1` 和 source-bound `WorkspaceObservationV1`，不执行真实 IDE provider、open file、diff view、terminal 或 workspace mutation。真实 IDE extension bridge、diagnostics streaming、approval UI 和 CLI/Web/IDE history synchronization 继续后移；下一轮应补 IDE approval handoff manifest。
 
 ## 20. Open Questions
 
@@ -2061,6 +2082,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - Phase 5 的 Evidence / Verifier artifacts 固定为 `EvidenceListV1`、`verifier-runtime-v1` 和 `verifier-rule-catalog-v1`：先用 same-process read-only evidence validator、rule catalog 和 replay gate 验证 sourcePath/lineRange/excerptHash、ContextPack provenance、artifact backlinks 与 `verifier_report.json`，review agent、human verifier backend、policy engine 和数据库 Evidence Graph 后移。
 - Phase 6 的 state/permission/recovery gate 固定为 `RunControlV1` + `InterruptedRecoveryFixtureV1`：terminal run 使用 `terminal_replay_only`，non-terminal interrupted run 必须提供 `resumeTarget` 和 `resume_step`；durable checkpoint store、真实 resume executor、retry scheduler 和 approval backend 后移。
 - Phase 7 的 Computer Runtime / CUA Adapter gate 固定为 contract-only artifact set：`ComputerRuntimeAdapterV1` 定义底层 `computer.*` / `sandbox.*` / `trajectory.*` 能力边界，`TrajectoryObservationV1` 只能作为 Evidence/Verifier 输入，`AdapterPolicyManifestV1` 阻止未审批 dangerous capability，`ObservationRedactionPolicyV1` 禁止 raw screen pixels、secret、credential 和 trajectory task verdict；真实 trycua/cua、GUI automation、redaction engine 和 replay runtime 后移。
+- Phase 8 的 IDE Adapter gate 已启动为 contract-only artifact set：`IDEAdapterContractV1` 定义 IDE workspace/current file/diagnostics/open file/diff view/terminal/approval request 边界，`WorkspaceObservationV1` 只能作为 source-bound ContextPack/workspace observation，不能声明 task verdict；真实 IDE extension、terminal execution、diff view UI、workspace registry 和 approval UI 后移。
 
 ### 20.2 仍开放的问题
 
@@ -4149,11 +4171,79 @@ git diff --check
 新增最小 IDEAdapterContractV1 / workspace observation artifact，声明 IDE workspace、open file、diagnostics、terminal/diff approval 等 capability boundary，并用 validation 证明 IDE adapter 只产生 observation/approval request，不直接绕过 TaskSpec、Policy、Evidence 和 Verifier。
 ```
 
+### 2026-05-13 16:03 UTC: Phase 8 IDEAdapterContractV1 Static Workspace Observation Gate
+
+Active phase：Phase 8 IDE Adapter。
+
+Selected slice：
+
+```text
+Add IDEAdapterContractV1 static workspace observation contract so that python3 scripts/validate_repo.py verifies deterministic Phase 8 IDE adapter artifacts and negative cases.
+```
+
+为什么这是下一步：Phase 7 contract-only Computer Runtime / CUA Adapter gate 已满足；`validate.yml` 和 `auto-merge-cursor-pr.yml` 均存在，且本轮编辑前基线 `python3 scripts/validate_repo.py` 已通过。最早未完成且 prerequisites 满足的产品 phase 是 Phase 8，计划要求先定义 IDE adapter contract / workspace observation artifact，而不是执行真实 IDE side effect。
+
+实现摘要：
+
+- 新增 `scripts/ide_adapter.py`，提供 `ide-adapter-contract-v1` / `IDEAdapterContractV1` 和 `workspace-observation-v1` / `WorkspaceObservationV1` builder、validator 和 CLI。
+- 新增 committed `artifacts/ide_adapter/phase8_ide_adapter_contract.json`，声明 IDE workspace/current file/diagnostics/open file/diff view/terminal/approval request capability boundary；全部保持 `contract_only`、`implemented=false`、`externalSideEffectAllowed=false`。
+- 新增 committed `artifacts/ide_adapter/phase8_workspace_observation.json`，引用 `artifacts/context/all_passed/context_pack.json` 和 `artifacts/runs/all_passed/run.json`，只记录 repo-relative currentFile、visibleFiles 和 ContextPack log_excerpt source binding。
+- `scripts/validate_repo.py` 纳入 Phase 8 required files、plan markers、committed artifact validation、deterministic CLI output comparison，以及 forced-failure：IDE external side effect、open file side effect、terminal approval bypass、workspace observation missing sourceRef、task verdict leakage、currentFile hash mismatch。
+
+验收标准：
+
+- `phase8_ide_adapter_contract.json` 和 `phase8_workspace_observation.json` 可 deterministic 生成并通过 validation。
+- IDE contract 不允许真实 IDE execution、workspace mutation、terminal execution 或外部副作用。
+- IDE UI/terminal 类 capability 必须走 approval boundary。
+- Workspace observation 必须绑定 ContextPack/source hash，不能声明 task verdict。
+- 仓库级 validation 覆盖正向 deterministic output 和负向 tamper cases。
+
+验证命令：
+
+```text
+/usr/bin/python3 scripts/validate_repo.py
+/usr/bin/python3 -m py_compile scripts/*.py
+/usr/bin/python3 scripts/ide_adapter.py --validate-contract artifacts/ide_adapter/phase8_ide_adapter_contract.json --validate-observation artifacts/ide_adapter/phase8_workspace_observation.json
+/usr/bin/python3 scripts/ide_adapter.py --contract-out /tmp/phase8_ide_adapter_contract.json --observation-out /tmp/phase8_workspace_observation.json --context-pack artifacts/context/all_passed/context_pack.json --run artifacts/runs/all_passed/run.json
+/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase8-ide-fixture-smoke
+/usr/bin/python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase8-ide-task-spec.json
+/usr/bin/python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --out-dir /tmp/phase8-ide-local-smoke --task-spec-path /tmp/phase8-ide-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json
+git diff --check
+```
+
+验证结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline `/usr/bin/python3 scripts/validate_repo.py` before edits：通过。
+- `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 IDEAdapterContractV1 / WorkspaceObservationV1 committed artifacts、deterministic builder output 和 IDE side-effect / approval bypass / missing sourceRef / task verdict / hash mismatch forced-failure cases。
+- `/usr/bin/python3 scripts/ide_adapter.py --validate-contract ... --validate-observation ...`：通过。
+- `/usr/bin/python3 scripts/ide_adapter.py --contract-out ... --observation-out ...`：通过，可 deterministic 生成 Phase 8 IDE adapter contract 和 workspace observation artifacts。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase8-ide-fixture-smoke`：通过。
+- `/usr/bin/python3 scripts/task_spec.py ... --out /tmp/phase8-ide-task-spec.json`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json ...`：通过。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- Phase 8 当前仍是 contract-only，不包含真实 IDE extension bridge、diagnostics stream、diff view renderer、terminal runner 或 approval UI。
+- WorkspaceObservationV1 只绑定 static regression ContextPack；真实 IDE workspace state 需要后续 provider adapter 与 source/redaction policy 验证。
+- IDE approval handoff 尚未与 Phase 6 permission policy / human gate manifest 形成独立 artifact。
+
+下一轮建议：
+
+```text
+继续 Phase 8：
+新增 IDEApprovalHandoffManifestV1，把 ide.approval.request / ide.terminal.request / ide.open_file / ide.diff_view.open 与 Phase 6 permission-policy-v1 和 approvalPoints 对齐，证明 IDE 只能提交 approval request，不能直接执行 workspace/terminal side effect。
+```
+
 ## 22. Parking Lot
 
 以下内容仍然重要，但不进入第一版 MVP：
 
-- 多 IDE 控制和 IDE adapter。
+- 多 IDE 控制和真实 IDE provider 集成。
 - Web dashboard、Slack/CI 多入口。
 - 多 agent 协作框架。
 - CUA 实际集成、GUI 自动化、desktop control、trajectory replay。
