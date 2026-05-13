@@ -13,6 +13,7 @@ from multi_agent_delivery import (
 )
 from human_approval import DECISION_ARTIFACT_PATH as HUMAN_APPROVAL_DECISION_ARTIFACT_PATH, validate_human_approval_decision
 from durable_run_store import STORE_ARTIFACT_PATH as DURABLE_RUN_STORE_ARTIFACT_PATH, validate_durable_run_store
+from replay_query import QUERY_ARTIFACT_PATH as REPLAY_QUERY_ARTIFACT_PATH, validate_replay_query
 
 
 EVALUATION_REPORT_SCHEMA_VERSION = "mvp-evaluation-report-v1"
@@ -106,6 +107,7 @@ def _source_specs() -> list[tuple[str, str]]:
         ("phase1b_local_readonly_runner_script", "scripts/local_readonly_runner.py"),
         ("phase2_task_spec_script", "scripts/task_spec.py"),
         ("post_mvp_durable_run_store_script", "scripts/durable_run_store.py"),
+        ("post_mvp_replay_query_script", "scripts/replay_query.py"),
         ("phase3_capability_catalog", "artifacts/capabilities/phase3_capability_catalog.json"),
         ("phase5_verifier_rule_catalog", "artifacts/verifier/phase5_verifier_rule_catalog.json"),
         ("phase6_recovery_run", "artifacts/recovery/interrupted_after_extract/run.json"),
@@ -121,6 +123,7 @@ def _source_specs() -> list[tuple[str, str]]:
         ("phase9_delivery_report", DELIVERY_REPORT_ARTIFACT_PATH),
         ("post_mvp_human_approval_decision", HUMAN_APPROVAL_DECISION_ARTIFACT_PATH),
         ("post_mvp_durable_run_store", DURABLE_RUN_STORE_ARTIFACT_PATH),
+        ("post_mvp_replay_query", REPLAY_QUERY_ARTIFACT_PATH),
     ]
     for fixture_id in FIXTURE_IDS:
         specs.append((f"phase1a_{fixture_id}_run", f"artifacts/runs/{fixture_id}/run.json"))
@@ -235,6 +238,8 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
     validate_human_approval_decision(human_approval_decision, root)
     durable_run_store = _load_json(root / DURABLE_RUN_STORE_ARTIFACT_PATH)
     validate_durable_run_store(durable_run_store, root)
+    replay_query = _load_json(root / REPLAY_QUERY_ARTIFACT_PATH)
+    validate_replay_query(replay_query, root)
     delivery_readiness = delivery_report["readiness"]
     delivery_blocker_ids = [blocker["id"] for blocker in delivery_report["blockers"]]
     phase_coverage = _phase_coverage()
@@ -317,7 +322,7 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
         ],
         "nextRecommendedSlice": {
             "phase": "post_mvp",
-            "slice": "Add a replay query fixture over DurableRunStoreV1 or an identity-bound approval backend fixture while preserving the no-side-effect contract.",
+            "slice": "Add an identity-bound approval backend fixture over HumanApprovalDecisionV1 and DurableRunStoreV1 while preserving the no-side-effect contract.",
             "mustRemainMachineVerifiable": True,
         },
         "invariants": [
