@@ -1,0 +1,340 @@
+{
+  "artifacts": [
+    "run.json",
+    "events.jsonl"
+  ],
+  "capabilityEnvelope": {
+    "items": [
+      {
+        "inputContract": {
+          "properties": {
+            "sourcePath": "string:path"
+          },
+          "required": [
+            "sourcePath"
+          ],
+          "schema": "ReadLogInputV1"
+        },
+        "name": "read_log",
+        "outputContract": {
+          "produces": [
+            "logTextRef"
+          ],
+          "properties": {
+            "logTextRef": "string:memory-ref"
+          },
+          "schema": "ReadLogOutputV1"
+        },
+        "permission": "read",
+        "ref": "capability://phase3/read_log",
+        "schemaVersion": "capability-metadata-v1",
+        "sideEffect": false,
+        "timeoutMs": 1000
+      },
+      {
+        "inputContract": {
+          "properties": {
+            "logTextRef": "string:memory-ref",
+            "taskSpecRef": "string:run-json-pointer"
+          },
+          "required": [
+            "logTextRef",
+            "taskSpecRef"
+          ],
+          "schema": "ExtractRegressionResultInputV1"
+        },
+        "name": "extract_regression_result",
+        "outputContract": {
+          "produces": [
+            "evidenceItems",
+            "regressionResultCandidate"
+          ],
+          "properties": {
+            "evidenceItems": "LogEvidenceV1[]",
+            "regressionResultCandidate": "RegressionResultArtifactV1"
+          },
+          "schema": "ExtractRegressionResultOutputV1"
+        },
+        "permission": "read",
+        "ref": "capability://phase3/extract_regression_result",
+        "schemaVersion": "capability-metadata-v1",
+        "sideEffect": false,
+        "timeoutMs": 1000
+      },
+      {
+        "inputContract": {
+          "properties": {
+            "emailDraftRef": "string:artifact-ref",
+            "evidenceRef": "string:artifact-ref",
+            "regressionResultRef": "string:artifact-ref",
+            "runRef": "string:run-json-pointer"
+          },
+          "required": [
+            "runRef",
+            "evidenceRef",
+            "regressionResultRef",
+            "emailDraftRef"
+          ],
+          "schema": "WriteArtifactInputV1"
+        },
+        "name": "write_artifact",
+        "outputContract": {
+          "effectBoundary": "local_artifact_output_only",
+          "produces": [
+            "artifactPaths"
+          ],
+          "properties": {
+            "artifactPaths": "string:path[]"
+          },
+          "schema": "WriteArtifactOutputV1"
+        },
+        "permission": "write",
+        "ref": "capability://phase3/write_artifact",
+        "schemaVersion": "capability-metadata-v1",
+        "sideEffect": false,
+        "timeoutMs": 1000
+      },
+      {
+        "inputContract": {
+          "properties": {
+            "emailDraftRef": "string:artifact-ref",
+            "evidenceRef": "string:artifact-ref",
+            "regressionResultRef": "string:artifact-ref",
+            "taskSpecRef": "string:run-json-pointer"
+          },
+          "required": [
+            "taskSpecRef",
+            "evidenceRef",
+            "regressionResultRef",
+            "emailDraftRef"
+          ],
+          "schema": "RuleVerifierInputV1"
+        },
+        "name": "rule_verifier",
+        "outputContract": {
+          "produces": [
+            "verifierReport"
+          ],
+          "properties": {
+            "verifierReport": "VerifierReportV1"
+          },
+          "schema": "RuleVerifierOutputV1"
+        },
+        "permission": "read",
+        "ref": "capability://phase3/rule_verifier",
+        "schemaVersion": "capability-metadata-v1",
+        "sideEffect": false,
+        "timeoutMs": 1000
+      }
+    ],
+    "schemaVersion": "capability-envelope-v1"
+  },
+  "events": [
+    "event-interrupted_after_read_log-001",
+    "event-interrupted_after_read_log-002",
+    "event-interrupted_after_read_log-003"
+  ],
+  "fixtureId": "interrupted_after_read_log",
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "run-interrupted_after_read_log-001",
+  "runControl": {
+    "currentState": "waiting_context",
+    "permissionPolicy": {
+      "approvalRequiredFor": [
+        "dangerous",
+        "external_side_effect",
+        "send_email"
+      ],
+      "capabilities": [
+        {
+          "approvalRequired": false,
+          "capability": "read_log",
+          "capabilityRef": "capability://phase3/read_log",
+          "effectBoundary": "same_process_readonly",
+          "permission": "read",
+          "sideEffect": false
+        },
+        {
+          "approvalRequired": false,
+          "capability": "extract_regression_result",
+          "capabilityRef": "capability://phase3/extract_regression_result",
+          "effectBoundary": "same_process_readonly",
+          "permission": "read",
+          "sideEffect": false
+        },
+        {
+          "approvalRequired": false,
+          "capability": "write_artifact",
+          "capabilityRef": "capability://phase3/write_artifact",
+          "effectBoundary": "local_artifact_output_only",
+          "permission": "write",
+          "sideEffect": false
+        },
+        {
+          "approvalRequired": false,
+          "capability": "rule_verifier",
+          "capabilityRef": "capability://phase3/rule_verifier",
+          "effectBoundary": "same_process_readonly",
+          "permission": "read",
+          "sideEffect": false
+        }
+      ],
+      "externalSideEffectsAllowed": false,
+      "id": "permission-policy-interrupted_after_read_log",
+      "localWriteBoundary": "artifacts/runs/interrupted_after_read_log",
+      "mode": "readonly_regression_mvp",
+      "schemaVersion": "permission-policy-v1"
+    },
+    "recoverySnapshot": {
+      "artifactBasePath": "artifacts/recovery/interrupted_after_read_log",
+      "currentState": "waiting_context",
+      "fixtureId": "interrupted_after_read_log",
+      "id": "recovery-snapshot-interrupted_after_read_log",
+      "lastEventId": "event-interrupted_after_read_log-003",
+      "nextAction": "resume_extract_regression_result",
+      "replayArtifactRefs": [
+        {
+          "path": "artifacts/recovery/interrupted_after_read_log/run.json",
+          "required": true
+        },
+        {
+          "path": "artifacts/recovery/interrupted_after_read_log/events.jsonl",
+          "required": true
+        }
+      ],
+      "resumeFromEventId": "event-interrupted_after_read_log-003",
+      "resumeMode": "from_last_event",
+      "runId": "run-interrupted_after_read_log-001",
+      "schemaVersion": "recovery-snapshot-v1"
+    },
+    "schemaVersion": "run-control-v1",
+    "stateHistory": [
+      {
+        "eventRef": "event-interrupted_after_read_log-001",
+        "eventType": "run.created",
+        "state": "created"
+      },
+      {
+        "eventRef": "event-interrupted_after_read_log-002",
+        "eventType": "task_spec.generated",
+        "state": "planning"
+      },
+      {
+        "eventRef": "event-interrupted_after_read_log-003",
+        "eventType": "capability.read_log.completed",
+        "state": "waiting_context"
+      }
+    ],
+    "stateMachine": {
+      "allowedTransitions": [
+        {
+          "from": "created",
+          "to": "planning"
+        },
+        {
+          "from": "planning",
+          "to": "waiting_context"
+        },
+        {
+          "from": "waiting_context",
+          "to": "running"
+        },
+        {
+          "from": "running",
+          "to": "running"
+        },
+        {
+          "from": "running",
+          "to": "verifying"
+        },
+        {
+          "from": "verifying",
+          "to": "completed"
+        },
+        {
+          "from": "verifying",
+          "to": "failed"
+        }
+      ],
+      "initialState": "created",
+      "schemaVersion": "run-state-machine-v1",
+      "states": [
+        "created",
+        "planning",
+        "waiting_context",
+        "running",
+        "verifying",
+        "completed",
+        "failed"
+      ],
+      "terminalStates": [
+        "completed",
+        "failed"
+      ]
+    },
+    "stepAttempts": [
+      {
+        "attempt": 1,
+        "capability": "read_log",
+        "capabilityRef": "capability://phase3/read_log",
+        "inputRef": "fixtures/regression/all_passed/input.log",
+        "lastError": null,
+        "maxRetries": 0,
+        "outputRef": "log_text",
+        "permission": "read",
+        "status": "completed",
+        "stepId": "step-read-log",
+        "timeoutMs": 1000
+      }
+    ]
+  },
+  "schemaVersion": "run-v1",
+  "status": "running",
+  "steps": [
+    {
+      "capability": "read_log",
+      "capabilityRef": "capability://phase3/read_log",
+      "id": "step-read-log",
+      "status": "completed"
+    }
+  ],
+  "task": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",
+  "taskSpec": {
+    "allowedActions": [
+      "read_log",
+      "extract_regression_result",
+      "write_artifact"
+    ],
+    "approvalPoints": [
+      "send_email_requires_human_approval"
+    ],
+    "expectedArtifacts": [
+      "evidence.json",
+      "regression_result.json",
+      "email_draft.md"
+    ],
+    "forbiddenActions": [
+      "modify_repo_or_log",
+      "execute_external_side_effect",
+      "send_email",
+      "call_gui_desktop_cua_or_browser_capability",
+      "claim_all_passed_without_sufficient_evidence"
+    ],
+    "goal": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",
+    "id": "task-spec-all_passed",
+    "inputLogPath": "fixtures/regression/all_passed/input.log",
+    "requiredEvidence": [
+      "sourcePath",
+      "exact log excerpt",
+      "classification",
+      "evidence id referenced by artifacts"
+    ],
+    "schemaVersion": "regression-task-spec-v1",
+    "successCriteria": [
+      "Read the regression log path without modifying it.",
+      "Extract a safe structured verdict from log markers.",
+      "Write evidence-linked artifacts without external side effects.",
+      "Verify schema, evidence references, classification precedence, and email grounding."
+    ]
+  }
+}

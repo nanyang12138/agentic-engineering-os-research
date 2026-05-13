@@ -24,6 +24,11 @@ from evidence_list import (
 )
 from fixture_runner import load_fixture
 from run_control import validate_run_control
+from run_control import (
+    INTERRUPTED_RECOVERY_ARTIFACT_BASE_PATH,
+    INTERRUPTED_RECOVERY_FIXTURE_ID,
+    build_interrupted_run_control_fixture,
+)
 from task_spec import TASK_SPEC_SCHEMA_VERSION, build_regression_task_spec, validate_regression_task_spec
 from verifier_runtime import (
     REQUIRED_ARTIFACT_CHECK_IDS,
@@ -41,6 +46,7 @@ ARTIFACT_DIR = ROOT / "artifacts/runs"
 CAPABILITY_CATALOG_PATH = ROOT / "artifacts/capabilities/phase3_capability_catalog.json"
 CONTEXT_PACK_DIR = ROOT / "artifacts/context"
 VERIFIER_RULE_CATALOG_PATH = ROOT / "artifacts/verifier/phase5_verifier_rule_catalog.json"
+INTERRUPTED_RECOVERY_DIR = ROOT / INTERRUPTED_RECOVERY_ARTIFACT_BASE_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -61,7 +67,7 @@ REQUIRED_REPORT_RULES = {
 }
 PASS_STYLE_PHRASES = ["all passed", "clean pass", "passed successfully", "no failures"]
 VERDICTS = {"passed", "failed", "incomplete", "warning_or_waiver", "unknown", "needs_human_check"}
-RUN_STATUSES = {"completed", "failed"}
+RUN_STATUSES = {"completed", "failed", "running"}
 STEP_STATUSES = {"completed", "failed", "passed"}
 EVENT_TYPES = {
     "run.created",
@@ -94,6 +100,8 @@ REQUIRED_FILES = [
     "scripts/verifier_runtime.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
+    "artifacts/recovery/interrupted_after_read_log/run.json",
+    "artifacts/recovery/interrupted_after_read_log/events.jsonl",
 ]
 
 PLAN_REQUIRED_MARKERS = [
@@ -809,6 +817,28 @@ def run_run_control_validator(fixture_id: str) -> None:
         )
 
 
+def run_interrupted_recovery_builder(out_dir: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/run_control.py"),
+        "--build-interrupted",
+        "--source-run",
+        str(ARTIFACT_DIR / "all_passed/run.json"),
+        "--source-events",
+        str(ARTIFACT_DIR / "all_passed/events.jsonl"),
+        "--out-dir",
+        str(out_dir),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "Interrupted RunControlV1 fixture builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def compare_context_packs(expected_dir: Path, actual_dir: Path) -> None:
     for fixture_id in FIXTURE_IDS:
         expected = expected_dir / fixture_id / "context_pack.json"
@@ -943,6 +973,12 @@ def break_recovery_last_event(tampered_dir: Path) -> None:
     write_json(run_path, run)
 
 
+def break_recovery_next_action(tampered_run: dict) -> dict:
+    tampered = json.loads(json.dumps(tampered_run))
+    tampered["runControl"]["recoverySnapshot"]["nextAction"] = "none_terminal"
+    return tampered
+
+
 def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
     scratch_root.mkdir(parents=True, exist_ok=True)
     expect_artifact_validation_failure(
@@ -1015,6 +1051,76 @@ def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
         break_recovery_last_event,
         "must point to the last event",
     )
+
+
+def validate_interrupted_recovery_fixture(temp_root: Path) -> None:
+    run_path = INTERRUPTED_RECOVERY_DIR / "run.json"
+    events_path = INTERRUPTED_RECOVERY_DIR / "events.jsonl"
+    if not run_path.is_file() or not events_path.is_file():
+        raise AssertionError("Missing committed Phase 6 interrupted recovery fixture")
+
+    committed_run = load_json(run_path)
+    committed_events = [
+        json.loads(line)
+        for line in events_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    try:
+        validate_run_control(committed_run, committed_events)
+    except ValueError as exc:
+        raise AssertionError(f"Committed interrupted RunControlV1 fixture failed validation: {exc}") from exc
+
+    if committed_run["fixtureId"] != INTERRUPTED_RECOVERY_FIXTURE_ID:
+        raise AssertionError("Interrupted recovery fixtureId mismatch")
+    if committed_run["status"] != "running":
+        raise AssertionError("Interrupted recovery run.status must be running")
+    snapshot = committed_run["runControl"]["recoverySnapshot"]
+    if committed_run["runControl"]["currentState"] != "waiting_context":
+        raise AssertionError("Interrupted recovery fixture must stop in waiting_context")
+    if snapshot["resumeMode"] != "from_last_event":
+        raise AssertionError("Interrupted recovery snapshot must use from_last_event resume mode")
+    if snapshot["nextAction"] != "resume_extract_regression_result":
+        raise AssertionError("Interrupted recovery snapshot must resume extraction after read_log")
+    if snapshot.get("artifactBasePath") != INTERRUPTED_RECOVERY_ARTIFACT_BASE_PATH:
+        raise AssertionError("Interrupted recovery snapshot artifactBasePath mismatch")
+    expected_refs = [
+        f"{INTERRUPTED_RECOVERY_ARTIFACT_BASE_PATH}/run.json",
+        f"{INTERRUPTED_RECOVERY_ARTIFACT_BASE_PATH}/events.jsonl",
+    ]
+    if [ref["path"] for ref in snapshot["replayArtifactRefs"]] != expected_refs:
+        raise AssertionError("Interrupted recovery replayArtifactRefs mismatch")
+
+    expected_run, expected_events = build_interrupted_run_control_fixture(
+        load_json(ARTIFACT_DIR / "all_passed/run.json"),
+        [
+            json.loads(line)
+            for line in (ARTIFACT_DIR / "all_passed/events.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ],
+    )
+    if committed_run != expected_run or committed_events != expected_events:
+        raise AssertionError("Committed interrupted recovery fixture differs from deterministic builder output")
+
+    generated_dir = temp_root / "interrupted-recovery"
+    run_interrupted_recovery_builder(generated_dir)
+    if load_json(generated_dir / "run.json") != committed_run:
+        raise AssertionError("Committed interrupted recovery run differs from deterministic CLI output")
+    generated_events = [
+        json.loads(line)
+        for line in (generated_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    if generated_events != committed_events:
+        raise AssertionError("Committed interrupted recovery events differ from deterministic CLI output")
+
+    tampered = break_recovery_next_action(committed_run)
+    try:
+        validate_run_control(tampered, committed_events)
+    except ValueError as exc:
+        if "nextAction does not match current state" not in str(exc):
+            raise AssertionError(f"Interrupted recovery forced-failure rejected for the wrong reason: {exc}") from exc
+    else:
+        raise AssertionError("Interrupted recovery forced-failure unexpectedly accepted wrong nextAction")
 
 
 def expect_task_spec_validation_failure(label: str, task_spec: dict, expected_message_fragment: str) -> None:
@@ -1105,6 +1211,7 @@ def main() -> None:
         for fixture_id in FIXTURE_IDS:
             run_evidence_list_validator(fixture_id)
             run_run_control_validator(fixture_id)
+        validate_interrupted_recovery_fixture(temp_root)
         generated_artifacts = temp_root / "runs"
         run_fixture_runner(generated_artifacts)
         validate_artifact_packet(generated_artifacts)
