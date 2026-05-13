@@ -4595,6 +4595,82 @@ git diff --check
 在保持当前 no-side-effect MVP contract 的前提下，选择一个最小 durable run store 或 human approval decision fixture；不要直接接入真实 CUA/IDE provider、邮件发送或 PR 创建。
 ```
 
+### 2026-05-13 21:02 UTC: Post-MVP HumanApprovalDecisionV1 Fixture Gate
+
+Active phase：post-MVP 前置切片，基于 Phase 1a-9 contract-only MVP 已完成后的 human approval blocker 收敛。
+
+Selected slice：
+
+```text
+Add HumanApprovalDecisionV1 fixture so that /usr/bin/python3 scripts/validate_repo.py proves human approval decisions are source-bound, not synthesized, and cannot enable external delivery side effects.
+```
+
+为什么这是下一步：`validate.yml` 和 `auto-merge-cursor-pr.yml` 均存在且 baseline validation 通过。计划和 `EvaluationReportV1` 已明确 Phase 1a-9 contract-only MVP 完成，但完整产品仍被 human approval missing、external delivery disabled 和真实 provider execution out-of-scope 阻塞。最小有用实现不是发送邮件、创建 PR 或接入真实 approval backend，而是先提交一个 deterministic human approval decision fixture，证明 approval 也必须成为可审计 artifact，且即使记录了决策也不能绕过 MVP 的 no-side-effect policy。
+
+验收标准：
+
+- 新增 `HumanApprovalDecisionV1` builder / validator / CLI，输出 deterministic `human-approval-decision-v1` artifact。
+- committed fixture 必须绑定 `DeliveryReportV1`、`IDEApprovalHandoffManifestV1` 和 `PermissionPolicyV1` source hash。
+- validator 必须拒绝 synthesized approval、允许发送 email、允许 external delivery、缺失 delivery blocker、source hash 漂移或 task verdict 被 human decision 覆盖。
+- `scripts/validate_repo.py` 必须验证 committed fixture、deterministic builder 输出和 forced-failure cases。
+- 不执行真实邮件发送、PR 创建、IDE/CUA provider、workspace mutation 或外部 side effect。
+
+预期改动文件：
+
+- `scripts/human_approval.py`
+- `artifacts/approval/phase9_human_approval_decision_fixture.json`
+- `artifacts/evaluation/phase9_mvp_evaluation_report.json`
+- `scripts/evaluation_report.py`
+- `scripts/validate_repo.py`
+- `.cursor/plans/agentic-control-plane.plan.md`
+
+验证命令：
+
+```text
+/usr/bin/python3 scripts/validate_repo.py
+/usr/bin/python3 -m py_compile scripts/*.py
+/usr/bin/python3 scripts/human_approval.py --validate-decision artifacts/approval/phase9_human_approval_decision_fixture.json
+/usr/bin/python3 scripts/human_approval.py --decision-out /tmp/phase9_human_approval_decision_fixture.json
+/usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json
+/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/post-mvp-approval-fixture-smoke
+git diff --check
+```
+
+实现摘要：
+
+- 新增 `scripts/human_approval.py`，提供 `HumanApprovalDecisionV1` / `human-approval-decision-v1` builder、validator 和 CLI。
+- 新增 committed `artifacts/approval/phase9_human_approval_decision_fixture.json`，绑定 IDE adapter contract、`DeliveryReportV1`、`IDEApprovalHandoffManifestV1`、`all_passed` run 和 verifier report 的 source hashes。
+- 该 fixture 记录一个 static human gate decision state：decision 为 `rejected`、`approvalGranted=false`、`approvalDecisionSynthesized=false`，并保持 `sendEmailAllowed=false`、`externalDeliveryAllowed=false`、`taskVerdictOverrideAllowed=false`。
+- `scripts/validate_repo.py` 纳入 HumanApprovalDecisionV1 required file/markers、committed artifact validation、deterministic CLI output comparison，以及 forced-failure：synthesized approval、send email allowed、external delivery allowed、missing DeliveryReport blocker、source hash mismatch、task verdict override。
+- `scripts/evaluation_report.py` 将 `post_mvp_human_approval_decision` 纳入 source artifact hash 汇总，并把下一推荐切片更新为 durable run store fixture。
+
+验证结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline `/usr/bin/python3 scripts/validate_repo.py` before edits：通过。
+- `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 HumanApprovalDecisionV1 committed artifact、deterministic builder output，以及 synthesized approval / send email allowed / external delivery allowed / missing blocker / source hash mismatch / task verdict override forced-failure cases。
+- `/usr/bin/python3 scripts/human_approval.py --validate-decision artifacts/approval/phase9_human_approval_decision_fixture.json`：通过。
+- `/usr/bin/python3 scripts/human_approval.py --decision-out /tmp/phase9_human_approval_decision_fixture.json`：通过，可 deterministic 生成 HumanApprovalDecisionV1 fixture。
+- `/usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json`：通过。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/post-mvp-approval-fixture-smoke`：通过。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- HumanApprovalDecisionV1 仍是 static fixture，不是 production human approval backend、identity-bound decision store、UI prompt 或 durable audit database。
+- 本切片记录的是拒绝/不授权外部发送的决策状态，不会更新既有 `DeliveryReportV1` 为可外部交付；external delivery 仍被 MVP policy 阻塞。
+- 完整 Agentic Engineering OS 产品仍缺 durable runtime、真实 approval backend、真实 IDE/CUA providers、external delivery adapters 和 production learning/evaluation loop。
+
+下一轮建议：
+
+```text
+进入 post-MVP durable state slice：
+新增最小 DurableRunStoreV1 fixture / validator，保存 Run、events、HumanApprovalDecisionV1 和 DeliveryReportV1 的可重放索引；仍不得接入真实数据库、真实邮件发送、PR 创建或 provider side effects。
+```
+
 ## 22. Parking Lot
 
 以下内容仍然重要，但不进入第一版 MVP：
