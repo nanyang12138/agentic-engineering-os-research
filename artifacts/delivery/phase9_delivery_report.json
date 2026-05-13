@@ -1,0 +1,95 @@
+{
+  "approvalBinding": {
+    "approvalDecisionSynthesized": false,
+    "approvalPoint": "send_email_requires_human_approval",
+    "humanApprovalSatisfied": false,
+    "matchingHandoffRequestIds": [
+      "approval-handoff-task-spec-send-email"
+    ],
+    "taskSpecApprovalPoints": [
+      "send_email_requires_human_approval"
+    ]
+  },
+  "blockers": [
+    {
+      "id": "human_approval_missing",
+      "message": "The TaskSpec delivery approval point exists, but no human approval decision is recorded.",
+      "owner": "permission-policy-v1",
+      "sourceRef": "artifacts/ide_adapter/phase8_ide_approval_handoff_manifest.json"
+    },
+    {
+      "id": "external_delivery_disabled_by_mvp_policy",
+      "message": "Phase 9 MVP keeps email delivery as a draft-only artifact and does not send email.",
+      "owner": "multi-agent-delivery-policy",
+      "sourceRef": "artifacts/delivery/phase9_multi_agent_delivery_manifest.json#policy"
+    }
+  ],
+  "deliveryRefs": {
+    "emailDraftRef": "artifacts/runs/all_passed/email_draft.md",
+    "evidenceListRef": "artifacts/runs/all_passed/evidence.json",
+    "ideApprovalHandoffRef": "artifacts/ide_adapter/phase8_ide_approval_handoff_manifest.json",
+    "multiAgentDeliveryManifestRef": "artifacts/delivery/phase9_multi_agent_delivery_manifest.json",
+    "regressionResultRef": "artifacts/runs/all_passed/regression_result.json",
+    "taskSpecRef": "artifacts/runs/all_passed/run.json#taskSpec",
+    "verifierReportRef": "artifacts/runs/all_passed/verifier_report.json"
+  },
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "phase9-delivery-report-all_passed",
+  "invariants": [
+    "DeliveryReportV1 summarizes existing verified artifacts; it does not create a new task verdict.",
+    "Human approval must come from permission-policy-v1 and cannot be synthesized by the reporter.",
+    "Phase 9 MVP keeps external delivery blocked: no email is sent and no PR is created."
+  ],
+  "mode": "static_contract_only",
+  "phase": "phase9",
+  "readiness": {
+    "blockingVerifierFailures": [],
+    "deliveryDraftReady": true,
+    "deliveryState": "draft_ready_blocked_until_human_approval",
+    "externalSideEffectsAllowed": false,
+    "humanApprovalRequired": true,
+    "humanApprovalSatisfied": false,
+    "prCreationAllowed": false,
+    "readyForExternalDelivery": false,
+    "readyForHumanReview": true,
+    "sendEmailAllowed": false,
+    "verifierPassed": true,
+    "verifierStatus": "passed"
+  },
+  "schemaVersion": "delivery-report-v1",
+  "scope": "delivery_readiness_report",
+  "sourceArtifacts": [
+    {
+      "contentHash": "9dc9ceb06e47e90975f3100466397d4d3eab3839a72ddaf5dd2078391db889ba",
+      "path": "artifacts/delivery/phase9_multi_agent_delivery_manifest.json",
+      "role": "multi_agent_delivery_manifest"
+    },
+    {
+      "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
+      "path": "artifacts/runs/all_passed/run.json",
+      "role": "run"
+    },
+    {
+      "contentHash": "f6ec06f8bcc35f325451778d8b3d4985b5e75242b2d7ac9cad20bde244676f66",
+      "path": "artifacts/runs/all_passed/verifier_report.json",
+      "role": "verifier_report"
+    },
+    {
+      "contentHash": "dc3f7d5b17d569e2acd9247fae6f0d6cb08638132e8fcfd1dd0b77b75b464bcd",
+      "path": "artifacts/runs/all_passed/email_draft.md",
+      "role": "email_draft"
+    },
+    {
+      "contentHash": "94c54703ba84302b8e1146150d0f2d768b4d19ae1b16605ea8a4b52839d9ef39",
+      "path": "artifacts/ide_adapter/phase8_ide_approval_handoff_manifest.json",
+      "role": "ide_approval_handoff"
+    }
+  ],
+  "summary": {
+    "artifactHash": "dc3f7d5b17d569e2acd9247fae6f0d6cb08638132e8fcfd1dd0b77b75b464bcd",
+    "artifactTextHash": "dc3f7d5b17d569e2acd9247fae6f0d6cb08638132e8fcfd1dd0b77b75b464bcd",
+    "artifactType": "email_draft",
+    "decision": "delivery_draft_ready_external_delivery_blocked",
+    "message": "The verified email draft is ready for human review, but external delivery remains blocked."
+  }
+}

@@ -9,10 +9,13 @@ from typing import Any
 
 MULTI_AGENT_DELIVERY_MANIFEST_SCHEMA_VERSION = "multi-agent-delivery-manifest-v1"
 AGENT_HANDOFF_SCHEMA_VERSION = "agent-handoff-v1"
+DELIVERY_REPORT_SCHEMA_VERSION = "delivery-report-v1"
 GENERATED_AT = "2026-05-12T14:39:00Z"
 
 MANIFEST_ID = "phase9-static-multi-agent-delivery-all_passed"
 MANIFEST_ARTIFACT_PATH = "artifacts/delivery/phase9_multi_agent_delivery_manifest.json"
+DELIVERY_REPORT_ID = "phase9-delivery-report-all_passed"
+DELIVERY_REPORT_ARTIFACT_PATH = "artifacts/delivery/phase9_delivery_report.json"
 
 DEFAULT_RUN_PATH = "artifacts/runs/all_passed/run.json"
 DEFAULT_CONTEXT_PACK_PATH = "artifacts/context/all_passed/context_pack.json"
@@ -381,6 +384,138 @@ def build_multi_agent_delivery_manifest(
     }
 
 
+def _matching_delivery_approval_requests(ide_approval_handoff: dict[str, Any], approval_point: str) -> list[dict[str, Any]]:
+    requests = ide_approval_handoff.get("handoffRequests")
+    if not isinstance(requests, list):
+        raise ValueError("IDEApprovalHandoffManifestV1 handoffRequests must be a list")
+    return [
+        request
+        for request in requests
+        if isinstance(request, dict) and request.get("approvalPoint") == approval_point
+    ]
+
+
+def build_delivery_report(
+    manifest_path: Path,
+    run_path: Path,
+    verifier_report_path: Path,
+    email_draft_path: Path,
+    ide_approval_handoff_path: Path,
+    root: Path,
+) -> dict[str, Any]:
+    manifest = _load_json(manifest_path)
+    validate_multi_agent_delivery_manifest(manifest, root)
+    run = _load_json(run_path)
+    verifier_report = _load_json(verifier_report_path)
+    ide_approval_handoff = _load_json(ide_approval_handoff_path)
+    email_text = email_draft_path.read_text(encoding="utf-8")
+
+    delivery = manifest["deliveryArtifact"]
+    review = manifest["deliveryReview"]
+    policy = manifest["policy"]
+    approval_point = delivery["approvalPoint"]
+    matching_approval_requests = _matching_delivery_approval_requests(ide_approval_handoff, approval_point)
+    matching_approval_request_ids = [request["id"] for request in matching_approval_requests]
+
+    verifier_passed = verifier_report["status"] == "passed" and review["verifierStatus"] == "passed"
+    delivery_draft_ready = verifier_passed and not verifier_report["blockingFailures"] and not review["blockingFailures"]
+    ready_for_external_delivery = (
+        delivery_draft_ready
+        and delivery["humanApprovalSatisfied"] is True
+        and delivery["sendEmailAllowed"] is True
+        and policy["sendEmailAllowed"] is True
+        and policy["externalSideEffectsAllowed"] is True
+    )
+
+    blockers: list[dict[str, Any]] = []
+    if not verifier_passed or verifier_report["blockingFailures"] or review["blockingFailures"]:
+        blockers.append(
+            {
+                "id": "verifier_not_passed",
+                "owner": "verifier-runtime-v1",
+                "sourceRef": _artifact_ref(verifier_report_path, root),
+                "message": "Delivery cannot proceed until verifier status is passed and blockingFailures is empty.",
+            }
+        )
+    if delivery["humanApprovalRequired"] is True and delivery["humanApprovalSatisfied"] is not True:
+        blockers.append(
+            {
+                "id": "human_approval_missing",
+                "owner": "permission-policy-v1",
+                "sourceRef": _artifact_ref(ide_approval_handoff_path, root),
+                "message": "The TaskSpec delivery approval point exists, but no human approval decision is recorded.",
+            }
+        )
+    if delivery["sendEmailAllowed"] is not True or policy["sendEmailAllowed"] is not True:
+        blockers.append(
+            {
+                "id": "external_delivery_disabled_by_mvp_policy",
+                "owner": "multi-agent-delivery-policy",
+                "sourceRef": f"{_artifact_ref(manifest_path, root)}#policy",
+                "message": "Phase 9 MVP keeps email delivery as a draft-only artifact and does not send email.",
+            }
+        )
+
+    return {
+        "schemaVersion": DELIVERY_REPORT_SCHEMA_VERSION,
+        "id": DELIVERY_REPORT_ID,
+        "phase": "phase9",
+        "scope": "delivery_readiness_report",
+        "mode": "static_contract_only",
+        "generatedAt": GENERATED_AT,
+        "sourceArtifacts": [
+            _artifact_source("multi_agent_delivery_manifest", manifest_path, root),
+            _artifact_source("run", run_path, root),
+            _artifact_source("verifier_report", verifier_report_path, root),
+            _artifact_source("email_draft", email_draft_path, root),
+            _artifact_source("ide_approval_handoff", ide_approval_handoff_path, root),
+        ],
+        "deliveryRefs": {
+            "taskSpecRef": _artifact_ref(run_path, root, "#taskSpec"),
+            "multiAgentDeliveryManifestRef": _artifact_ref(manifest_path, root),
+            "verifierReportRef": _artifact_ref(verifier_report_path, root),
+            "emailDraftRef": _artifact_ref(email_draft_path, root),
+            "regressionResultRef": delivery["regressionResultRef"],
+            "evidenceListRef": delivery["evidenceListRef"],
+            "ideApprovalHandoffRef": _artifact_ref(ide_approval_handoff_path, root),
+        },
+        "approvalBinding": {
+            "approvalPoint": approval_point,
+            "taskSpecApprovalPoints": run["taskSpec"]["approvalPoints"],
+            "matchingHandoffRequestIds": matching_approval_request_ids,
+            "approvalDecisionSynthesized": False,
+            "humanApprovalSatisfied": delivery["humanApprovalSatisfied"],
+        },
+        "readiness": {
+            "verifierStatus": verifier_report["status"],
+            "verifierPassed": verifier_passed,
+            "blockingVerifierFailures": verifier_report["blockingFailures"],
+            "deliveryDraftReady": delivery_draft_ready,
+            "readyForHumanReview": delivery_draft_ready and delivery["humanApprovalRequired"] is True,
+            "readyForExternalDelivery": ready_for_external_delivery,
+            "humanApprovalRequired": delivery["humanApprovalRequired"],
+            "humanApprovalSatisfied": delivery["humanApprovalSatisfied"],
+            "sendEmailAllowed": delivery["sendEmailAllowed"],
+            "externalSideEffectsAllowed": policy["externalSideEffectsAllowed"],
+            "prCreationAllowed": policy["prCreationAllowed"],
+            "deliveryState": "draft_ready_blocked_until_human_approval",
+        },
+        "blockers": blockers,
+        "summary": {
+            "decision": "delivery_draft_ready_external_delivery_blocked",
+            "artifactType": delivery["artifactType"],
+            "artifactHash": delivery["artifactHash"],
+            "artifactTextHash": _stable_text_hash(email_text),
+            "message": "The verified email draft is ready for human review, but external delivery remains blocked.",
+        },
+        "invariants": [
+            "DeliveryReportV1 summarizes existing verified artifacts; it does not create a new task verdict.",
+            "Human approval must come from permission-policy-v1 and cannot be synthesized by the reporter.",
+            "Phase 9 MVP keeps external delivery blocked: no email is sent and no PR is created.",
+        ],
+    }
+
+
 def validate_multi_agent_delivery_manifest(manifest: dict[str, Any], root: Path) -> None:
     _require_fields(
         "MultiAgentDeliveryManifestV1",
@@ -654,9 +789,186 @@ def validate_multi_agent_delivery_manifest(manifest: dict[str, Any], root: Path)
         raise ValueError("MultiAgentDeliveryManifestV1 policy must bind static IDE approval handoff mode")
 
 
+def validate_delivery_report(report: dict[str, Any], root: Path) -> None:
+    _require_fields(
+        "DeliveryReportV1",
+        report,
+        [
+            "schemaVersion",
+            "id",
+            "phase",
+            "scope",
+            "mode",
+            "sourceArtifacts",
+            "deliveryRefs",
+            "approvalBinding",
+            "readiness",
+            "blockers",
+            "summary",
+            "invariants",
+        ],
+    )
+    if report["schemaVersion"] != DELIVERY_REPORT_SCHEMA_VERSION:
+        raise ValueError(f"DeliveryReportV1 schemaVersion must be {DELIVERY_REPORT_SCHEMA_VERSION}")
+    if report["id"] != DELIVERY_REPORT_ID:
+        raise ValueError(f"DeliveryReportV1 id must be {DELIVERY_REPORT_ID}")
+    if report["phase"] != "phase9":
+        raise ValueError("DeliveryReportV1 phase must be phase9")
+    if report["mode"] != "static_contract_only":
+        raise ValueError("DeliveryReportV1 mode must be static_contract_only")
+
+    expected_paths = {
+        "multi_agent_delivery_manifest": MANIFEST_ARTIFACT_PATH,
+        "run": DEFAULT_RUN_PATH,
+        "verifier_report": DEFAULT_VERIFIER_REPORT_PATH,
+        "email_draft": DEFAULT_EMAIL_DRAFT_PATH,
+        "ide_approval_handoff": DEFAULT_IDE_APPROVAL_HANDOFF_PATH,
+    }
+    sources = _validate_source_artifacts(report["sourceArtifacts"], expected_paths, root)
+    manifest = _load_json(root / sources["multi_agent_delivery_manifest"]["path"])
+    validate_multi_agent_delivery_manifest(manifest, root)
+    run = _load_json(root / sources["run"]["path"])
+    verifier_report = _load_json(root / sources["verifier_report"]["path"])
+    ide_approval_handoff = _load_json(root / sources["ide_approval_handoff"]["path"])
+    email_path = root / sources["email_draft"]["path"]
+
+    delivery = manifest["deliveryArtifact"]
+    policy = manifest["policy"]
+    delivery_refs = report["deliveryRefs"]
+    _require_fields(
+        "DeliveryReportV1 deliveryRefs",
+        delivery_refs,
+        [
+            "taskSpecRef",
+            "multiAgentDeliveryManifestRef",
+            "verifierReportRef",
+            "emailDraftRef",
+            "regressionResultRef",
+            "evidenceListRef",
+            "ideApprovalHandoffRef",
+        ],
+    )
+    if delivery_refs["taskSpecRef"] != f"{DEFAULT_RUN_PATH}#taskSpec":
+        raise ValueError("DeliveryReportV1 taskSpecRef must point to run.json#taskSpec")
+    if delivery_refs["multiAgentDeliveryManifestRef"] != MANIFEST_ARTIFACT_PATH:
+        raise ValueError("DeliveryReportV1 manifest ref mismatch")
+    if delivery_refs["verifierReportRef"] != DEFAULT_VERIFIER_REPORT_PATH:
+        raise ValueError("DeliveryReportV1 verifier report ref mismatch")
+    if delivery_refs["emailDraftRef"] != DEFAULT_EMAIL_DRAFT_PATH:
+        raise ValueError("DeliveryReportV1 email draft ref mismatch")
+    if delivery_refs["regressionResultRef"] != delivery["regressionResultRef"]:
+        raise ValueError("DeliveryReportV1 regression result ref must match MultiAgentDeliveryManifestV1")
+    if delivery_refs["evidenceListRef"] != delivery["evidenceListRef"]:
+        raise ValueError("DeliveryReportV1 evidence list ref must match MultiAgentDeliveryManifestV1")
+    if delivery_refs["ideApprovalHandoffRef"] != DEFAULT_IDE_APPROVAL_HANDOFF_PATH:
+        raise ValueError("DeliveryReportV1 IDE approval handoff ref mismatch")
+
+    approval = report["approvalBinding"]
+    _require_fields(
+        "DeliveryReportV1 approvalBinding",
+        approval,
+        [
+            "approvalPoint",
+            "taskSpecApprovalPoints",
+            "matchingHandoffRequestIds",
+            "approvalDecisionSynthesized",
+            "humanApprovalSatisfied",
+        ],
+    )
+    if approval["approvalPoint"] != delivery["approvalPoint"]:
+        raise ValueError("DeliveryReportV1 approval point must match delivery artifact")
+    if approval["approvalPoint"] not in run["taskSpec"]["approvalPoints"]:
+        raise ValueError("DeliveryReportV1 approval point must be present in TaskSpec")
+    if approval["taskSpecApprovalPoints"] != run["taskSpec"]["approvalPoints"]:
+        raise ValueError("DeliveryReportV1 TaskSpec approval points mismatch")
+    matching_approval_requests = _matching_delivery_approval_requests(ide_approval_handoff, approval["approvalPoint"])
+    if approval["matchingHandoffRequestIds"] != [request["id"] for request in matching_approval_requests]:
+        raise ValueError("DeliveryReportV1 must bind matching IDE approval handoff request ids")
+    if not matching_approval_requests:
+        raise ValueError("DeliveryReportV1 requires an IDE approval handoff request for delivery approval")
+    if approval["approvalDecisionSynthesized"] is not False:
+        raise ValueError("DeliveryReportV1 must not synthesize approval decisions")
+    if approval["humanApprovalSatisfied"] is not False:
+        raise ValueError("DeliveryReportV1 must not synthesize human approval")
+
+    readiness = report["readiness"]
+    _require_fields(
+        "DeliveryReportV1 readiness",
+        readiness,
+        [
+            "verifierStatus",
+            "verifierPassed",
+            "blockingVerifierFailures",
+            "deliveryDraftReady",
+            "readyForHumanReview",
+            "readyForExternalDelivery",
+            "humanApprovalRequired",
+            "humanApprovalSatisfied",
+            "sendEmailAllowed",
+            "externalSideEffectsAllowed",
+            "prCreationAllowed",
+            "deliveryState",
+        ],
+    )
+    if readiness["verifierStatus"] != verifier_report["status"]:
+        raise ValueError("DeliveryReportV1 verifierStatus must match verifier_report")
+    if readiness["verifierPassed"] is not True:
+        raise ValueError("DeliveryReportV1 requires verifierPassed true for the ready draft fixture")
+    if readiness["blockingVerifierFailures"] != verifier_report["blockingFailures"] or readiness["blockingVerifierFailures"]:
+        raise ValueError("DeliveryReportV1 must report no blocking verifier failures")
+    if readiness["deliveryDraftReady"] is not True:
+        raise ValueError("DeliveryReportV1 delivery draft must be ready after verifier passes")
+    if readiness["readyForHumanReview"] is not True:
+        raise ValueError("DeliveryReportV1 must mark the verified draft ready for human review")
+    if readiness["readyForExternalDelivery"] is not False:
+        raise ValueError("DeliveryReportV1 must not mark external delivery ready without human approval")
+    if readiness["humanApprovalRequired"] is not True:
+        raise ValueError("DeliveryReportV1 must require human approval")
+    if readiness["humanApprovalSatisfied"] is not False:
+        raise ValueError("DeliveryReportV1 must not mark human approval satisfied")
+    if readiness["sendEmailAllowed"] is not False:
+        raise ValueError("DeliveryReportV1 must not allow sending email")
+    if readiness["externalSideEffectsAllowed"] is not False:
+        raise ValueError("DeliveryReportV1 must not allow external side effects")
+    if readiness["prCreationAllowed"] is not False:
+        raise ValueError("DeliveryReportV1 must not allow PR creation")
+    if readiness["deliveryState"] != "draft_ready_blocked_until_human_approval":
+        raise ValueError("DeliveryReportV1 deliveryState must remain blocked until human approval")
+    if readiness["sendEmailAllowed"] != delivery["sendEmailAllowed"] or readiness["externalSideEffectsAllowed"] != policy["externalSideEffectsAllowed"]:
+        raise ValueError("DeliveryReportV1 readiness must mirror MultiAgentDeliveryManifestV1 policy")
+
+    blockers = report["blockers"]
+    if not isinstance(blockers, list):
+        raise ValueError("DeliveryReportV1 blockers must be a list")
+    blocker_ids = {blocker.get("id") for blocker in blockers if isinstance(blocker, dict)}
+    for required_blocker in ["human_approval_missing", "external_delivery_disabled_by_mvp_policy"]:
+        if required_blocker not in blocker_ids:
+            raise ValueError(f"DeliveryReportV1 blockers must include {required_blocker}")
+    for blocker in blockers:
+        if not isinstance(blocker, dict):
+            raise ValueError("DeliveryReportV1 blockers must be objects")
+        _require_fields("DeliveryReportV1 blocker", blocker, ["id", "owner", "sourceRef", "message"])
+
+    summary = report["summary"]
+    _require_fields(
+        "DeliveryReportV1 summary",
+        summary,
+        ["decision", "artifactType", "artifactHash", "artifactTextHash", "message"],
+    )
+    if summary["decision"] != "delivery_draft_ready_external_delivery_blocked":
+        raise ValueError("DeliveryReportV1 summary decision must keep external delivery blocked")
+    if summary["artifactType"] != delivery["artifactType"]:
+        raise ValueError("DeliveryReportV1 summary artifact type must match delivery artifact")
+    if summary["artifactHash"] != _stable_file_hash(email_path):
+        raise ValueError("DeliveryReportV1 summary artifact hash mismatch")
+    if summary["artifactTextHash"] != _stable_text_hash(email_path.read_text(encoding="utf-8")):
+        raise ValueError("DeliveryReportV1 summary artifact text hash mismatch")
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="multi-agent-delivery")
     parser.add_argument("--manifest-out", type=Path)
+    parser.add_argument("--delivery-report-out", type=Path)
     parser.add_argument("--run", type=Path, default=Path(DEFAULT_RUN_PATH))
     parser.add_argument("--context-pack", type=Path, default=Path(DEFAULT_CONTEXT_PACK_PATH))
     parser.add_argument("--evidence", type=Path, default=Path(DEFAULT_EVIDENCE_PATH))
@@ -666,6 +978,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--ide-approval-handoff", type=Path, default=Path(DEFAULT_IDE_APPROVAL_HANDOFF_PATH))
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--validate-manifest", type=Path)
+    parser.add_argument("--validate-delivery-report", type=Path)
     return parser.parse_args(argv)
 
 
@@ -688,12 +1001,30 @@ def main(argv: list[str] | None = None) -> int:
         _write_json(args.manifest_out, manifest)
         print(f"Wrote MultiAgentDeliveryManifestV1 artifact to {args.manifest_out}.")
 
+    if args.delivery_report_out:
+        report = build_delivery_report(
+            root / Path(MANIFEST_ARTIFACT_PATH),
+            root / args.run,
+            root / args.verifier_report,
+            root / args.email_draft,
+            root / args.ide_approval_handoff,
+            root,
+        )
+        validate_delivery_report(report, root)
+        _write_json(args.delivery_report_out, report)
+        print(f"Wrote DeliveryReportV1 artifact to {args.delivery_report_out}.")
+
     if args.validate_manifest:
         manifest = _load_json(args.validate_manifest)
         validate_multi_agent_delivery_manifest(manifest, root)
         print(f"Validated MultiAgentDeliveryManifestV1 artifact {args.validate_manifest}.")
 
-    if not any([args.manifest_out, args.validate_manifest]):
+    if args.validate_delivery_report:
+        report = _load_json(args.validate_delivery_report)
+        validate_delivery_report(report, root)
+        print(f"Validated DeliveryReportV1 artifact {args.validate_delivery_report}.")
+
+    if not any([args.manifest_out, args.delivery_report_out, args.validate_manifest, args.validate_delivery_report]):
         raise ValueError("No action requested")
     return 0
 
