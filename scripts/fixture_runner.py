@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+from capability_contract import capability_contract_for
 from task_spec import EXPECTED_ARTIFACTS, build_regression_task_spec, validate_regression_task_spec
 
 
@@ -435,10 +436,30 @@ def run_fixture(fixture: Fixture, out_dir: Path) -> dict:
         "task": fixture.goal,
         "taskSpec": task_spec,
         "steps": [
-            {"id": "step-read-log", "capability": "read_log", "status": "completed"},
-            {"id": "step-extract-regression-result", "capability": "extract_regression_result", "status": "completed"},
-            {"id": "step-write-artifact", "capability": "write_artifact", "status": "completed"},
-            {"id": "step-verify", "capability": "rule_verifier", "status": report_status},
+            {
+                "id": "step-read-log",
+                "capability": "read_log",
+                "capabilityContract": capability_contract_for("read_log"),
+                "status": "completed",
+            },
+            {
+                "id": "step-extract-regression-result",
+                "capability": "extract_regression_result",
+                "capabilityContract": capability_contract_for("extract_regression_result"),
+                "status": "completed",
+            },
+            {
+                "id": "step-write-artifact",
+                "capability": "write_artifact",
+                "capabilityContract": capability_contract_for("write_artifact"),
+                "status": "completed",
+            },
+            {
+                "id": "step-verify",
+                "capability": "rule_verifier",
+                "capabilityContract": capability_contract_for("rule_verifier"),
+                "status": report_status,
+            },
         ],
         "events": [event["id"] for event in events],
         "artifacts": EXPECTED_ARTIFACTS + ["run.json", "events.jsonl", "verifier_report.json"],

@@ -13,7 +13,7 @@ todos:
     status: pending
   - id: define-capability-runtime
     content: 定义 Capability Runtime：标准能力接口、权限等级、超时、输入输出 schema
-    status: pending
+    status: in_progress
   - id: design-context-broker
     content: 设计 Context Broker：上下文检索、压缩、引用来源和 token budget
     status: pending
@@ -732,6 +732,30 @@ Phase 1a 只把这三个名字实现为同进程 deterministic functions；Phase
 
 成功标准：Phase 1a 先用最小 read-only function 子集验证 contract 是否成立；fixture gate 通过后，workflow 才需要不知道底层是 IDE、shell 还是云端 worker，只调用标准 capability。
 
+#### Phase 3 最小 Capability Contract Gate
+
+2026-05-13 04:01 UTC 自动化实现结论：Phase 3 的第一个执行切片不引入 daemon、adapter plugin、HTTP API、SQLite registry 或真实外部工具，而是先把 Phase 1a/1b 已经证明有效的同进程步骤提升为版本化 capability metadata envelope。
+
+最小入口：
+
+```text
+scripts/capability_contract.py
+```
+
+本切片完成后：
+
+- `capability-contract-v1` 固定最小字段：`name`、`permission`、`sideEffect`、`timeoutMs`、`inputSchema`、`outputSchema`、`description`。
+- MVP catalogue 覆盖 `read_log`、`extract_regression_result`、`write_artifact`，并为现有 verifier step 记录内部 `rule_verifier` contract。
+- `run.json.steps[*].capabilityContract` 必须与 catalogue 中的 contract 完全一致，避免 artifact 只有 capability 名称却没有权限、超时和输入输出语义。
+- `scripts/validate_repo.py` 会验证 catalogue、TaskSpec allowed actions 与 run steps，并用 forced-failure 证明缺失或篡改 `capabilityContract` 会被拒绝。
+
+Build vs Integrate：
+
+- Build now：标准库实现的 deterministic metadata catalogue、contract validator、runner step embedding、validation forced-failure gate。
+- Integrate later：正式 plugin registry、adapter discovery、JSON Schema 库、daemon/HTTP API、SQLite capability registry、真实 IDE/shell/CI/CUA provider。
+
+当前 Phase 3 仍未完成：本切片只完成 regression log MVP 的 capability metadata envelope；`read_file`、`search_code`、`run_command`、`get_git_status`、`apply_patch`、`run_test`、`summarize_log`、`request_approval` 的通用 catalogue、policy enforcement 和 adapter mapping 仍后移。
+
 ### Phase 4：Context Broker
 
 把上下文收集从 prompt 里拆出来：
@@ -1433,10 +1457,11 @@ Add forced-failure verifier checks so that python3 scripts/validate_repo.py prov
 5. Intent-to-Spec MVP：已实现 Phase 2 deterministic `RegressionTaskSpecV1` builder / validator / CLI gate，入口为 `python3 scripts/task_spec.py --goal <goal> --input-log-path <log> --out <task_spec.json>`；schema version 为 `regression-task-spec-v1`，fixture runner 和 local read-only runner 均复用该 spec gate。local read-only runner 现在也支持 `--task-spec-path <task_spec.json>`，并在读取日志前拒绝与请求 goal/log 不匹配的 spec。LLM 仍只能作为后续草稿生成器，必须通过同一 schema/rule verifier。
 6. Evidence List + Verifier Runtime：已固化 `LogEvidenceV1`、`RegressionResultArtifactV1`、email grounding 规则和 fixture gate；下一步以 fixture runner 验证规则是否过多或不足。
 7. Local Read-only Runner：已实现 Phase 1b one-shot CLI `python3 scripts/local_readonly_runner.py --log-path <log> --goal <goal> --out-dir <out>`；该 runner 复用 Phase 1a schema、evidence list、email grounding 和 verifier report，`scripts/validate_repo.py` 已加入本地 read-only smoke gate。SQLite event store、daemon、正式 capability registry、真实外部 adapter 和更完整 run state 仍后移。
-8. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
-9. Phase 1a Evidence Intake Review：在 fixture runner 输出完整 artifact packet 前，后续优化只允许维护评分、Decision Log、Open Questions 和 Research Sprint Log；只有 `verifier_report.json` 失败、grounded email 问题、真实脱敏日志差异或 Build vs Integrate 运行证据出现后，才修改正式设计章节。
-10. Evidence Packet Stop Rule：已由 2026-05-12 14:39 UTC artifact packet 解锁；后续修改必须基于 committed `artifacts/runs/*`、`verifier_report.json` failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据，不再无证据扩写 adapter mapping 或正式设计章节。
-11. Phase 1a Verifier Hardening：已实现 deterministic negative validation，`scripts/validate_repo.py` 会验证 malformed schema、missing evidence refs、failure-marker-to-passed tamper 和 pass-style email injection 均被拒绝或生成 failed verifier report。
+8. Capability Contract MVP：已实现 Phase 3 最小 `capability-contract-v1` catalogue，入口为 `scripts/capability_contract.py`；覆盖 `read_log`、`extract_regression_result`、`write_artifact` 和内部 `rule_verifier`，并让 `run.json.steps[*].capabilityContract` 嵌入 permission、sideEffect、timeout 和 input/output schema。`scripts/validate_repo.py` 已验证 catalogue、TaskSpec allowed actions、run step contract，并加入缺失/篡改 capability contract forced-failure gate。正式 adapter registry、plugin discovery、daemon、SQLite 和通用 capability catalogue 仍后移。
+9. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
+10. Phase 1a Evidence Intake Review：在 fixture runner 输出完整 artifact packet 前，后续优化只允许维护评分、Decision Log、Open Questions 和 Research Sprint Log；只有 `verifier_report.json` 失败、grounded email 问题、真实脱敏日志差异或 Build vs Integrate 运行证据出现后，才修改正式设计章节。
+11. Evidence Packet Stop Rule：已由 2026-05-12 14:39 UTC artifact packet 解锁；后续修改必须基于 committed `artifacts/runs/*`、`verifier_report.json` failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据，不再无证据扩写 adapter mapping 或正式设计章节。
+12. Phase 1a Verifier Hardening：已实现 deterministic negative validation，`scripts/validate_repo.py` 会验证 malformed schema、missing evidence refs、failure-marker-to-passed tamper 和 pass-style email injection 均被拒绝或生成 failed verifier report。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -1719,6 +1744,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-13 01:02 UTC：Phase 1b Local Read-only Runner 的首个最小实现已完成；决定将 `scripts/local_readonly_runner.py --log-path <log> --goal <goal> --out-dir <out>` 作为 Phase 1b CLI gate，继续复用 Phase 1a 的 artifact schema、evidence list、email grounding 和 verifier report，不引入 SQLite、daemon、capability registry、CUA、IDE 或外部副作用。
 - 2026-05-13 02:02 UTC：Phase 2 Intent-to-Spec 的首个最小实现已完成；决定将 deterministic `scripts/task_spec.py` 作为 regression 场景 TaskSpec builder / validator / CLI gate，schema version 固定为 `regression-task-spec-v1`，并让 fixture runner 与 local read-only runner 在执行前复用同一 spec validation。LLM intent parser、用户审查 UI 和多场景 spec router 继续后移。
 - 2026-05-13 03:01 UTC：Phase 2 TaskSpec Intake Gate 已实现；决定让 local read-only runner 接收 `--task-spec-path`，并在读取 log 前校验该 spec 与请求 goal/log 匹配，`run.json#taskSpec` 使用传入 spec 原文。Phase 2 regression-log MVP gate 视为满足，下一轮进入 Phase 3 capability interface standardization。
+- 2026-05-13 04:01 UTC：Phase 3 Capability Contract MVP 的首个最小实现已完成；决定将 `capability-contract-v1` metadata envelope 作为 runner step 的机器可验证合约，先覆盖 `read_log`、`extract_regression_result`、`write_artifact` 和内部 `rule_verifier`。正式 capability registry、adapter plugin、daemon、HTTP API、SQLite、IDE/shell/CI/CUA provider discovery 继续后移。
 
 ## 20. Open Questions
 
@@ -1742,6 +1768,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - Phase 1a synthetic fixture artifact packet 已由 `scripts/fixture_runner.py` 生成并由 `scripts/validate_repo.py` 校验；当前默认门槛是先完成 Evidence Review，再决定是否进入 Phase 1b。
 - Phase 1a Evidence Review 的 forced-failure gate 已收敛为 deterministic validation：malformed schema、missing evidence refs、failure marker 被篡改为 passed、负例邮件注入 pass-style claim 都必须失败。
 - Phase 2 regression-log MVP gate 已收敛为 deterministic TaskSpec builder + runner intake：`task_spec.py` 生成审查对象，`local_readonly_runner.py --task-spec-path` 在执行前校验并使用该 spec。
+- Phase 3 regression-log MVP gate 已收敛为 deterministic `capability-contract-v1` metadata catalogue：runner step 必须嵌入并匹配 `read_log`、`extract_regression_result`、`write_artifact` 和内部 `rule_verifier` 的权限、sideEffect、timeout 与 input/output schema。
 
 ### 20.2 仍开放的问题
 
@@ -1761,7 +1788,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 已有 5 个 synthetic fixture artifact packet 后，后续自动化是否应该从 Plan Maintenance 切换为 Evidence Review / implementation loop，并停止追加 no-evidence no-op 日志？
 - Phase 1a verifier hardening 通过 PR / GitHub checks 后，是否足以直接进入 Phase 1b Local Read-only Runner，还是需要先用真实脱敏日志校准 marker 常量？
 - 当前 marker 常量是否对真实脱敏 regression log 足够，还是 Evidence Review 会证明需要新增 project-specific marker 配置？
-- Phase 3 capability interface standardization 的最小 metadata envelope 应包含哪些字段，才能覆盖 `read_log`、`extract_regression_result`、`write_artifact`，但不提前引入正式 registry、daemon 或外部 adapter？
+- Phase 3 的下一步是否应先扩展通用 catalogue（`read_file`、`search_code`、`run_command`、`get_git_status`、`run_test`），还是先把现有 `capability-contract-v1` 接入更明确的 policy / approval checks？
 
 ## 21. Research Sprint Log
 

@@ -24,21 +24,177 @@
   "steps": [
     {
       "capability": "read_log",
+      "capabilityContract": {
+        "description": "Read a local regression log without modifying it.",
+        "inputSchema": {
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "type": "object"
+        },
+        "name": "read_log",
+        "outputSchema": {
+          "properties": {
+            "sourcePath": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "sourcePath",
+            "text"
+          ],
+          "type": "object"
+        },
+        "permission": "read",
+        "schemaVersion": "capability-contract-v1",
+        "sideEffect": false,
+        "timeoutMs": 5000
+      },
       "id": "step-read-log",
       "status": "completed"
     },
     {
       "capability": "extract_regression_result",
+      "capabilityContract": {
+        "description": "Classify regression log markers into evidence and a structured verdict.",
+        "inputSchema": {
+          "properties": {
+            "logText": {
+              "type": "string"
+            },
+            "sourcePath": {
+              "type": "string"
+            },
+            "taskSpec": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "sourcePath",
+            "logText",
+            "taskSpec"
+          ],
+          "type": "object"
+        },
+        "name": "extract_regression_result",
+        "outputSchema": {
+          "properties": {
+            "evidence": {
+              "type": "array"
+            },
+            "evidenceIds": {
+              "type": "array"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "verdict": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "evidence",
+            "verdict",
+            "summary",
+            "evidenceIds"
+          ],
+          "type": "object"
+        },
+        "permission": "read",
+        "schemaVersion": "capability-contract-v1",
+        "sideEffect": false,
+        "timeoutMs": 5000
+      },
       "id": "step-extract-regression-result",
       "status": "completed"
     },
     {
       "capability": "write_artifact",
+      "capabilityContract": {
+        "description": "Write local run artifacts under the selected output directory.",
+        "inputSchema": {
+          "properties": {
+            "artifacts": {
+              "type": "array"
+            },
+            "outDir": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "outDir",
+            "artifacts"
+          ],
+          "type": "object"
+        },
+        "name": "write_artifact",
+        "outputSchema": {
+          "properties": {
+            "writtenArtifacts": {
+              "type": "array"
+            }
+          },
+          "required": [
+            "writtenArtifacts"
+          ],
+          "type": "object"
+        },
+        "permission": "write",
+        "schemaVersion": "capability-contract-v1",
+        "sideEffect": true,
+        "timeoutMs": 5000
+      },
       "id": "step-write-artifact",
       "status": "completed"
     },
     {
       "capability": "rule_verifier",
+      "capabilityContract": {
+        "description": "Verify schema, evidence references, classification precedence, and email grounding.",
+        "inputSchema": {
+          "properties": {
+            "emailDraft": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array"
+            },
+            "regressionResult": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "evidence",
+            "regressionResult",
+            "emailDraft"
+          ],
+          "type": "object"
+        },
+        "name": "rule_verifier",
+        "outputSchema": {
+          "properties": {
+            "verifierReport": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "verifierReport"
+          ],
+          "type": "object"
+        },
+        "permission": "read",
+        "schemaVersion": "capability-contract-v1",
+        "sideEffect": false,
+        "timeoutMs": 5000
+      },
       "id": "step-verify",
       "status": "passed"
     }

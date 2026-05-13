@@ -9,6 +9,13 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from capability_contract import (
+    CAPABILITY_CONTRACT_SCHEMA_VERSION,
+    MVP_CAPABILITY_CATALOG,
+    validate_capability_catalog,
+    validate_run_steps_capabilities,
+    validate_task_spec_capabilities,
+)
 from fixture_runner import load_fixture, stable_hash, verify_artifacts
 from task_spec import TASK_SPEC_SCHEMA_VERSION, build_regression_task_spec, validate_regression_task_spec
 
@@ -75,6 +82,7 @@ REQUIRED_FILES = [
     "scripts/fixture_runner.py",
     "scripts/local_readonly_runner.py",
     "scripts/task_spec.py",
+    "scripts/capability_contract.py",
 ]
 
 PLAN_REQUIRED_MARKERS = [
@@ -85,6 +93,7 @@ PLAN_REQUIRED_MARKERS = [
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
+    "capability-contract-v1",
     "fixtures/regression/",
     "all_passed",
     "failed_tests",
@@ -327,8 +336,13 @@ def validate_schema_structure(
     if not isinstance(run["steps"], list) or not run["steps"]:
         raise AssertionError(f"Fixture {fixture_id} run.steps must be a non-empty list")
     for step in run["steps"]:
-        require_fields(f"{fixture_id} step", step, ["id", "capability", "status"])
+        require_fields(f"{fixture_id} step", step, ["id", "capability", "capabilityContract", "status"])
         require_enum(f"{fixture_id} step.status", step["status"], STEP_STATUSES)
+    try:
+        validate_task_spec_capabilities(task_spec, MVP_CAPABILITY_CATALOG)
+        validate_run_steps_capabilities(run["steps"], MVP_CAPABILITY_CATALOG)
+    except ValueError as exc:
+        raise AssertionError(f"Fixture {fixture_id} capability contract validation failed: {exc}") from exc
 
     require_fields(f"{fixture_id} evidence.json", evidence, ["schemaVersion", "fixtureId", "items"])
     if evidence["schemaVersion"] != "evidence-list-v1":
@@ -514,6 +528,20 @@ def remove_required_report_rule(tampered_dir: Path) -> None:
     write_json(report_path, report)
 
 
+def remove_step_capability_contract(tampered_dir: Path) -> None:
+    run_path = tampered_dir / "all_passed/run.json"
+    run = load_json(run_path)
+    del run["steps"][0]["capabilityContract"]
+    write_json(run_path, run)
+
+
+def tamper_step_capability_contract_permission(tampered_dir: Path) -> None:
+    run_path = tampered_dir / "all_passed/run.json"
+    run = load_json(run_path)
+    run["steps"][0]["capabilityContract"]["permission"] = "dangerous"
+    write_json(run_path, run)
+
+
 def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
     scratch_root.mkdir(parents=True, exist_ok=True)
     expect_artifact_validation_failure(
@@ -536,6 +564,20 @@ def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
         scratch_root,
         remove_required_report_rule,
         "missing rules",
+    )
+    expect_artifact_validation_failure(
+        "missing_capability_contract",
+        source_dir,
+        scratch_root,
+        remove_step_capability_contract,
+        "missing required fields",
+    )
+    expect_artifact_validation_failure(
+        "tampered_capability_contract",
+        source_dir,
+        scratch_root,
+        tamper_step_capability_contract_permission,
+        "capabilityContract must match",
     )
 
 
@@ -605,6 +647,10 @@ def validate_local_readonly_runner(out_dir: Path, task_spec_path: Path) -> None:
 def main() -> None:
     for path in REQUIRED_FILES:
         require_file(path)
+
+    validate_capability_catalog(MVP_CAPABILITY_CATALOG)
+    if CAPABILITY_CONTRACT_SCHEMA_VERSION != "capability-contract-v1":
+        raise AssertionError("Unexpected capability contract schema version")
 
     plan = require_file(".cursor/plans/agentic-control-plane.plan.md")
     automation_prompt = require_file("docs/automation/cloud-automation-prompt.md")
