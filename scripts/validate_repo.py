@@ -18,10 +18,13 @@ from capability_contract import (
 )
 from context_pack import build_context_pack, validate_context_pack
 from computer_runtime import (
+    POLICY_MANIFEST_ARTIFACT_PATH,
     CONTRACT_ARTIFACT_PATH,
     OBSERVATION_ARTIFACT_PATH,
+    build_adapter_policy_manifest,
     build_computer_runtime_contract,
     build_trajectory_observation,
+    validate_adapter_policy_manifest,
     validate_computer_runtime_contract,
     validate_trajectory_observation,
 )
@@ -52,6 +55,7 @@ VERIFIER_RULE_CATALOG_PATH = ROOT / "artifacts/verifier/phase5_verifier_rule_cat
 RECOVERY_FIXTURE_DIR = ROOT / "artifacts/recovery/interrupted_after_extract"
 COMPUTER_RUNTIME_CONTRACT_PATH = ROOT / CONTRACT_ARTIFACT_PATH
 TRAJECTORY_OBSERVATION_PATH = ROOT / OBSERVATION_ARTIFACT_PATH
+ADAPTER_POLICY_MANIFEST_PATH = ROOT / POLICY_MANIFEST_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -111,6 +115,7 @@ REQUIRED_FILES = [
     "artifacts/recovery/interrupted_after_extract/events.jsonl",
     "artifacts/computer_runtime/phase7_computer_runtime_contract.json",
     "artifacts/computer_runtime/phase7_trajectory_observation.json",
+    "artifacts/computer_runtime/phase7_adapter_policy_manifest.json",
 ]
 
 PLAN_REQUIRED_MARKERS = [
@@ -138,6 +143,9 @@ PLAN_REQUIRED_MARKERS = [
     "TrajectoryObservationV1",
     "trajectory-observation-v1",
     "phase7_computer_runtime_contract.json",
+    "AdapterPolicyManifestV1",
+    "adapter-policy-manifest-v1",
+    "phase7_adapter_policy_manifest.json",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -969,6 +977,8 @@ def expect_trajectory_observation_validation_failure(
 def validate_committed_computer_runtime_artifacts() -> None:
     contract = load_json(COMPUTER_RUNTIME_CONTRACT_PATH)
     observation = load_json(TRAJECTORY_OBSERVATION_PATH)
+    policy_manifest = load_json(ADAPTER_POLICY_MANIFEST_PATH)
+    capability_catalog = load_json(CAPABILITY_CATALOG_PATH)
     try:
         validate_computer_runtime_contract(contract)
     except ValueError as exc:
@@ -977,6 +987,10 @@ def validate_committed_computer_runtime_artifacts() -> None:
         validate_trajectory_observation(observation, contract, ROOT)
     except ValueError as exc:
         raise AssertionError(f"Committed TrajectoryObservationV1 artifact failed validation: {exc}") from exc
+    try:
+        validate_adapter_policy_manifest(policy_manifest, contract, capability_catalog, ROOT)
+    except ValueError as exc:
+        raise AssertionError(f"Committed AdapterPolicyManifestV1 artifact failed validation: {exc}") from exc
 
     expected_contract = build_computer_runtime_contract()
     if contract != expected_contract:
@@ -990,6 +1004,14 @@ def validate_committed_computer_runtime_artifacts() -> None:
     )
     if observation != expected_observation:
         raise AssertionError("Committed TrajectoryObservationV1 artifact differs from deterministic builder output")
+
+    expected_policy_manifest = build_adapter_policy_manifest(
+        COMPUTER_RUNTIME_CONTRACT_PATH,
+        CAPABILITY_CATALOG_PATH,
+        ROOT,
+    )
+    if policy_manifest != expected_policy_manifest:
+        raise AssertionError("Committed AdapterPolicyManifestV1 artifact differs from deterministic builder output")
 
     tampered_contract = json.loads(json.dumps(contract))
     tampered_contract["policy"]["externalSideEffectsAllowed"] = True
@@ -1036,8 +1058,53 @@ def validate_committed_computer_runtime_artifacts() -> None:
         "must not declare task verdicts",
     )
 
+    tampered_policy_manifest = json.loads(json.dumps(policy_manifest))
+    for decision in tampered_policy_manifest["decisions"]:
+        if decision["permission"] == "dangerous":
+            decision["scheduleWithoutApproval"] = True
+            break
+    try:
+        validate_adapter_policy_manifest(tampered_policy_manifest, contract, capability_catalog, ROOT)
+    except ValueError as exc:
+        if "dangerous adapter capabilities must not be schedulable without approval" not in str(exc):
+            raise AssertionError(f"AdapterPolicyManifest dangerous forced-failure rejected for the wrong reason: {exc}") from exc
+    else:
+        raise AssertionError("AdapterPolicyManifest forced-failure unexpectedly accepted dangerous unapproved scheduling")
 
-def run_computer_runtime_builder(contract_out: Path, observation_out: Path) -> None:
+    tampered_policy_manifest = json.loads(json.dumps(policy_manifest))
+    tampered_policy_manifest["schedulerPolicy"]["realProviderExecutionAllowed"] = True
+    try:
+        validate_adapter_policy_manifest(tampered_policy_manifest, contract, capability_catalog, ROOT)
+    except ValueError as exc:
+        if "must disallow real provider execution" not in str(exc):
+            raise AssertionError(f"AdapterPolicyManifest provider forced-failure rejected for the wrong reason: {exc}") from exc
+    else:
+        raise AssertionError("AdapterPolicyManifest forced-failure unexpectedly accepted real provider execution")
+
+    tampered_catalog = json.loads(json.dumps(capability_catalog))
+    tampered_catalog["capabilityEnvelope"]["items"].append(
+        {
+            "name": "computer.click",
+            "ref": "computer-runtime://phase7/computer.click",
+        }
+    )
+    tampered_policy_manifest = json.loads(json.dumps(policy_manifest))
+    tampered_policy_manifest["phase3CatalogBoundary"]["registeredRunnerCapabilityRefs"].append(
+        "computer-runtime://phase7/computer.click"
+    )
+    tampered_policy_manifest["phase3CatalogBoundary"]["adapterCapabilitiesInRunnerCatalog"] = [
+        "computer-runtime://phase7/computer.click"
+    ]
+    try:
+        validate_adapter_policy_manifest(tampered_policy_manifest, contract, tampered_catalog, ROOT)
+    except ValueError as exc:
+        if "must not register Phase 7 adapter capabilities" not in str(exc):
+            raise AssertionError(f"AdapterPolicyManifest catalog forced-failure rejected for the wrong reason: {exc}") from exc
+    else:
+        raise AssertionError("AdapterPolicyManifest forced-failure unexpectedly accepted adapter refs in runner catalog")
+
+
+def run_computer_runtime_builder(contract_out: Path, observation_out: Path, policy_manifest_out: Path) -> None:
     command = [
         sys.executable,
         str(ROOT / "scripts/computer_runtime.py"),
@@ -1045,6 +1112,8 @@ def run_computer_runtime_builder(contract_out: Path, observation_out: Path) -> N
         str(contract_out),
         "--observation-out",
         str(observation_out),
+        "--policy-manifest-out",
+        str(policy_manifest_out),
         "--run",
         str(ARTIFACT_DIR / "all_passed/run.json"),
         "--evidence",
@@ -1368,11 +1437,14 @@ def main() -> None:
         compare_interrupted_recovery_fixture(RECOVERY_FIXTURE_DIR, generated_recovery / "interrupted_after_extract")
         generated_computer_contract = temp_root / "phase7_computer_runtime_contract.json"
         generated_trajectory_observation = temp_root / "phase7_trajectory_observation.json"
-        run_computer_runtime_builder(generated_computer_contract, generated_trajectory_observation)
+        generated_policy_manifest = temp_root / "phase7_adapter_policy_manifest.json"
+        run_computer_runtime_builder(generated_computer_contract, generated_trajectory_observation, generated_policy_manifest)
         if load_json(generated_computer_contract) != load_json(COMPUTER_RUNTIME_CONTRACT_PATH):
             raise AssertionError("Committed ComputerRuntimeAdapterV1 contract differs from deterministic CLI output")
         if load_json(generated_trajectory_observation) != load_json(TRAJECTORY_OBSERVATION_PATH):
             raise AssertionError("Committed TrajectoryObservationV1 artifact differs from deterministic CLI output")
+        if load_json(generated_policy_manifest) != load_json(ADAPTER_POLICY_MANIFEST_PATH):
+            raise AssertionError("Committed AdapterPolicyManifestV1 artifact differs from deterministic CLI output")
 
     print("Repository validation passed.")
 

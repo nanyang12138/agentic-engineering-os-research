@@ -11,12 +11,17 @@ from typing import Any
 COMPUTER_RUNTIME_CONTRACT_SCHEMA_VERSION = "computer-runtime-adapter-contract-v1"
 COMPUTER_RUNTIME_CAPABILITY_SCHEMA_VERSION = "computer-runtime-capability-v1"
 TRAJECTORY_OBSERVATION_SCHEMA_VERSION = "trajectory-observation-v1"
+ADAPTER_POLICY_MANIFEST_SCHEMA_VERSION = "adapter-policy-manifest-v1"
+ADAPTER_POLICY_DECISION_SCHEMA_VERSION = "adapter-policy-decision-v1"
 GENERATED_AT = "2026-05-12T14:39:00Z"
 
 CONTRACT_ID = "phase7-static-computer-runtime-contract"
 OBSERVATION_ID = "phase7-static-trajectory-observation-all_passed"
+POLICY_MANIFEST_ID = "phase7-computer-runtime-adapter-policy"
 CONTRACT_ARTIFACT_PATH = "artifacts/computer_runtime/phase7_computer_runtime_contract.json"
 OBSERVATION_ARTIFACT_PATH = "artifacts/computer_runtime/phase7_trajectory_observation.json"
+POLICY_MANIFEST_ARTIFACT_PATH = "artifacts/computer_runtime/phase7_adapter_policy_manifest.json"
+PHASE3_CAPABILITY_CATALOG_PATH = "artifacts/capabilities/phase3_capability_catalog.json"
 ADAPTER_REF = "computer-runtime://phase7/adapter/cua-placeholder"
 CAPABILITY_URI_PREFIX = "computer-runtime://phase7/"
 
@@ -207,6 +212,23 @@ def _require_fields(label: str, payload: dict[str, Any], fields: list[str]) -> N
 def _validate_relative_posix_path(path: str) -> None:
     if Path(path).is_absolute() or "\\" in path or path.startswith("../") or "/../" in path:
         raise ValueError(f"ComputerRuntime paths must be POSIX relative repository paths: {path}")
+
+
+def _capability_catalog_refs(catalog: dict[str, Any]) -> list[str]:
+    _require_fields("CapabilityCatalogV1", catalog, ["schemaVersion", "id", "capabilityEnvelope"])
+    envelope = catalog["capabilityEnvelope"]
+    if not isinstance(envelope, dict):
+        raise ValueError("CapabilityCatalogV1 capabilityEnvelope must be an object")
+    items = envelope.get("items")
+    if not isinstance(items, list) or not items:
+        raise ValueError("CapabilityCatalogV1 capabilityEnvelope.items must be a non-empty list")
+    refs = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise ValueError("CapabilityCatalogV1 capabilityEnvelope.items must be objects")
+        _require_fields("CapabilityCatalogV1 capability", item, ["name", "ref"])
+        refs.append(item["ref"])
+    return refs
 
 
 def build_computer_runtime_contract() -> dict[str, Any]:
@@ -538,16 +560,241 @@ def validate_trajectory_observation(observation: dict[str, Any], contract: dict[
             raise ValueError("TrajectoryObservationV1 observation excerptHash must match EvidenceListV1")
 
 
+def build_adapter_policy_manifest(contract_path: Path, capability_catalog_path: Path, root: Path) -> dict[str, Any]:
+    contract = _load_json(contract_path)
+    validate_computer_runtime_contract(contract)
+    catalog = _load_json(capability_catalog_path)
+    phase3_refs = _capability_catalog_refs(catalog)
+    adapter_refs_in_catalog = [ref for ref in phase3_refs if ref.startswith(CAPABILITY_URI_PREFIX)]
+
+    decisions = []
+    for capability in contract["capabilities"]:
+        dangerous = capability["permission"] == "dangerous" or capability["approvalRequired"] is True
+        decisions.append(
+            {
+                "schemaVersion": ADAPTER_POLICY_DECISION_SCHEMA_VERSION,
+                "capability": capability["name"],
+                "capabilityRef": capability["ref"],
+                "permission": capability["permission"],
+                "approvalRequired": capability["approvalRequired"],
+                "executionMode": capability["executionMode"],
+                "scheduleWithoutApproval": not dangerous,
+                "scheduledByDefault": False,
+                "realProviderExecutionAllowed": False,
+                "externalSideEffectAllowed": False,
+                "schedulerDecision": "blocked_requires_approval" if dangerous else "contract_only_allowed_without_approval",
+            }
+        )
+
+    return {
+        "schemaVersion": ADAPTER_POLICY_MANIFEST_SCHEMA_VERSION,
+        "id": POLICY_MANIFEST_ID,
+        "phase": "phase7",
+        "scope": "computer_runtime_permission_overlay",
+        "generatedAt": GENERATED_AT,
+        "sourceArtifacts": [
+            _artifact_source("computer_runtime_contract", contract_path, root),
+            _artifact_source("phase3_capability_catalog", capability_catalog_path, root),
+        ],
+        "schedulerPolicy": {
+            "schemaVersion": "permission-policy-v1",
+            "mode": "phase7_adapter_policy_overlay",
+            "externalSideEffectsAllowed": False,
+            "realProviderExecutionAllowed": False,
+            "dangerousCapabilitiesRequireApproval": True,
+            "unapprovedDangerousDecision": "block",
+        },
+        "phase3CatalogBoundary": {
+            "catalogRef": PHASE3_CAPABILITY_CATALOG_PATH,
+            "registeredRunnerCapabilityRefs": phase3_refs,
+            "adapterCapabilityRefPrefix": CAPABILITY_URI_PREFIX,
+            "adapterCapabilitiesInRunnerCatalog": adapter_refs_in_catalog,
+        },
+        "blockedDangerousCapabilityRefs": [
+            capability["ref"]
+            for capability in contract["capabilities"]
+            if capability["permission"] == "dangerous" or capability["approvalRequired"] is True
+        ],
+        "decisions": decisions,
+        "invariants": [
+            "Phase 7 adapter capabilities are not registered in the Phase 3 regression runner catalogue.",
+            "Dangerous computer and sandbox capabilities must be blocked unless an approval policy explicitly authorizes them.",
+            "Real CUA, GUI, desktop, browser, shell, and sandbox providers remain disabled in this MVP slice.",
+        ],
+    }
+
+
+def validate_adapter_policy_manifest(
+    manifest: dict[str, Any],
+    contract: dict[str, Any],
+    capability_catalog: dict[str, Any],
+    root: Path,
+) -> None:
+    validate_computer_runtime_contract(contract)
+    phase3_refs = _capability_catalog_refs(capability_catalog)
+    _require_fields(
+        "AdapterPolicyManifestV1",
+        manifest,
+        [
+            "schemaVersion",
+            "id",
+            "phase",
+            "scope",
+            "sourceArtifacts",
+            "schedulerPolicy",
+            "phase3CatalogBoundary",
+            "blockedDangerousCapabilityRefs",
+            "decisions",
+            "invariants",
+        ],
+    )
+    if manifest["schemaVersion"] != ADAPTER_POLICY_MANIFEST_SCHEMA_VERSION:
+        raise ValueError(f"AdapterPolicyManifestV1 schemaVersion must be {ADAPTER_POLICY_MANIFEST_SCHEMA_VERSION}")
+    if manifest["id"] != POLICY_MANIFEST_ID:
+        raise ValueError(f"AdapterPolicyManifestV1 id must be {POLICY_MANIFEST_ID}")
+    if manifest["phase"] != "phase7":
+        raise ValueError("AdapterPolicyManifestV1 phase must be phase7")
+    if manifest["scope"] != "computer_runtime_permission_overlay":
+        raise ValueError("AdapterPolicyManifestV1 scope must be computer_runtime_permission_overlay")
+
+    source_artifacts = manifest["sourceArtifacts"]
+    if not isinstance(source_artifacts, list) or len(source_artifacts) != 2:
+        raise ValueError("AdapterPolicyManifestV1 sourceArtifacts must contain contract and capability catalog")
+    sources_by_role: dict[str, dict[str, Any]] = {}
+    for source in source_artifacts:
+        if not isinstance(source, dict):
+            raise ValueError("AdapterPolicyManifestV1 sourceArtifacts must be objects")
+        _require_fields("AdapterPolicyManifestV1 source artifact", source, ["role", "path", "contentHash"])
+        _validate_relative_posix_path(source["path"])
+        source_path = root / source["path"]
+        if not source_path.is_file():
+            raise ValueError(f"AdapterPolicyManifestV1 source artifact does not exist: {source['path']}")
+        if _stable_file_hash(source_path) != source["contentHash"]:
+            raise ValueError(f"AdapterPolicyManifestV1 source hash mismatch for {source['path']}")
+        sources_by_role[source["role"]] = source
+    if set(sources_by_role) != {"computer_runtime_contract", "phase3_capability_catalog"}:
+        raise ValueError("AdapterPolicyManifestV1 source roles must be contract and capability catalog")
+    if sources_by_role["computer_runtime_contract"]["path"] != CONTRACT_ARTIFACT_PATH:
+        raise ValueError(f"AdapterPolicyManifestV1 contract source must be {CONTRACT_ARTIFACT_PATH}")
+    if sources_by_role["phase3_capability_catalog"]["path"] != PHASE3_CAPABILITY_CATALOG_PATH:
+        raise ValueError(f"AdapterPolicyManifestV1 capability catalog source must be {PHASE3_CAPABILITY_CATALOG_PATH}")
+
+    policy = manifest["schedulerPolicy"]
+    _require_fields(
+        "AdapterPolicyManifestV1 schedulerPolicy",
+        policy,
+        [
+            "schemaVersion",
+            "mode",
+            "externalSideEffectsAllowed",
+            "realProviderExecutionAllowed",
+            "dangerousCapabilitiesRequireApproval",
+            "unapprovedDangerousDecision",
+        ],
+    )
+    if policy["schemaVersion"] != "permission-policy-v1":
+        raise ValueError("AdapterPolicyManifestV1 schedulerPolicy must reference permission-policy-v1")
+    if policy["mode"] != "phase7_adapter_policy_overlay":
+        raise ValueError("AdapterPolicyManifestV1 schedulerPolicy mode must be phase7_adapter_policy_overlay")
+    if policy["externalSideEffectsAllowed"] is not False:
+        raise ValueError("AdapterPolicyManifestV1 schedulerPolicy must disallow external side effects")
+    if policy["realProviderExecutionAllowed"] is not False:
+        raise ValueError("AdapterPolicyManifestV1 schedulerPolicy must disallow real provider execution")
+    if policy["dangerousCapabilitiesRequireApproval"] is not True:
+        raise ValueError("AdapterPolicyManifestV1 schedulerPolicy must require dangerous capability approval")
+    if policy["unapprovedDangerousDecision"] != "block":
+        raise ValueError("AdapterPolicyManifestV1 unapproved dangerous decision must be block")
+
+    boundary = manifest["phase3CatalogBoundary"]
+    _require_fields(
+        "AdapterPolicyManifestV1 phase3CatalogBoundary",
+        boundary,
+        [
+            "catalogRef",
+            "registeredRunnerCapabilityRefs",
+            "adapterCapabilityRefPrefix",
+            "adapterCapabilitiesInRunnerCatalog",
+        ],
+    )
+    if boundary["catalogRef"] != PHASE3_CAPABILITY_CATALOG_PATH:
+        raise ValueError("AdapterPolicyManifestV1 phase3 catalogRef mismatch")
+    if boundary["registeredRunnerCapabilityRefs"] != phase3_refs:
+        raise ValueError("AdapterPolicyManifestV1 registered runner refs must mirror Phase 3 capability catalog")
+    if boundary["adapterCapabilityRefPrefix"] != CAPABILITY_URI_PREFIX:
+        raise ValueError("AdapterPolicyManifestV1 adapterCapabilityRefPrefix mismatch")
+    adapter_refs_in_catalog = [ref for ref in phase3_refs if ref.startswith(CAPABILITY_URI_PREFIX)]
+    if boundary["adapterCapabilitiesInRunnerCatalog"] != adapter_refs_in_catalog:
+        raise ValueError("AdapterPolicyManifestV1 adapter catalog overlap must be derived from Phase 3 catalog")
+    if adapter_refs_in_catalog:
+        raise ValueError("AdapterPolicyManifestV1 must not register Phase 7 adapter capabilities in the Phase 3 runner catalog")
+
+    expected_blocked_refs = [
+        capability["ref"]
+        for capability in contract["capabilities"]
+        if capability["permission"] == "dangerous" or capability["approvalRequired"] is True
+    ]
+    if manifest["blockedDangerousCapabilityRefs"] != expected_blocked_refs:
+        raise ValueError("AdapterPolicyManifestV1 blocked dangerous refs must match ComputerRuntimeAdapterV1")
+
+    decisions = manifest["decisions"]
+    if not isinstance(decisions, list) or len(decisions) != len(contract["capabilities"]):
+        raise ValueError("AdapterPolicyManifestV1 decisions must mirror ComputerRuntimeAdapterV1 capabilities")
+    for decision, capability in zip(decisions, contract["capabilities"]):
+        _require_fields(
+            "AdapterPolicyManifestV1 decision",
+            decision,
+            [
+                "schemaVersion",
+                "capability",
+                "capabilityRef",
+                "permission",
+                "approvalRequired",
+                "executionMode",
+                "scheduleWithoutApproval",
+                "scheduledByDefault",
+                "realProviderExecutionAllowed",
+                "externalSideEffectAllowed",
+                "schedulerDecision",
+            ],
+        )
+        if decision["schemaVersion"] != ADAPTER_POLICY_DECISION_SCHEMA_VERSION:
+            raise ValueError("AdapterPolicyManifestV1 decision schemaVersion mismatch")
+        for field in ["capability", "capabilityRef", "permission", "approvalRequired", "executionMode"]:
+            expected = capability["name"] if field == "capability" else capability["ref"] if field == "capabilityRef" else capability[field]
+            if decision[field] != expected:
+                raise ValueError(f"AdapterPolicyManifestV1 decision {field} must match ComputerRuntimeAdapterV1")
+        if decision["scheduledByDefault"] is not False:
+            raise ValueError("AdapterPolicyManifestV1 adapter capabilities must not be scheduled by default")
+        if decision["realProviderExecutionAllowed"] is not False:
+            raise ValueError("AdapterPolicyManifestV1 decisions must disallow real provider execution")
+        if decision["externalSideEffectAllowed"] is not False:
+            raise ValueError("AdapterPolicyManifestV1 decisions must disallow external side effects")
+        dangerous = capability["permission"] == "dangerous" or capability["approvalRequired"] is True
+        if dangerous:
+            if decision["scheduleWithoutApproval"] is not False:
+                raise ValueError("AdapterPolicyManifestV1 dangerous adapter capabilities must not be schedulable without approval")
+            if decision["schedulerDecision"] != "blocked_requires_approval":
+                raise ValueError("AdapterPolicyManifestV1 dangerous schedulerDecision must be blocked_requires_approval")
+        else:
+            if decision["scheduleWithoutApproval"] is not True:
+                raise ValueError("AdapterPolicyManifestV1 read-only contract capabilities should be schedulable without approval")
+            if decision["schedulerDecision"] != "contract_only_allowed_without_approval":
+                raise ValueError("AdapterPolicyManifestV1 read-only schedulerDecision must be contract_only_allowed_without_approval")
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="computer-runtime-contract")
     parser.add_argument("--contract-out", type=Path)
     parser.add_argument("--observation-out", type=Path)
+    parser.add_argument("--policy-manifest-out", type=Path)
     parser.add_argument("--run", type=Path)
     parser.add_argument("--evidence", type=Path)
     parser.add_argument("--events", type=Path)
     parser.add_argument("--root", type=Path, default=Path.cwd())
+    parser.add_argument("--capability-catalog", type=Path, default=Path(PHASE3_CAPABILITY_CATALOG_PATH))
     parser.add_argument("--validate-contract", type=Path)
     parser.add_argument("--validate-observation", type=Path)
+    parser.add_argument("--validate-policy-manifest", type=Path)
     return parser.parse_args(argv)
 
 
@@ -571,6 +818,11 @@ def main(argv: list[str] | None = None) -> int:
         _write_json(args.observation_out, observation)
         print(f"Wrote TrajectoryObservationV1 artifact to {args.observation_out}.")
 
+    if args.policy_manifest_out:
+        policy_manifest = build_adapter_policy_manifest(root / CONTRACT_ARTIFACT_PATH, root / args.capability_catalog, root)
+        _write_json(args.policy_manifest_out, policy_manifest)
+        print(f"Wrote AdapterPolicyManifestV1 artifact to {args.policy_manifest_out}.")
+
     if args.validate_contract:
         contract = _load_json(args.validate_contract)
         validate_computer_runtime_contract(contract)
@@ -583,7 +835,24 @@ def main(argv: list[str] | None = None) -> int:
         validate_trajectory_observation(observation, contract, root)
         print(f"Validated TrajectoryObservationV1 artifact {args.validate_observation}.")
 
-    if not any([args.contract_out, args.observation_out, args.validate_contract, args.validate_observation]):
+    if args.validate_policy_manifest:
+        contract_path = args.validate_contract or (root / CONTRACT_ARTIFACT_PATH)
+        contract = _load_json(contract_path)
+        catalog = _load_json(root / args.capability_catalog)
+        policy_manifest = _load_json(args.validate_policy_manifest)
+        validate_adapter_policy_manifest(policy_manifest, contract, catalog, root)
+        print(f"Validated AdapterPolicyManifestV1 artifact {args.validate_policy_manifest}.")
+
+    if not any(
+        [
+            args.contract_out,
+            args.observation_out,
+            args.policy_manifest_out,
+            args.validate_contract,
+            args.validate_observation,
+            args.validate_policy_manifest,
+        ]
+    ):
         raise ValueError("No action requested")
     return 0
 

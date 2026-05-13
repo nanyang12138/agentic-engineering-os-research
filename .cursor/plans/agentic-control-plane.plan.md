@@ -1048,6 +1048,25 @@ Build vs Integrate：
 
 当前 Phase 7 已启动但未完成：本 gate 固化了 CUA/Computer Runtime 作为底层 adapter 的边界，以及 trajectory -> observation/evidence 的最小 artifact contract。下一步应把该 contract 与 capability catalogue / policy gate 连接，例如新增只读 `computer_runtime` catalogue refs 或 adapter policy manifest，仍不执行真实 GUI 自动化或外部 side effect。
 
+#### Phase 7 AdapterPolicyManifestV1 Permission Overlay Gate
+
+2026-05-13 14:15 UTC 自动化实现结论：Phase 7 的第二步不是把 `computer.*` capability 注册进现有 regression runner，也不是接入真实 CUA/GUI provider，而是在静态 `ComputerRuntimeAdapterV1` 之上新增 `AdapterPolicyManifestV1` permission overlay。该 overlay 把 Phase 7 adapter contract 与 Phase 3 capability catalogue / Phase 6 `permission-policy-v1` 调度语义连接起来，证明 dangerous computer/sandbox capability 在没有显式 approval policy 时必须被 block。
+
+最小 AdapterPolicyManifestV1 contract：
+
+- `artifacts/computer_runtime/phase7_adapter_policy_manifest.json` 采用 `adapter-policy-manifest-v1`，引用 `phase7_computer_runtime_contract.json` 和 `phase3_capability_catalog.json`，并记录两者 content hash。
+- `schedulerPolicy.schemaVersion="permission-policy-v1"`、`realProviderExecutionAllowed=false`、`externalSideEffectsAllowed=false`、`dangerousCapabilitiesRequireApproval=true`、`unapprovedDangerousDecision="block"`。
+- `phase3CatalogBoundary` 证明当前 Phase 3 regression runner catalogue 仍只包含 `capability://phase3/*`，没有混入 `computer-runtime://phase7/*` adapter refs。
+- `decisions[]` 为每个 `ComputerRuntimeAdapterV1` capability 生成调度决策：`computer.click`、`computer.type`、`computer.run_shell`、`sandbox.session` 必须 `scheduleWithoutApproval=false` 且 `schedulerDecision="blocked_requires_approval"`；只读 `computer.screenshot` 和 `trajectory.record` 仅允许 contract-only decision，仍不允许 real provider execution。
+- validator 拒绝三类关键错误：dangerous capability 未审批即可调度、real provider execution 被打开、Phase 7 adapter capability 被注册进 Phase 3 runner catalogue。
+
+Build vs Integrate：
+
+- Build：Phase 7 最小 adapter policy manifest、permission-policy overlay validation、catalog boundary validation 和 forced-failure cases。
+- Integrate later：真实 approval backend、provider registry、CUA/desktop/sandbox runtime scheduling、redaction policy executor、trajectory replay 和 runtime health checks。
+
+当前 Phase 7 MVP gate 进一步收敛：Computer Runtime 已具备静态 adapter contract、trajectory observation artifact 和 adapter policy overlay。Phase 7 仍未完成真实 provider integration；下一步可以补一个更细的 observation redaction/source policy，或在计划明确接受 contract-only Phase 7 MVP 后进入 Phase 8 IDE Adapter。
+
 ### Phase 8：IDE Adapter
 
 再把 IDE 接进来，而不是一开始绑定 IDE：
@@ -3964,6 +3983,77 @@ git diff --check
 ```text
 继续 Phase 7：
 把 ComputerRuntimeAdapterV1 与现有 capability catalogue / permission policy 连接，例如新增 Phase 7 adapter policy manifest 或 capability catalogue refs，并用 validation 证明 dangerous computer/sandbox capabilities 在未批准时不可被 RunControl 调度；仍不要执行真实 GUI/CUA side effect。
+```
+
+### 2026-05-13 14:15 UTC Automation Implementation Log - Phase 7 AdapterPolicyManifestV1 Permission Overlay Gate
+
+Active phase：
+
+```text
+Phase 7: Computer Runtime and CUA Adapter
+```
+
+Selected slice：
+
+```text
+Add a Phase 7 AdapterPolicyManifestV1 so that /usr/bin/python3 scripts/validate_repo.py proves dangerous computer/sandbox adapter capabilities are blocked without approval.
+```
+
+为什么这是下一步：Phase 7 已经完成 static `ComputerRuntimeAdapterV1` contract 和 evidence-bound `TrajectoryObservationV1` artifact。计划明确要求下一步把该 contract 与 capability catalogue / permission policy gate 连接；因此本切片只新增调度权限 overlay，不把 Phase 7 adapter 注册进当前 runner，也不执行真实 GUI、desktop、browser、sandbox、shell 或 CUA provider。
+
+实现摘要：
+
+- `scripts/computer_runtime.py` 新增 `adapter-policy-manifest-v1` / `AdapterPolicyManifestV1` builder、validator 和 CLI。
+- 新增 committed `artifacts/computer_runtime/phase7_adapter_policy_manifest.json`，引用 Phase 7 contract 与 Phase 3 capability catalogue source hash。
+- manifest 声明 `permission-policy-v1` overlay：dangerous capability 未审批时必须 block，real provider execution 和 external side effects 均为 false。
+- `scripts/validate_repo.py` 校验 committed manifest、deterministic CLI 输出，并加入 forced-failure：dangerous capability `scheduleWithoutApproval=true`、打开 real provider execution、Phase 7 ref 混入 Phase 3 runner catalogue。
+
+验收标准：
+
+- `phase7_adapter_policy_manifest.json` 可 deterministic 生成并通过 validation：通过。
+- manifest 绑定 `phase7_computer_runtime_contract.json` 与 `phase3_capability_catalog.json` 的 POSIX 相对路径和 content hash：通过。
+- validator 拒绝未审批 dangerous computer/sandbox capability 调度、真实 provider execution 和 Phase 7 ref 注册进 Phase 3 runner catalogue：通过。
+- 不执行 GUI、desktop、browser、sandbox、shell、CUA provider 或外部 side effect：通过。
+
+验证命令：
+
+```text
+/usr/bin/python3 -m py_compile scripts/*.py
+/usr/bin/python3 scripts/validate_repo.py
+/usr/bin/python3 scripts/computer_runtime.py --validate-contract artifacts/computer_runtime/phase7_computer_runtime_contract.json --validate-observation artifacts/computer_runtime/phase7_trajectory_observation.json --validate-policy-manifest artifacts/computer_runtime/phase7_adapter_policy_manifest.json
+/usr/bin/python3 scripts/computer_runtime.py --contract-out /tmp/phase7_policy_contract.json --observation-out /tmp/phase7_policy_observation.json --policy-manifest-out /tmp/phase7_policy_manifest.json --run artifacts/runs/all_passed/run.json --evidence artifacts/runs/all_passed/evidence.json --events artifacts/runs/all_passed/events.jsonl
+/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase7-policy-fixture-smoke
+/usr/bin/python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase7-policy-task-spec.json
+/usr/bin/python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --out-dir /tmp/phase7-policy-local-smoke --task-spec-path /tmp/phase7-policy-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json
+git diff --check
+```
+
+验证结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- 首次 `/usr/bin/python3 -m py_compile scripts/*.py && /usr/bin/python3 scripts/validate_repo.py`：py_compile 通过；validate 失败，原因是主计划尚未包含新 Phase 7 policy manifest required markers；已通过本日志和 Phase 7 正文更新修复。
+- 修复后 `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- 修复后 `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 AdapterPolicyManifestV1 committed artifact、deterministic builder、dangerous unapproved scheduling / real provider execution / adapter refs in runner catalog forced-failure cases。
+- `/usr/bin/python3 scripts/computer_runtime.py --validate-contract ... --validate-observation ... --validate-policy-manifest ...`：通过。
+- `/usr/bin/python3 scripts/computer_runtime.py --contract-out /tmp/phase7_policy_contract.json --observation-out /tmp/phase7_policy_observation.json --policy-manifest-out /tmp/phase7_policy_manifest.json ...`：通过，可 deterministic 生成 Phase 7 contract、observation 和 policy manifest artifacts。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase7-policy-fixture-smoke`：通过。
+- `/usr/bin/python3 scripts/task_spec.py ... --out /tmp/phase7-policy-task-spec.json`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json ...`：通过。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- AdapterPolicyManifestV1 仍是 contract-only permission overlay，不是 provider registry、approval backend 或 scheduler runtime。
+- 只证明 dangerous adapter capability 未审批时被 block；真实审批、redaction、screen observation privacy 和 trajectory replay 后移。
+- Phase 7 adapter capability 仍未进入 Phase 3 runner catalogue，避免 regression MVP 误调真实 computer runtime。
+
+下一轮建议：
+
+```text
+继续 Phase 7：
+新增最小 observation redaction/source policy，规定 screenshot/trajectory observation 必须声明 redaction boundary 和 Evidence/Verifier ownership；或者记录决策认为 Phase 7 contract-only MVP 已足以进入 Phase 8 IDE Adapter。
 ```
 
 ## 22. Parking Lot

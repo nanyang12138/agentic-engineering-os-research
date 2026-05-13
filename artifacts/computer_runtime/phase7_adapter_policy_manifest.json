@@ -1,0 +1,129 @@
+{
+  "blockedDangerousCapabilityRefs": [
+    "computer-runtime://phase7/computer.click",
+    "computer-runtime://phase7/computer.type",
+    "computer-runtime://phase7/computer.run_shell",
+    "computer-runtime://phase7/sandbox.session"
+  ],
+  "decisions": [
+    {
+      "approvalRequired": false,
+      "capability": "computer.screenshot",
+      "capabilityRef": "computer-runtime://phase7/computer.screenshot",
+      "executionMode": "contract_only",
+      "externalSideEffectAllowed": false,
+      "permission": "read",
+      "realProviderExecutionAllowed": false,
+      "scheduleWithoutApproval": true,
+      "scheduledByDefault": false,
+      "schedulerDecision": "contract_only_allowed_without_approval",
+      "schemaVersion": "adapter-policy-decision-v1"
+    },
+    {
+      "approvalRequired": true,
+      "capability": "computer.click",
+      "capabilityRef": "computer-runtime://phase7/computer.click",
+      "executionMode": "contract_only",
+      "externalSideEffectAllowed": false,
+      "permission": "dangerous",
+      "realProviderExecutionAllowed": false,
+      "scheduleWithoutApproval": false,
+      "scheduledByDefault": false,
+      "schedulerDecision": "blocked_requires_approval",
+      "schemaVersion": "adapter-policy-decision-v1"
+    },
+    {
+      "approvalRequired": true,
+      "capability": "computer.type",
+      "capabilityRef": "computer-runtime://phase7/computer.type",
+      "executionMode": "contract_only",
+      "externalSideEffectAllowed": false,
+      "permission": "dangerous",
+      "realProviderExecutionAllowed": false,
+      "scheduleWithoutApproval": false,
+      "scheduledByDefault": false,
+      "schedulerDecision": "blocked_requires_approval",
+      "schemaVersion": "adapter-policy-decision-v1"
+    },
+    {
+      "approvalRequired": true,
+      "capability": "computer.run_shell",
+      "capabilityRef": "computer-runtime://phase7/computer.run_shell",
+      "executionMode": "contract_only",
+      "externalSideEffectAllowed": false,
+      "permission": "dangerous",
+      "realProviderExecutionAllowed": false,
+      "scheduleWithoutApproval": false,
+      "scheduledByDefault": false,
+      "schedulerDecision": "blocked_requires_approval",
+      "schemaVersion": "adapter-policy-decision-v1"
+    },
+    {
+      "approvalRequired": true,
+      "capability": "sandbox.session",
+      "capabilityRef": "computer-runtime://phase7/sandbox.session",
+      "executionMode": "contract_only",
+      "externalSideEffectAllowed": false,
+      "permission": "dangerous",
+      "realProviderExecutionAllowed": false,
+      "scheduleWithoutApproval": false,
+      "scheduledByDefault": false,
+      "schedulerDecision": "blocked_requires_approval",
+      "schemaVersion": "adapter-policy-decision-v1"
+    },
+    {
+      "approvalRequired": false,
+      "capability": "trajectory.record",
+      "capabilityRef": "computer-runtime://phase7/trajectory.record",
+      "executionMode": "contract_only",
+      "externalSideEffectAllowed": false,
+      "permission": "read",
+      "realProviderExecutionAllowed": false,
+      "scheduleWithoutApproval": true,
+      "scheduledByDefault": false,
+      "schedulerDecision": "contract_only_allowed_without_approval",
+      "schemaVersion": "adapter-policy-decision-v1"
+    }
+  ],
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "phase7-computer-runtime-adapter-policy",
+  "invariants": [
+    "Phase 7 adapter capabilities are not registered in the Phase 3 regression runner catalogue.",
+    "Dangerous computer and sandbox capabilities must be blocked unless an approval policy explicitly authorizes them.",
+    "Real CUA, GUI, desktop, browser, shell, and sandbox providers remain disabled in this MVP slice."
+  ],
+  "phase": "phase7",
+  "phase3CatalogBoundary": {
+    "adapterCapabilitiesInRunnerCatalog": [],
+    "adapterCapabilityRefPrefix": "computer-runtime://phase7/",
+    "catalogRef": "artifacts/capabilities/phase3_capability_catalog.json",
+    "registeredRunnerCapabilityRefs": [
+      "capability://phase3/read_log",
+      "capability://phase3/extract_regression_result",
+      "capability://phase3/write_artifact",
+      "capability://phase3/rule_verifier"
+    ]
+  },
+  "schedulerPolicy": {
+    "dangerousCapabilitiesRequireApproval": true,
+    "externalSideEffectsAllowed": false,
+    "mode": "phase7_adapter_policy_overlay",
+    "realProviderExecutionAllowed": false,
+    "schemaVersion": "permission-policy-v1",
+    "unapprovedDangerousDecision": "block"
+  },
+  "schemaVersion": "adapter-policy-manifest-v1",
+  "scope": "computer_runtime_permission_overlay",
+  "sourceArtifacts": [
+    {
+      "contentHash": "d42cae527d8970d7678cb78e86ba1cc72f49890283c93011bfecbf7097a0738f",
+      "path": "artifacts/computer_runtime/phase7_computer_runtime_contract.json",
+      "role": "computer_runtime_contract"
+    },
+    {
+      "contentHash": "531bbbbb30b4793d94effe78c4e1ce37d79ceb0f53b5c3da9d652f7ecf465d1a",
+      "path": "artifacts/capabilities/phase3_capability_catalog.json",
+      "role": "phase3_capability_catalog"
+    }
+  ]
+}
