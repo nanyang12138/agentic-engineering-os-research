@@ -3176,7 +3176,14 @@ git diff --check
 验证结果：
 
 ```text
-待本轮本地验证命令完成后更新。
+- `python scripts/validate_repo.py`：本地镜像缺少 `python` 命令，返回 command not found；GitHub Actions 的 setup-python 环境预期提供 `python`。
+- `python3 scripts/validate_repo.py`：通过，覆盖 Phase 1a fixture/schema/verifier gate、Phase 1b local read-only smoke、Phase 2 TaskSpec gate、Phase 3 run/event capability refs，以及独立 capability catalogue deterministic/forced-failure validation。
+- `python3 -m py_compile scripts/capability_contract.py scripts/fixture_runner.py scripts/validate_repo.py scripts/local_readonly_runner.py scripts/task_spec.py`：通过。
+- `python3 scripts/capability_contract.py --out /tmp/phase3-capability-catalog.json`：通过，生成 deterministic catalogue。
+- `python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase3-catalog-fixtures`：通过，处理 5 个 fixtures。
+- `python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase3-catalog-task-spec.json`：通过。
+- `python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --task-spec-path /tmp/phase3-catalog-task-spec.json --out-dir /tmp/phase3-catalog-local`：通过。
+- `git diff --check`：通过。
 ```
 
 剩余风险：
