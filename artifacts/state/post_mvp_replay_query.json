@@ -1,0 +1,153 @@
+{
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "post-mvp-replay-query-fixture-all_passed",
+  "invariants": [
+    "ReplayQueryV1 answers are derived from DurableRunStoreV1 and committed source artifacts only.",
+    "Replay queries must not grant approval, send email, mutate workspace state, or enable external delivery.",
+    "Event query results preserve append-only event order and source content hashes."
+  ],
+  "mode": "static_json_query_only",
+  "phase": "post_mvp",
+  "queries": [
+    {
+      "input": {
+        "runId": "run-all_passed-988940c2"
+      },
+      "queryId": "query-run-state-by-id",
+      "queryType": "run_state_by_id",
+      "result": {
+        "currentState": "completed",
+        "eventCount": 7,
+        "fixtureId": "all_passed",
+        "lastEventId": "event-all_passed-007",
+        "nextAction": "none_terminal",
+        "recoveryMode": "terminal_replay_only",
+        "runId": "run-all_passed-988940c2",
+        "runStatus": "completed",
+        "terminal": true
+      },
+      "sourceRefs": [
+        "artifacts/state/post_mvp_durable_run_store.json",
+        "artifacts/runs/all_passed/run.json",
+        "artifacts/runs/all_passed/events.jsonl"
+      ]
+    },
+    {
+      "input": {
+        "runId": "run-all_passed-988940c2"
+      },
+      "queryId": "query-delivery-readiness-by-run-id",
+      "queryType": "delivery_readiness_by_run_id",
+      "result": {
+        "blockers": [
+          "human_approval_missing",
+          "external_delivery_disabled_by_mvp_policy"
+        ],
+        "deliveryReportId": "phase9-delivery-report-all_passed",
+        "externalSideEffectsAllowed": false,
+        "readyForExternalDelivery": false,
+        "readyForHumanReview": true,
+        "sendEmailAllowed": false
+      },
+      "sourceRefs": [
+        "artifacts/state/post_mvp_durable_run_store.json",
+        "artifacts/delivery/phase9_delivery_report.json"
+      ]
+    },
+    {
+      "input": {
+        "runId": "run-all_passed-988940c2"
+      },
+      "queryId": "query-approval-decision-by-run-id",
+      "queryType": "approval_decision_by_run_id",
+      "result": {
+        "approvalDecisionSynthesized": false,
+        "approvalGranted": false,
+        "decisionId": "human-decision-all_passed-send-email-rejected",
+        "externalDeliveryAllowed": false,
+        "externalSideEffectsAllowed": false,
+        "humanDecisionRecorded": true,
+        "postDecisionBlockers": [
+          "human_approval_not_granted",
+          "external_delivery_disabled_by_mvp_policy"
+        ],
+        "sendEmailAllowed": false,
+        "taskVerdictOverrideAllowed": false
+      },
+      "sourceRefs": [
+        "artifacts/state/post_mvp_durable_run_store.json",
+        "artifacts/approval/phase9_human_approval_decision_fixture.json"
+      ]
+    },
+    {
+      "input": {
+        "runId": "run-all_passed-988940c2",
+        "tailCount": 3
+      },
+      "queryId": "query-event-log-tail-by-run-id",
+      "queryType": "event_log_tail_by_run_id",
+      "result": {
+        "appendOnlyEventIds": [
+          "event-all_passed-001",
+          "event-all_passed-002",
+          "event-all_passed-003",
+          "event-all_passed-004",
+          "event-all_passed-005",
+          "event-all_passed-006",
+          "event-all_passed-007"
+        ],
+        "eventCount": 7,
+        "eventLogContentHash": "02f5a82d1765a4443aae0d3c50502e7ee0ae6e3dcd1c2201b6e2a83daae4a6fc",
+        "lastEventId": "event-all_passed-007",
+        "tailEventIds": [
+          "event-all_passed-005",
+          "event-all_passed-006",
+          "event-all_passed-007"
+        ]
+      },
+      "sourceRefs": [
+        "artifacts/state/post_mvp_durable_run_store.json",
+        "artifacts/runs/all_passed/events.jsonl"
+      ]
+    }
+  ],
+  "queryPolicy": {
+    "approvalGrantAllowed": false,
+    "databaseUsed": false,
+    "durableBackendRequired": false,
+    "externalSideEffectsAllowed": false,
+    "queryEngine": "same_process_json_fixture",
+    "realProviderExecutionAllowed": false,
+    "replayOnly": true,
+    "sourceHashValidationRequired": true
+  },
+  "schemaVersion": "replay-query-v1",
+  "scope": "durable_run_store_replay_query_fixture",
+  "sourceArtifacts": [
+    {
+      "contentHash": "5e57764de6e9c125d9644d0e4a6797bf8922e5fe346062b77a8dc7c50f7cd0af",
+      "path": "artifacts/state/post_mvp_durable_run_store.json",
+      "role": "durable_run_store"
+    },
+    {
+      "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
+      "path": "artifacts/runs/all_passed/run.json",
+      "role": "run"
+    },
+    {
+      "contentHash": "02f5a82d1765a4443aae0d3c50502e7ee0ae6e3dcd1c2201b6e2a83daae4a6fc",
+      "path": "artifacts/runs/all_passed/events.jsonl",
+      "role": "events"
+    },
+    {
+      "contentHash": "2a340e1323b927385a2844f59110439d3ff12078c37f63a874287b006bdf8e5e",
+      "path": "artifacts/delivery/phase9_delivery_report.json",
+      "role": "delivery_report"
+    },
+    {
+      "contentHash": "99b6e4391d1fd0111b375c3393f20374f3c37419f3c4d6a043c1dc2eebdcb017",
+      "path": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+      "role": "human_approval_decision"
+    }
+  ]
+}

@@ -1224,6 +1224,25 @@ Build vs Integrate：
 
 当前 post-MVP durable state 前置 gate 已启动并满足 static replay index：Run/events/DeliveryReport/HumanApprovalDecision 可以被一个 deterministic store artifact 重新索引和校验，但完整 durable runtime、真实数据库、resume executor、调度器和 provider checkpoint 仍未实现。下一步应补一个 replay query fixture 或 identity-bound approval backend fixture，继续保持 no-side-effect policy。
 
+#### Post-MVP ReplayQueryV1 Static Query Fixture Gate
+
+2026-05-13 23:03 UTC 自动化实现结论：DurableRunStoreV1 已经能把 `all_passed` Run、events、DeliveryReportV1 和 HumanApprovalDecisionV1 索引为 source-hash-bound replay store；下一步最小有用切片不是接入数据库、query service、REST API、worker lease 或真实 approval backend，而是提交一个 deterministic `ReplayQueryV1` fixture，证明 store 至少可以回答 run state、delivery readiness、approval decision 和 event log tail 查询，并且查询结果不能绕过 no-side-effect policy。
+
+最小 ReplayQueryV1 contract：
+
+- `scripts/replay_query.py` 提供 `replay-query-v1` / `ReplayQueryV1` builder、validator 和 CLI。
+- `artifacts/state/post_mvp_replay_query.json` 采用 POSIX 相对路径和 normalized content hash，绑定 `post_mvp_durable_run_store.json`、`all_passed` Run、append-only `events.jsonl`、DeliveryReportV1 和 HumanApprovalDecisionV1。
+- `queries[]` 固定四类只读查询：`run_state_by_id`、`delivery_readiness_by_run_id`、`approval_decision_by_run_id` 和 `event_log_tail_by_run_id`；结果必须与 DurableRunStoreV1 的 `runIndex`、`stateIndex`、`deliveryIndex` 和 `approvalIndex` 完全一致。
+- `queryPolicy` 明确当前是 `same_process_json_fixture` / `static_json_query_only`，`databaseUsed=false`、`durableBackendRequired=false`、`replayOnly=true`、`externalSideEffectsAllowed=false`、`realProviderExecutionAllowed=false`、`approvalGrantAllowed=false`。
+- validator 拒绝关键错误：source hash 漂移、查询结果与 store index 不一致、event order 漂移、数据库伪完成、外部副作用打开或 approval grant 打开。
+
+Build vs Integrate：
+
+- Build：post-MVP 最小 `ReplayQueryV1` schema、source-bound query artifact、builder/validator/CLI、deterministic repository validation gate。
+- Integrate later：SQLite/Postgres query backend、REST/GraphQL query API、durable event compaction、identity-bound approval database、workspace/provider checkpoint query 和 replay UI。
+
+当前 post-MVP replay query 前置 gate 已满足 static query fixture：DurableRunStoreV1 不只可重放，也可被 deterministic read-only 查询验证。但完整 durable runtime、真实 query service、identity-bound approval backend、数据库和 resume executor 仍未实现。下一步应进入 identity-bound approval backend fixture，继续保持 no-side-effect policy。
+
 ## 13. 第一版应该证明什么
 
 第一版只需要证明一个核心闭环：
@@ -4756,6 +4775,75 @@ Add DurableRunStoreV1 fixture so that /usr/bin/python3 scripts/validate_repo.py 
 ```text
 进入 post-MVP replay query / approval backend 前置切片：
 新增一个最小 ReplayQueryV1 fixture 或 identity-bound approval backend fixture，基于 DurableRunStoreV1 查询 run/delivery/approval 状态；仍不得接入真实数据库、真实邮件发送、PR 创建或 provider side effects。
+```
+
+### 2026-05-13 23:03 UTC: Post-MVP ReplayQueryV1 Static Query Fixture Gate
+
+Active phase：post-MVP replay query 前置切片，基于 Phase 1a-9 contract-only MVP、HumanApprovalDecisionV1 和 DurableRunStoreV1 已完成后的 durable state 查询收敛。
+
+Selected slice：
+
+```text
+Add ReplayQueryV1 fixture so that /usr/bin/python3 scripts/validate_repo.py proves DurableRunStoreV1 can answer run/delivery/approval replay queries without a database or side effects.
+```
+
+为什么这是下一步：`validate.yml` 和 `auto-merge-cursor-pr.yml` 均存在且 baseline validation 通过。上一轮主计划推荐 replay query / approval backend 前置切片；最早可验证的 product slice 是先让 DurableRunStoreV1 产生 deterministic query result artifact，证明 state store 不只是静态索引，也能以 read-only query contract 返回 run state、delivery readiness、approval decision 和 event log tail，同时仍不能打开 external delivery、approval grant 或 provider execution。
+
+验收标准：
+
+- 新增 `ReplayQueryV1` builder / validator / CLI，输出 deterministic `replay-query-v1` artifact。
+- committed fixture 必须绑定 DurableRunStoreV1、`all_passed` Run、append-only `events.jsonl`、DeliveryReportV1 和 HumanApprovalDecisionV1 source hashes。
+- validator 必须拒绝 source hash 漂移、查询结果与 DurableRunStoreV1 index 不一致、event order 漂移、database/durable backend 伪完成、外部副作用打开、approval grant 打开。
+- `scripts/validate_repo.py` 必须验证 committed fixture、deterministic builder output 和 forced-failure cases。
+- 不接入真实数据库、query service、resume executor、邮件发送、PR 创建、IDE/CUA provider、workspace mutation 或外部 side effect。
+
+预期改动文件：
+
+- `scripts/replay_query.py`
+- `artifacts/state/post_mvp_replay_query.json`
+- `scripts/validate_repo.py`
+- `scripts/evaluation_report.py`
+- `artifacts/evaluation/phase9_mvp_evaluation_report.json`
+- `.cursor/plans/agentic-control-plane.plan.md`
+
+实现摘要：
+
+- 新增 `scripts/replay_query.py`，提供 `ReplayQueryV1` / `replay-query-v1` builder、validator 和 CLI。
+- 新增 committed `artifacts/state/post_mvp_replay_query.json`，绑定 DurableRunStoreV1、Run、events、DeliveryReportV1 和 HumanApprovalDecisionV1 的 POSIX relative paths 与 normalized content hashes。
+- Query artifact 固定四类 read-only query：`run_state_by_id`、`delivery_readiness_by_run_id`、`approval_decision_by_run_id` 和 `event_log_tail_by_run_id`，结果必须与 DurableRunStoreV1 的 `runIndex`、`stateIndex`、`deliveryIndex` 和 `approvalIndex` 一致。
+- `scripts/validate_repo.py` 纳入 ReplayQueryV1 required file/markers、committed artifact validation、deterministic CLI output comparison，以及 database enabled、external side effects allowed、approval grant allowed、run state result drift、event order drift、store hash mismatch forced-failure cases。
+- `scripts/evaluation_report.py` 将 replay query script 和 artifact 纳入 source artifact hash 汇总，并把下一推荐切片更新为 identity-bound approval backend fixture。
+
+验证结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline `/usr/bin/python3 scripts/validate_repo.py` before edits：通过。
+- `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 ReplayQueryV1 committed artifact、deterministic builder output，以及 database enabled / external side effects allowed / approval grant allowed / run state drift / event order drift / store hash mismatch forced-failure cases。
+- `/usr/bin/python3 scripts/replay_query.py --validate-query artifacts/state/post_mvp_replay_query.json`：通过。
+- `/usr/bin/python3 scripts/replay_query.py --query-out /tmp/post_mvp_replay_query.json`：通过，可 deterministic 生成 ReplayQueryV1 artifact。
+- `/usr/bin/python3 scripts/durable_run_store.py --validate-store artifacts/state/post_mvp_durable_run_store.json`：通过。
+- `/usr/bin/python3 scripts/durable_run_store.py --store-out /tmp/post_mvp_durable_run_store.json`：通过。
+- `/usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json`：通过。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/post-mvp-replay-fixture-smoke`：通过。
+- `/usr/bin/python3 scripts/task_spec.py ... --input-log-path fixtures/regression/all_passed/input.log --out /tmp/post-mvp-replay-task-spec.json`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json`：通过。
+- `git diff --check`：通过。
+- 备注：第一次 smoke 命令使用了错误的 TaskSpec CLI 参数 `--log-path`，脚本按预期拒绝；已用正确的 `--input-log-path` 重跑并通过。
+```
+
+剩余风险：
+
+- ReplayQueryV1 仍是 static JSON query fixture，不是 production query service、database index、REST/GraphQL API、event compaction backend 或 replay UI。
+- 本切片只查询 `all_passed` read-only regression run；真实代码修改、多 run 查询、失败恢复执行、provider checkpoints 和 approval audit DB 仍后移。
+- 完整 Agentic Engineering OS 产品仍缺真实 durable runtime、identity-bound approval backend、IDE/CUA providers、external delivery adapters 和 production learning/evaluation loop。
+
+下一轮建议：
+
+```text
+进入 post-MVP identity-bound approval backend 前置切片：
+新增最小 IdentityBoundApprovalRecordV1 fixture，基于 HumanApprovalDecisionV1、DurableRunStoreV1 和 ReplayQueryV1 证明 approval decision 必须绑定 actor/intent/policy/source hashes；仍不得接入真实身份服务、邮件发送、PR 创建或 provider side effects。
 ```
 
 ## 22. Parking Lot

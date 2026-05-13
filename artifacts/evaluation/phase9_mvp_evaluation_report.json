@@ -56,7 +56,7 @@
   "nextRecommendedSlice": {
     "mustRemainMachineVerifiable": true,
     "phase": "post_mvp",
-    "slice": "Add a replay query fixture over DurableRunStoreV1 or an identity-bound approval backend fixture while preserving the no-side-effect contract."
+    "slice": "Add an identity-bound approval backend fixture over HumanApprovalDecisionV1 and DurableRunStoreV1 while preserving the no-side-effect contract."
   },
   "outOfScope": [
     {
@@ -263,7 +263,7 @@
   "scope": "read_only_regression_evidence_demo_mvp_completion",
   "sourceArtifacts": [
     {
-      "contentHash": "6f959777c23259e773cb525b5af2bc86b8ed209d90631b44edfdbde784ed8fd8",
+      "contentHash": "68480cdc99d1e626ca4d3896f3bcb24849e2fd19b5ae528873968498f0623286",
       "path": "scripts/validate_repo.py",
       "role": "validation_script"
     },
@@ -286,6 +286,11 @@
       "contentHash": "5e56232ecc5b158136cf3e0d9c40432e6c5245071b9f28ad16a1da48a39e31f4",
       "path": "scripts/durable_run_store.py",
       "role": "post_mvp_durable_run_store_script"
+    },
+    {
+      "contentHash": "bd37bc3b3576a2dd14c166cb2c1fdabd4b3a9cb425febc397c2621a19ce0648d",
+      "path": "scripts/replay_query.py",
+      "role": "post_mvp_replay_query_script"
     },
     {
       "contentHash": "531bbbbb30b4793d94effe78c4e1ce37d79ceb0f53b5c3da9d652f7ecf465d1a",
@@ -361,6 +366,11 @@
       "contentHash": "5e57764de6e9c125d9644d0e4a6797bf8922e5fe346062b77a8dc7c50f7cd0af",
       "path": "artifacts/state/post_mvp_durable_run_store.json",
       "role": "post_mvp_durable_run_store"
+    },
+    {
+      "contentHash": "e020d1b30f00445c7b6671f0c63a5f57da069c8c26ff4b7f13008fd73e90fe3f",
+      "path": "artifacts/state/post_mvp_replay_query.json",
+      "role": "post_mvp_replay_query"
     },
     {
       "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
