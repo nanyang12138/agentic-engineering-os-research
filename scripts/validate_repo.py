@@ -17,6 +17,14 @@ from capability_contract import (
     validate_capability_envelope,
 )
 from context_pack import build_context_pack, validate_context_pack
+from computer_runtime import (
+    CONTRACT_ARTIFACT_PATH,
+    OBSERVATION_ARTIFACT_PATH,
+    build_computer_runtime_contract,
+    build_trajectory_observation,
+    validate_computer_runtime_contract,
+    validate_trajectory_observation,
+)
 from evidence_list import (
     EVIDENCE_CLASSES,
     EVIDENCE_CONFIDENCE,
@@ -42,6 +50,8 @@ CAPABILITY_CATALOG_PATH = ROOT / "artifacts/capabilities/phase3_capability_catal
 CONTEXT_PACK_DIR = ROOT / "artifacts/context"
 VERIFIER_RULE_CATALOG_PATH = ROOT / "artifacts/verifier/phase5_verifier_rule_catalog.json"
 RECOVERY_FIXTURE_DIR = ROOT / "artifacts/recovery/interrupted_after_extract"
+COMPUTER_RUNTIME_CONTRACT_PATH = ROOT / CONTRACT_ARTIFACT_PATH
+TRAJECTORY_OBSERVATION_PATH = ROOT / OBSERVATION_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -94,10 +104,13 @@ REQUIRED_FILES = [
     "scripts/run_control.py",
     "scripts/recovery_fixture.py",
     "scripts/verifier_runtime.py",
+    "scripts/computer_runtime.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
     "artifacts/recovery/interrupted_after_extract/run.json",
     "artifacts/recovery/interrupted_after_extract/events.jsonl",
+    "artifacts/computer_runtime/phase7_computer_runtime_contract.json",
+    "artifacts/computer_runtime/phase7_trajectory_observation.json",
 ]
 
 PLAN_REQUIRED_MARKERS = [
@@ -120,6 +133,11 @@ PLAN_REQUIRED_MARKERS = [
     "permission-policy-v1",
     "recovery-snapshot-v1",
     "InterruptedRecoveryFixtureV1",
+    "ComputerRuntimeAdapterV1",
+    "computer-runtime-adapter-contract-v1",
+    "TrajectoryObservationV1",
+    "trajectory-observation-v1",
+    "phase7_computer_runtime_contract.json",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -913,6 +931,137 @@ def validate_interrupted_recovery_fixture(run_dir: Path) -> None:
         raise AssertionError("InterruptedRecoveryFixtureV1 forced-failure unexpectedly accepted missing resumeTarget")
 
 
+def expect_computer_runtime_validation_failure(label: str, payload: dict, validator, expected_message_fragment: str) -> None:
+    try:
+        validator(payload)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"ComputerRuntime forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"ComputerRuntime forced-failure case {label} unexpectedly passed validation")
+
+
+def expect_trajectory_observation_validation_failure(
+    label: str,
+    observation: dict,
+    contract: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_trajectory_observation(observation, contract, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"TrajectoryObservation forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"TrajectoryObservation forced-failure case {label} unexpectedly passed validation")
+
+
+def validate_committed_computer_runtime_artifacts() -> None:
+    contract = load_json(COMPUTER_RUNTIME_CONTRACT_PATH)
+    observation = load_json(TRAJECTORY_OBSERVATION_PATH)
+    try:
+        validate_computer_runtime_contract(contract)
+    except ValueError as exc:
+        raise AssertionError(f"Committed ComputerRuntimeAdapterV1 contract failed validation: {exc}") from exc
+    try:
+        validate_trajectory_observation(observation, contract, ROOT)
+    except ValueError as exc:
+        raise AssertionError(f"Committed TrajectoryObservationV1 artifact failed validation: {exc}") from exc
+
+    expected_contract = build_computer_runtime_contract()
+    if contract != expected_contract:
+        raise AssertionError("Committed ComputerRuntimeAdapterV1 contract differs from deterministic builder output")
+
+    expected_observation = build_trajectory_observation(
+        ARTIFACT_DIR / "all_passed/run.json",
+        ARTIFACT_DIR / "all_passed/evidence.json",
+        ARTIFACT_DIR / "all_passed/events.jsonl",
+        ROOT,
+    )
+    if observation != expected_observation:
+        raise AssertionError("Committed TrajectoryObservationV1 artifact differs from deterministic builder output")
+
+    tampered_contract = json.loads(json.dumps(contract))
+    tampered_contract["policy"]["externalSideEffectsAllowed"] = True
+    expect_computer_runtime_validation_failure(
+        "external_side_effects_allowed",
+        tampered_contract,
+        validate_computer_runtime_contract,
+        "must disallow external side effects",
+    )
+
+    tampered_contract = json.loads(json.dumps(contract))
+    tampered_contract["capabilities"][1]["implemented"] = True
+    expect_computer_runtime_validation_failure(
+        "real_provider_capability_implemented",
+        tampered_contract,
+        validate_computer_runtime_contract,
+        "must remain contract-only",
+    )
+
+    tampered_observation = json.loads(json.dumps(observation))
+    tampered_observation["externalSideEffect"] = True
+    expect_trajectory_observation_validation_failure(
+        "trajectory_external_side_effect",
+        tampered_observation,
+        contract,
+        "must not declare external side effects",
+    )
+
+    tampered_observation = json.loads(json.dumps(observation))
+    tampered_observation["observations"][0]["evidenceId"] = "ev-all_passed-missing"
+    expect_trajectory_observation_validation_failure(
+        "trajectory_missing_evidence_binding",
+        tampered_observation,
+        contract,
+        "must bind to existing evidence id",
+    )
+
+    tampered_observation = json.loads(json.dumps(observation))
+    tampered_observation["observations"][0]["taskVerdict"] = "passed"
+    expect_trajectory_observation_validation_failure(
+        "trajectory_declares_task_verdict",
+        tampered_observation,
+        contract,
+        "must not declare task verdicts",
+    )
+
+
+def run_computer_runtime_builder(contract_out: Path, observation_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/computer_runtime.py"),
+        "--contract-out",
+        str(contract_out),
+        "--observation-out",
+        str(observation_out),
+        "--run",
+        str(ARTIFACT_DIR / "all_passed/run.json"),
+        "--evidence",
+        str(ARTIFACT_DIR / "all_passed/evidence.json"),
+        "--events",
+        str(ARTIFACT_DIR / "all_passed/events.jsonl"),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "ComputerRuntimeAdapterV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def compare_artifact_packets(expected_dir: Path, actual_dir: Path) -> None:
     for fixture_id in FIXTURE_IDS:
         for filename in ARTIFACT_FILES:
@@ -1188,6 +1337,7 @@ def main() -> None:
     validate_committed_verifier_rule_catalog()
     validate_committed_context_packs()
     validate_interrupted_recovery_fixture(RECOVERY_FIXTURE_DIR)
+    validate_committed_computer_runtime_artifacts()
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_root = Path(temp_dir)
@@ -1216,6 +1366,13 @@ def main() -> None:
         generated_recovery = temp_root / "recovery"
         run_recovery_fixture_builder(generated_recovery)
         compare_interrupted_recovery_fixture(RECOVERY_FIXTURE_DIR, generated_recovery / "interrupted_after_extract")
+        generated_computer_contract = temp_root / "phase7_computer_runtime_contract.json"
+        generated_trajectory_observation = temp_root / "phase7_trajectory_observation.json"
+        run_computer_runtime_builder(generated_computer_contract, generated_trajectory_observation)
+        if load_json(generated_computer_contract) != load_json(COMPUTER_RUNTIME_CONTRACT_PATH):
+            raise AssertionError("Committed ComputerRuntimeAdapterV1 contract differs from deterministic CLI output")
+        if load_json(generated_trajectory_observation) != load_json(TRAJECTORY_OBSERVATION_PATH):
+            raise AssertionError("Committed TrajectoryObservationV1 artifact differs from deterministic CLI output")
 
     print("Repository validation passed.")
 

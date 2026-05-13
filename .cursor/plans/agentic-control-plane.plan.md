@@ -22,7 +22,7 @@ todos:
     status: pending
   - id: study-computer-runtime
     content: 研究 CUA 这类 computer-use runtime 如何作为底层 sandbox、GUI automation、trajectory adapter 接入
-    status: pending
+    status: in_progress
   - id: design-verifier-evidence
     content: 设计 Evidence Graph 和 Verifier Runtime，让每个结论都有可追溯证据和验证流程
     status: completed
@@ -1028,6 +1028,25 @@ Build vs Integrate：
 - 用 sandbox 隔离不可信操作。
 
 成功标准：先明确 CUA 输出的是 observation / trajectory；是否可信、是否满足工程任务目标，由 OS 的 Evidence/Verifier 层判断。实际 GUI 操作不进入第一版。
+
+#### Phase 7 ComputerRuntimeAdapterV1 Static Contract / Trajectory Observation Gate
+
+2026-05-13 14:03 UTC 自动化实现结论：Phase 7 的第一步不是接入真实 trycua/cua、desktop provider、browser automation 或 sandbox executor，而是把 Computer Runtime 层的边界固化为可机器校验的 adapter contract，并用一个静态 `TrajectoryObservationV1` artifact 证明 trajectory 只能作为 Observation/Evidence 输入，不能自行声明工程任务 verdict。
+
+最小 Computer Runtime / CUA adapter contract：
+
+- `artifacts/computer_runtime/phase7_computer_runtime_contract.json` 采用 `computer-runtime-adapter-contract-v1`，声明 `ComputerRuntimeAdapterV1` 的 adapter-only 边界。
+- contract 覆盖 `computer.screenshot`、`computer.click`、`computer.type`、`computer.run_shell`、`sandbox.session`、`trajectory.record` 六类底层 capability，但全部保持 `executionMode="contract_only"`、`implemented=false`、`externalSideEffectAllowed=false`。
+- dangerous capability 必须 `approvalRequired=true`，且 Phase 7 MVP 明确 `realProviderExecutionAllowed=false`；因此不会执行 GUI、shell、sandbox、browser、desktop 或 CUA side effect。
+- `artifacts/computer_runtime/phase7_trajectory_observation.json` 采用 `trajectory-observation-v1`，绑定 existing `all_passed` run/event/evidence artifacts，并通过 source hash、eventRef、evidenceId、lineRange 和 excerptHash 证明 trajectory observation 只是证据链中的 observation。
+- validator 拒绝三类关键错误：contract 允许外部副作用、任何 real provider capability 被标记为 implemented、trajectory observation 引用不存在 evidence 或自行声明 task verdict。
+
+Build vs Integrate：
+
+- Build：Phase 7 最小 `ComputerRuntimeAdapterV1` schema、static adapter contract artifact、`TrajectoryObservationV1` artifact、deterministic builder/validator 和 repository validation gate。
+- Integrate later：trycua/cua provider、真实 desktop/browser GUI automation、sandbox lifecycle executor、trajectory replay、redaction pipeline 和 provider health/runtime discovery。
+
+当前 Phase 7 已启动但未完成：本 gate 固化了 CUA/Computer Runtime 作为底层 adapter 的边界，以及 trajectory -> observation/evidence 的最小 artifact contract。下一步应把该 contract 与 capability catalogue / policy gate 连接，例如新增只读 `computer_runtime` catalogue refs 或 adapter policy manifest，仍不执行真实 GUI 自动化或外部 side effect。
 
 ### Phase 8：IDE Adapter
 
@@ -3874,6 +3893,77 @@ git diff --check
 ```text
 进入 Phase 7 Computer Runtime / CUA Adapter：
 先定义 `computer.*` / `trajectory.*` adapter contract 和 observation/evidence 边界，并用静态 schema/fixture 验证 CUA 只作为底层 runtime adapter；不要实际执行 GUI 自动化、发送外部 side effect 或引入 desktop/sandbox provider。
+```
+
+### 2026-05-13 14:03 UTC Automation Implementation Log - Phase 7 ComputerRuntimeAdapterV1 Static Contract / Trajectory Observation Gate
+
+Active phase：
+
+```text
+Phase 7: Computer Runtime and CUA Adapter
+```
+
+Selected slice：
+
+```text
+Add a static ComputerRuntimeAdapterV1 contract and TrajectoryObservationV1 artifact so that /usr/bin/python3 scripts/validate_repo.py proves CUA remains an adapter-only, no-side-effect boundary.
+```
+
+为什么这是下一步：Phase 6 已经满足 terminal/non-terminal run state、permission 和 recovery snapshot gate。Phase 7 的最小前置不是执行 GUI 自动化，而是先把 `computer.*` / `sandbox.*` / `trajectory.*` 的边界标准化，并证明 trajectory observation 必须绑定 existing evidence/event，不能越过 Evidence/Verifier 层直接宣称任务成功。
+
+实现摘要：
+
+- 新增 `scripts/computer_runtime.py`，提供 `computer-runtime-adapter-contract-v1` / `ComputerRuntimeAdapterV1` builder、validator 和 CLI。
+- 新增 committed `artifacts/computer_runtime/phase7_computer_runtime_contract.json`，声明 `computer.screenshot`、`computer.click`、`computer.type`、`computer.run_shell`、`sandbox.session`、`trajectory.record` 的 contract-only capability metadata。
+- 新增 committed `artifacts/computer_runtime/phase7_trajectory_observation.json`，以 `trajectory-observation-v1` 绑定 `artifacts/runs/all_passed` 的 run/event/evidence refs 和 source hashes。
+- `scripts/validate_repo.py` 现在校验 Phase 7 committed artifacts、deterministic builder 输出，以及外部 side effect、real provider implemented、missing evidence binding、trajectory 自行声明 task verdict 的 forced-failure cases。
+
+验收标准：
+
+- ComputerRuntimeAdapterV1 contract 可 deterministic 生成并通过 validation：通过。
+- TrajectoryObservationV1 artifact 可 deterministic 生成，并绑定 existing run/event/evidence/source hash：通过。
+- validator 拒绝 external side effects、real provider implementation、missing evidence binding 和 task verdict leakage：通过。
+- 不执行 GUI、desktop、browser、sandbox、shell、CUA provider 或外部 side effect：通过。
+
+验证命令：
+
+```text
+/usr/bin/python3 -m py_compile scripts/*.py
+/usr/bin/python3 scripts/validate_repo.py
+/usr/bin/python3 scripts/computer_runtime.py --validate-contract artifacts/computer_runtime/phase7_computer_runtime_contract.json --validate-observation artifacts/computer_runtime/phase7_trajectory_observation.json
+/usr/bin/python3 scripts/computer_runtime.py --contract-out /tmp/phase7_computer_runtime_contract.json --observation-out /tmp/phase7_trajectory_observation.json --run artifacts/runs/all_passed/run.json --evidence artifacts/runs/all_passed/evidence.json --events artifacts/runs/all_passed/events.jsonl
+/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase7-fixture-smoke
+/usr/bin/python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase7-task-spec.json
+/usr/bin/python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --out-dir /tmp/phase7-local-smoke --task-spec-path /tmp/phase7-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json
+git diff --check
+```
+
+验证结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- 首次 `/usr/bin/python3 scripts/validate_repo.py`：失败，原因是主计划尚未包含 Phase 7 required markers；已通过本日志和 Phase 7 正文更新修复。
+- `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- 修复后 `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 Phase 1a-6 gates 和 Phase 7 ComputerRuntimeAdapterV1 / TrajectoryObservationV1 committed artifact、deterministic builder、forced-failure validation。
+- `/usr/bin/python3 scripts/computer_runtime.py --validate-contract ... --validate-observation ...`：通过。
+- `/usr/bin/python3 scripts/computer_runtime.py --contract-out /tmp/phase7_computer_runtime_contract.json --observation-out /tmp/phase7_trajectory_observation.json ...`：通过，可 deterministic 生成 Phase 7 artifacts。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase7-fixture-smoke`：通过。
+- `/usr/bin/python3 scripts/task_spec.py ... --out /tmp/phase7-task-spec.json`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json ...`：通过。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- 当前 Phase 7 仍是静态 contract，不是 trycua/cua provider、desktop automation 或 sandbox executor。
+- trajectory observation 只覆盖现有 `all_passed` fixture 的 evidence-bound sample；真实 CUA trajectory redaction、screen diff、accessibility tree 和 replay 留待后续 adapter runtime。
+- auto-merge workflow 存在，但最近运行显示其 author allowlist 可能拒绝 `app/cursor`，这是基础设施阻塞，不属于本产品切片。
+
+下一轮建议：
+
+```text
+继续 Phase 7：
+把 ComputerRuntimeAdapterV1 与现有 capability catalogue / permission policy 连接，例如新增 Phase 7 adapter policy manifest 或 capability catalogue refs，并用 validation 证明 dangerous computer/sandbox capabilities 在未批准时不可被 RunControl 调度；仍不要执行真实 GUI/CUA side effect。
 ```
 
 ## 22. Parking Lot
