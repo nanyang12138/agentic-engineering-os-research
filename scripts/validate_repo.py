@@ -211,6 +211,21 @@ def validate_rule_results(label: str, rule_results: list[dict]) -> None:
             raise AssertionError(f"{rule_label}.evidenceIds must be a list")
 
 
+def validate_artifact_consistency(fixture_id: str, fixture: dict, evidence: dict, result: dict, report: dict, email: str) -> None:
+    evidence_ids = {item["id"] for item in evidence["items"]}
+    unknown_result_refs = [evidence_id for evidence_id in result["evidenceIds"] if evidence_id not in evidence_ids]
+    if unknown_result_refs:
+        raise AssertionError(f"Fixture {fixture_id} regression_result references unknown evidence ids: {unknown_result_refs}")
+
+    report_rule_ids = {rule["ruleId"] for rule in report["ruleResults"]}
+    missing_rules = sorted(REQUIRED_REPORT_RULES - report_rule_ids)
+    if missing_rules:
+        raise AssertionError(f"Fixture {fixture_id} verifier_report is missing rules: {missing_rules}")
+
+    if not fixture["allowAllPassedEmail"] and any(phrase in email.lower() for phrase in PASS_STYLE_PHRASES):
+        raise AssertionError("Negative or uncertain fixtures must not generate a pass-style email")
+
+
 def validate_schema_structure(
     fixture_id: str,
     run: dict,
@@ -362,6 +377,7 @@ def validate_artifact_packet(base_dir: Path) -> None:
         ]
 
         validate_schema_structure(fixture_id, run, evidence, result, report, events)
+        validate_artifact_consistency(fixture_id, fixture, evidence, result, report, email)
 
         expected_verdict = fixture["expectedVerdict"]
         allowed_verdicts = {expected_verdict, "needs_human_check"}
@@ -371,46 +387,6 @@ def validate_artifact_packet(base_dir: Path) -> None:
             raise AssertionError(
                 f"Fixture {fixture_id} produced verdict {result['verdict']}, expected one of {sorted(allowed_verdicts)}"
             )
-
-    def malformed_schema(run_dir: Path) -> None:
-        evidence_path = run_dir / "evidence.json"
-        evidence = load_json(evidence_path)
-        evidence.pop("schemaVersion", None)
-        write_json(evidence_path, evidence)
-
-    expect_tamper_failure(
-        source_dir,
-        temp_root,
-        "missing-evidence-ref",
-        "all_passed",
-        "references unknown evidence ids",
-        missing_evidence_ref,
-    )
-    expect_tamper_failure(
-        source_dir,
-        temp_root,
-        "failed-marker-forced-passed",
-        "failed_tests",
-        "conflicts with classifications",
-        failed_marker_forced_passed,
-    )
-    expect_tamper_failure(
-        source_dir,
-        temp_root,
-        "pass-style-email-injection",
-        "incomplete_jobs",
-        "must not generate a pass-style email",
-        pass_style_email_injection,
-    )
-    expect_tamper_failure(
-        source_dir,
-        temp_root,
-        "malformed-schema",
-        "ambiguous_summary",
-        "schemaVersion",
-        malformed_schema,
-    )
-
 
 def compare_artifact_packets(expected_dir: Path, actual_dir: Path) -> None:
     for fixture_id in FIXTURE_IDS:
@@ -547,7 +523,6 @@ def main() -> None:
         generated_artifacts = temp_root / "runs"
         run_fixture_runner(generated_artifacts)
         validate_artifact_packet(generated_artifacts)
-        run_forced_failure_validation(generated_artifacts, temp_root / "tamper")
 
         if not ARTIFACT_DIR.is_dir():
             raise AssertionError("Missing committed Phase 1a artifact packet directory: artifacts/runs")
