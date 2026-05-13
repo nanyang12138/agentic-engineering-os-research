@@ -1,0 +1,144 @@
+{
+  "adapterRef": "ide-adapter://phase8/cursor-placeholder",
+  "contractRef": "artifacts/ide_adapter/phase8_ide_adapter_contract.json",
+  "externalSideEffect": false,
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "handoffRequests": [
+    {
+      "approvalDecisionSynthesized": false,
+      "approvalPoint": "ide_open_file_requires_human_approval",
+      "capability": "ide.open_file",
+      "capabilityRef": "ide-adapter://phase8/ide.open_file",
+      "executionAllowed": false,
+      "id": "approval-handoff-ide-open_file",
+      "inputPreview": {
+        "path": "fixtures/regression/all_passed/input.log",
+        "workspaceRef": "workspace://repo/agentic-engineering-os-research"
+      },
+      "permission": "write",
+      "permissionPolicyBound": true,
+      "policyBindings": [
+        "external_side_effect"
+      ],
+      "reason": "Opening a file changes IDE UI state and requires an explicit TaskSpec approval point before scheduling.",
+      "requiresHumanApproval": true,
+      "schedulerDecision": "blocked_missing_task_spec_approval",
+      "taskSpecApprovalBound": false
+    },
+    {
+      "approvalDecisionSynthesized": false,
+      "approvalPoint": "ide_diff_view_requires_human_approval",
+      "capability": "ide.diff_view.open",
+      "capabilityRef": "ide-adapter://phase8/ide.diff_view.open",
+      "executionAllowed": false,
+      "id": "approval-handoff-ide-diff_view-open",
+      "inputPreview": {
+        "artifactRef": "artifacts/runs/all_passed/regression_result.json",
+        "workspaceRef": "workspace://repo/agentic-engineering-os-research"
+      },
+      "permission": "write",
+      "permissionPolicyBound": true,
+      "policyBindings": [
+        "external_side_effect"
+      ],
+      "reason": "Opening a diff view changes IDE UI state and remains blocked until the TaskSpec names the approval point.",
+      "requiresHumanApproval": true,
+      "schedulerDecision": "blocked_missing_task_spec_approval",
+      "taskSpecApprovalBound": false
+    },
+    {
+      "approvalDecisionSynthesized": false,
+      "approvalPoint": "ide_terminal_execution_requires_human_approval",
+      "capability": "ide.terminal.request",
+      "capabilityRef": "ide-adapter://phase8/ide.terminal.request",
+      "executionAllowed": false,
+      "id": "approval-handoff-ide-terminal-request",
+      "inputPreview": {
+        "commandDigest": "a63e6ec4864c3ec5f5d6f2095942e7bdac06fb3065d9e2b4000a19e4e98f3b52",
+        "commandRedacted": true,
+        "workspaceRef": "workspace://repo/agentic-engineering-os-research"
+      },
+      "permission": "dangerous",
+      "permissionPolicyBound": true,
+      "policyBindings": [
+        "dangerous",
+        "external_side_effect"
+      ],
+      "reason": "Terminal execution is dangerous and cannot be scheduled without both policy and TaskSpec approval.",
+      "requiresHumanApproval": true,
+      "schedulerDecision": "blocked_missing_task_spec_approval",
+      "taskSpecApprovalBound": false
+    },
+    {
+      "approvalDecisionSynthesized": false,
+      "approvalPoint": "send_email_requires_human_approval",
+      "capability": "ide.approval.request",
+      "capabilityRef": "ide-adapter://phase8/ide.approval.request",
+      "executionAllowed": false,
+      "id": "approval-handoff-task-spec-send-email",
+      "inputPreview": {
+        "approvalPoint": "send_email_requires_human_approval",
+        "runRef": "artifacts/runs/all_passed/run.json#taskSpec"
+      },
+      "permission": "read",
+      "permissionPolicyBound": true,
+      "policyBindings": [
+        "send_email"
+      ],
+      "reason": "The IDE may surface a human approval prompt for TaskSpec approval points, but Phase 8 does not synthesize decisions or send email.",
+      "requiresHumanApproval": true,
+      "schedulerDecision": "contract_only_handoff_ready",
+      "taskSpecApprovalBound": true
+    }
+  ],
+  "id": "phase8-static-ide-approval-handoff-all_passed",
+  "mode": "static_fixture_only",
+  "permissionPolicyBinding": {
+    "approvalRequiredFor": [
+      "dangerous",
+      "external_side_effect",
+      "send_email"
+    ],
+    "externalSideEffectsAllowed": false,
+    "id": "permission-policy-all_passed",
+    "localWriteBoundary": "artifacts/runs/all_passed",
+    "schemaVersion": "permission-policy-v1"
+  },
+  "policy": {
+    "approvalDecisionSynthesisAllowed": false,
+    "autoApprovalAllowed": false,
+    "noRealIdeExecution": true,
+    "noTerminalExecution": true,
+    "noWorkspaceMutation": true
+  },
+  "provider": "static_fixture",
+  "runRef": "artifacts/runs/all_passed/run.json",
+  "schemaVersion": "ide-approval-handoff-manifest-v1",
+  "sourceArtifacts": [
+    {
+      "contentHash": "81f2b253be3fe0ef40b80ec6d70a9ec14421e38b67e3cfc05264616e28d69505",
+      "path": "artifacts/ide_adapter/phase8_ide_adapter_contract.json",
+      "role": "ide_adapter_contract"
+    },
+    {
+      "contentHash": "b26d8120b2880979780da911cb210901ab2e791f31d49d2bd2113efa7129a15e",
+      "path": "artifacts/ide_adapter/phase8_workspace_observation.json",
+      "role": "workspace_observation"
+    },
+    {
+      "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
+      "path": "artifacts/runs/all_passed/run.json",
+      "role": "run"
+    }
+  ],
+  "taskSpecBinding": {
+    "approvalPoints": [
+      "send_email_requires_human_approval"
+    ],
+    "requiredApprovalPoints": [
+      "send_email_requires_human_approval"
+    ],
+    "taskSpecId": "task-spec-all_passed"
+  },
+  "workspaceObservationRef": "artifacts/ide_adapter/phase8_workspace_observation.json"
+}
