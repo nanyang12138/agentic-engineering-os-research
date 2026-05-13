@@ -200,7 +200,11 @@ def run_fixture_runner(out_dir: Path) -> None:
         )
 
 
-def run_local_readonly_runner(out_dir: Path, task_spec_path: Path | None = None) -> None:
+def run_local_readonly_runner(
+    out_dir: Path,
+    task_spec_path: Path | None = None,
+    context_pack_path: Path | None = None,
+) -> None:
     command = [
         sys.executable,
         str(ROOT / "scripts/local_readonly_runner.py"),
@@ -213,11 +217,50 @@ def run_local_readonly_runner(out_dir: Path, task_spec_path: Path | None = None)
     ]
     if task_spec_path:
         command.extend(["--task-spec-path", str(task_spec_path)])
+    if context_pack_path:
+        command.extend(["--context-pack-path", str(context_pack_path)])
     result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
     if result.returncode != 0:
         raise AssertionError(
             "Local read-only runner failed.\n"
             f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
+def expect_local_readonly_context_pack_failure(context_pack_path: Path, task_spec_path: Path, scratch_root: Path) -> None:
+    scratch_root.mkdir(parents=True, exist_ok=True)
+    tampered_pack_path = scratch_root / "context-pack-without-log-excerpts.json"
+    tampered = load_json(context_pack_path)
+    tampered["contextItems"] = [
+        item
+        for item in tampered["contextItems"]
+        if item.get("kind") != "log_excerpt"
+    ]
+    write_json(tampered_pack_path, tampered)
+
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/local_readonly_runner.py"),
+        "--log-path",
+        str(FIXTURE_DIR / "all_passed/input.log"),
+        "--goal",
+        "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",
+        "--out-dir",
+        str(scratch_root / "should-not-run"),
+        "--task-spec-path",
+        str(task_spec_path),
+        "--context-pack-path",
+        str(tampered_pack_path),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode == 0:
+        raise AssertionError("Local read-only runner accepted evidence not declared by ContextPack")
+    output = result.stdout + result.stderr
+    if "ContextPack must declare at least one log_excerpt context item" not in output:
+        raise AssertionError(
+            "Local read-only runner rejected a tampered ContextPack for the wrong reason.\n"
             f"stdout:\n{result.stdout}\n"
             f"stderr:\n{result.stderr}"
         )
@@ -780,7 +823,8 @@ def validate_task_spec_gate(out_file: Path) -> None:
 
 
 def validate_local_readonly_runner(out_dir: Path, task_spec_path: Path) -> None:
-    run_local_readonly_runner(out_dir, task_spec_path)
+    context_pack_path = CONTEXT_PACK_DIR / "all_passed/context_pack.json"
+    run_local_readonly_runner(out_dir, task_spec_path, context_pack_path)
     run_dir = out_dir / "all_passed"
     for filename in ARTIFACT_FILES:
         if not (run_dir / filename).is_file():
@@ -808,6 +852,7 @@ def validate_local_readonly_runner(out_dir: Path, task_spec_path: Path) -> None:
     if result["id"].lower() not in email.lower():
         raise AssertionError("Local read-only runner email must reference regression_result artifact id")
     expect_local_readonly_task_spec_failure(task_spec_path, out_dir / "forced-failures")
+    expect_local_readonly_context_pack_failure(context_pack_path, task_spec_path, out_dir / "forced-failures")
 
 
 def main() -> None:

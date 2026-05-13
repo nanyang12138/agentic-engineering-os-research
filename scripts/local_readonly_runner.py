@@ -7,6 +7,13 @@ import shutil
 from pathlib import Path
 
 from capability_contract import build_capability_envelope
+from context_pack import (
+    ROOT,
+    load_json as load_context_pack_json,
+    validate_context_pack,
+    validate_context_pack_for_request,
+    validate_evidence_with_context_pack,
+)
 from fixture_runner import (
     EXPECTED_ARTIFACTS,
     GENERATED_AT,
@@ -30,7 +37,13 @@ def derive_run_case_id(log_path: Path) -> str:
     return normalized or "local_regression"
 
 
-def write_local_run(log_path: Path, goal: str, out_dir: Path, task_spec_path: Path | None = None) -> dict:
+def write_local_run(
+    log_path: Path,
+    goal: str,
+    out_dir: Path,
+    task_spec_path: Path | None = None,
+    context_pack_path: Path | None = None,
+) -> dict:
     if not log_path.is_file():
         raise FileNotFoundError(f"Log path does not exist or is not a file: {log_path}")
     if not goal.strip():
@@ -51,7 +64,14 @@ def write_local_run(log_path: Path, goal: str, out_dir: Path, task_spec_path: Pa
         validate_task_spec_for_request(task_spec, goal, log_path)
     else:
         task_spec = task_spec_for(initial_fixture)
+    context_pack = None
+    if context_pack_path:
+        context_pack = load_context_pack_json(context_pack_path)
+        validate_context_pack(context_pack, ROOT)
+        validate_context_pack_for_request(context_pack, log_path, goal, ROOT)
     evidence = extract_evidence(initial_fixture)
+    if context_pack:
+        validate_evidence_with_context_pack(evidence, context_pack, ROOT)
     verdict, summary, verdict_evidence_ids = classify(evidence)
     fixture = Fixture(
         id=case_id,
@@ -112,12 +132,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--goal", required=True)
     parser.add_argument("--out-dir", required=True, type=Path)
     parser.add_argument("--task-spec-path", type=Path)
+    parser.add_argument("--context-pack-path", type=Path)
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    report = write_local_run(args.log_path, args.goal, args.out_dir, args.task_spec_path)
+    report = write_local_run(args.log_path, args.goal, args.out_dir, args.task_spec_path, args.context_pack_path)
     print(f"Wrote local read-only run for {report['fixtureId']} into {args.out_dir / report['fixtureId']}.")
     if report["status"] != "passed":
         print(report["summary"])
