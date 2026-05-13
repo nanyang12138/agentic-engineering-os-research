@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from fixture_runner import load_fixture, stable_hash, verify_artifacts
+from task_spec import TASK_SPEC_SCHEMA_VERSION, build_regression_task_spec, validate_regression_task_spec
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -73,12 +74,14 @@ REQUIRED_FILES = [
     ".github/workflows/validate.yml",
     "scripts/fixture_runner.py",
     "scripts/local_readonly_runner.py",
+    "scripts/task_spec.py",
 ]
 
 PLAN_REQUIRED_MARKERS = [
     "Read-only Regression Evidence Demo",
     "fixture-runner --fixture-dir <fixtures/regression> --out-dir <artifacts/runs>",
     "RegressionTaskSpecV1",
+    "regression-task-spec-v1",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -200,6 +203,27 @@ def run_local_readonly_runner(out_dir: Path) -> None:
         )
 
 
+def run_task_spec_builder(out_file: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/task_spec.py"),
+        "--goal",
+        "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",
+        "--input-log-path",
+        str(FIXTURE_DIR / "all_passed/input.log"),
+        "--out",
+        str(out_file),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "TaskSpec builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def validate_rule_results(label: str, rule_results: list[dict]) -> None:
     if not isinstance(rule_results, list) or not rule_results:
         raise AssertionError(f"{label} ruleResults must be a non-empty list")
@@ -249,6 +273,7 @@ def validate_schema_structure(
         f"{fixture_id} taskSpec",
         task_spec,
         [
+            "schemaVersion",
             "id",
             "goal",
             "inputLogPath",
@@ -260,11 +285,12 @@ def validate_schema_structure(
             "approvalPoints",
         ],
     )
-    if task_spec["allowedActions"] != ["read_log", "extract_regression_result", "write_artifact"]:
-        raise AssertionError(f"Fixture {fixture_id} taskSpec allowedActions changed unexpectedly")
-    for field in ["forbiddenActions", "successCriteria", "requiredEvidence", "expectedArtifacts", "approvalPoints"]:
-        if not isinstance(task_spec[field], list) or not task_spec[field]:
-            raise AssertionError(f"Fixture {fixture_id} taskSpec.{field} must be a non-empty list")
+    if task_spec["schemaVersion"] != TASK_SPEC_SCHEMA_VERSION:
+        raise AssertionError(f"Fixture {fixture_id} taskSpec schemaVersion must be {TASK_SPEC_SCHEMA_VERSION}")
+    try:
+        validate_regression_task_spec(task_spec)
+    except ValueError as exc:
+        raise AssertionError(f"Fixture {fixture_id} taskSpec failed validation: {exc}") from exc
     if not isinstance(run["steps"], list) or not run["steps"]:
         raise AssertionError(f"Fixture {fixture_id} run.steps must be a non-empty list")
     for step in run["steps"]:
@@ -480,6 +506,38 @@ def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
     )
 
 
+def expect_task_spec_validation_failure(label: str, task_spec: dict, expected_message_fragment: str) -> None:
+    try:
+        validate_regression_task_spec(task_spec)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"TaskSpec forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"TaskSpec forced-failure case {label} unexpectedly passed validation")
+
+
+def validate_task_spec_gate(out_file: Path) -> None:
+    run_task_spec_builder(out_file)
+    task_spec = load_json(out_file)
+    validate_regression_task_spec(task_spec)
+
+    built_spec = build_regression_task_spec(
+        "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",
+        FIXTURE_DIR / "all_passed/input.log",
+    )
+    validate_regression_task_spec(built_spec)
+
+    for field in ["allowedActions", "forbiddenActions", "successCriteria", "requiredEvidence", "approvalPoints"]:
+        tampered = dict(built_spec)
+        del tampered[field]
+        expect_task_spec_validation_failure(f"missing_{field}", tampered, "missing required fields")
+
+
 def validate_local_readonly_runner(out_dir: Path) -> None:
     run_local_readonly_runner(out_dir)
     run_dir = out_dir / "all_passed"
@@ -529,6 +587,7 @@ def main() -> None:
         validate_artifact_packet(ARTIFACT_DIR)
         compare_artifact_packets(ARTIFACT_DIR, generated_artifacts)
         validate_forced_failure_cases(generated_artifacts, Path(temp_dir) / "forced-failures")
+        validate_task_spec_gate(Path(temp_dir) / "task-spec.json")
         validate_local_readonly_runner(Path(temp_dir) / "local-readonly")
 
     print("Repository validation passed.")

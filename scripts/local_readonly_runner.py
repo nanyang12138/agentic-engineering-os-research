@@ -42,6 +42,8 @@ def write_local_run(log_path: Path, goal: str, out_dir: Path) -> dict:
         allow_all_passed_email=True,
         directory=log_path.parent,
     )
+    # Phase 2 gate: build and validate the executable spec before reading or classifying the log.
+    task_spec = task_spec_for(initial_fixture)
     evidence = extract_evidence(initial_fixture)
     verdict, summary, verdict_evidence_ids = classify(evidence)
     fixture = Fixture(
@@ -60,7 +62,6 @@ def write_local_run(log_path: Path, goal: str, out_dir: Path) -> dict:
         shutil.rmtree(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    task_spec = task_spec_for(fixture)
     result = {
         "schemaVersion": "regression-result-v1",
         "id": f"regression-result-{case_id}",

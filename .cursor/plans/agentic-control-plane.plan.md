@@ -7,7 +7,7 @@ todos:
     status: pending
   - id: design-intent-spec-layer
     content: 设计 Intent-to-Spec 层：把模糊需求变成目标、约束、成功标准、证据要求和审批点
-    status: pending
+    status: in_progress
   - id: define-run-kernel
     content: 定义 Run Kernel：Task、Run、Step、RunEvent、状态机和 event log
     status: pending
@@ -643,6 +643,35 @@ schema validation
 - 预期 artifact
 
 成功标准：同一个任务在执行前能被用户或系统审查，避免一上来就跑偏。
+
+#### Phase 2 最小 TaskSpec Builder Gate
+
+2026-05-13 02:02 UTC 自动化实现结论：Phase 2 的第一个执行切片不是 LLM spec generator，而是把现有模板化 `RegressionTaskSpecV1` 从 runner 内部函数提升为可独立构建和校验的执行前契约。
+
+最小入口：
+
+```text
+python3 scripts/task_spec.py --goal <goal> --input-log-path <log> --out <task_spec.json>
+```
+
+TaskSpec v1 的 schema version 固定为：
+
+```text
+regression-task-spec-v1
+```
+
+本切片完成后：
+
+- `scripts/task_spec.py` 生成并校验 `RegressionTaskSpecV1`，字段包括 `schemaVersion`、`goal`、`inputLogPath`、`allowedActions`、`forbiddenActions`、`successCriteria`、`requiredEvidence`、`expectedArtifacts` 和 `approvalPoints`。
+- Phase 1a fixture runner 和 Phase 1b local read-only runner 均复用同一个 TaskSpec builder / validator；local runner 在读取和分类 log 前先构建可审查 spec。
+- `scripts/validate_repo.py` 会运行 TaskSpec CLI smoke，并验证缺少 allowed actions、forbidden actions、success criteria、required evidence 或 approval points 的 spec 会被拒绝。
+
+Build vs Integrate：
+
+- Build：`RegressionTaskSpecV1` builder、validator、CLI smoke 和 malformed spec validation gate。
+- Integrate later：LLM intent parser、schema library、UI review form、多任务 spec catalogue。
+
+当前 Phase 2 仍未完成：本切片只覆盖 regression log 场景的 deterministic spec builder；自然语言澄清、多场景 intent routing、用户审查 UI 和 LLM 草稿校验仍后移。
 
 ### Phase 3：能力接口标准化
 
@@ -1377,7 +1406,7 @@ Add forced-failure verifier checks so that python3 scripts/validate_repo.py prov
 2. MVP Verification Contract：已完成，把第一版压缩成 read-only regression evidence demo。
 3. Feasibility Critic Review：已完成，把 Phase 1a 冻结为静态 fixture runner；SQLite、daemon、adapter 和 durable workflow 全部延后。
 4. Fixture Runner MVP：已实现 Phase 1a one-shot runner、5 个 synthetic fixture、committed artifact packet 和 deterministic validation gate；入口为 `python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir artifacts/runs`，输出并验证 `run.json`、`events.jsonl`、`evidence.json`、`regression_result.json`、`email_draft.md`、`verifier_report.json`，其中 `verifier_report.json` 是唯一验收真相；`scripts/validate_repo.py` 已加入 pass-style negative email、坏 evidence id、缺失 verifier rule、错误 schemaVersion、非法 evidence classification 和缺失 verifier status 的 forced-failure self-test。
-5. Intent-to-Spec MVP：MVP 默认使用模板/表单化 `RegressionTaskSpecV1`；LLM 只能生成草稿，必须通过 schema/rule verifier。
+5. Intent-to-Spec MVP：已实现 Phase 2 首个 deterministic `RegressionTaskSpecV1` builder / validator / CLI gate，入口为 `python3 scripts/task_spec.py --goal <goal> --input-log-path <log> --out <task_spec.json>`；schema version 为 `regression-task-spec-v1`，fixture runner 和 local read-only runner 均复用该 spec gate。LLM 仍只能作为后续草稿生成器，必须通过同一 schema/rule verifier。
 6. Evidence List + Verifier Runtime：已固化 `LogEvidenceV1`、`RegressionResultArtifactV1`、email grounding 规则和 fixture gate；下一步以 fixture runner 验证规则是否过多或不足。
 7. Local Read-only Runner：已实现 Phase 1b one-shot CLI `python3 scripts/local_readonly_runner.py --log-path <log> --goal <goal> --out-dir <out>`；该 runner 复用 Phase 1a schema、evidence list、email grounding 和 verifier report，`scripts/validate_repo.py` 已加入本地 read-only smoke gate。SQLite event store、daemon、正式 capability registry、真实外部 adapter 和更完整 run state 仍后移。
 8. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
@@ -1664,6 +1693,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-12 15:01 UTC：Phase 1a forced-failure artifact validation 已实现；决定将 pass-style negative email、坏 evidence id、缺失 verifier rule 三个 deterministic negative self-test 纳入 `scripts/validate_repo.py`，作为进入 Phase 1b 前的机器验收补强。
 - 2026-05-13 01:02 UTC：Phase 1a versioned schema validation 已实现；决定将 `run.json`、`events.jsonl`、`evidence.json`、`regression_result.json`、`verifier_report.json` 和 fixture metadata 的显式字段/枚举校验纳入 `scripts/validate_repo.py`，并用 malformed artifact forced-failure cases 证明错误 schemaVersion、非法 evidence classification 和缺失 verifier status 会被拒绝。
 - 2026-05-13 01:02 UTC：Phase 1b Local Read-only Runner 的首个最小实现已完成；决定将 `scripts/local_readonly_runner.py --log-path <log> --goal <goal> --out-dir <out>` 作为 Phase 1b CLI gate，继续复用 Phase 1a 的 artifact schema、evidence list、email grounding 和 verifier report，不引入 SQLite、daemon、capability registry、CUA、IDE 或外部副作用。
+- 2026-05-13 02:02 UTC：Phase 2 Intent-to-Spec 的首个最小实现已完成；决定将 deterministic `scripts/task_spec.py` 作为 regression 场景 TaskSpec builder / validator / CLI gate，schema version 固定为 `regression-task-spec-v1`，并让 fixture runner 与 local read-only runner 在执行前复用同一 spec validation。LLM intent parser、用户审查 UI 和多场景 spec router 继续后移。
 
 ## 20. Open Questions
 
@@ -1705,6 +1735,8 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 已有 5 个 synthetic fixture artifact packet 后，后续自动化是否应该从 Plan Maintenance 切换为 Evidence Review / implementation loop，并停止追加 no-evidence no-op 日志？
 - Phase 1a verifier hardening 通过 PR / GitHub checks 后，是否足以直接进入 Phase 1b Local Read-only Runner，还是需要先用真实脱敏日志校准 marker 常量？
 - 当前 marker 常量是否对真实脱敏 regression log 足够，还是 Evidence Review 会证明需要新增 project-specific marker 配置？
+- Phase 2 的下一步是否应该先为 `RegressionTaskSpecV1` 增加 committed `task_spec.json` artifact，还是保持 `run.json#taskSpec` 作为当前审查位置，等用户审查 UI 或多场景 spec router 出现后再拆分独立 artifact？
+- Deterministic TaskSpec builder 通过后，下一轮应优先扩展自然语言 goal 的澄清/归一化，还是先进入 Phase 3 capability interface standardization，把 read_log/extract/write 从函数提升为正式 capability contract？
 
 ## 21. Research Sprint Log
 
@@ -2723,6 +2755,71 @@ python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_pass
 ```text
 进入 Phase 2 Intent-to-Spec 最小切片：
 将当前模板化 TaskSpec 提炼为可独立校验的 spec builder/schema，使自然语言 goal + log path 在执行前生成可审查的 TaskSpec artifact，并由 validation gate 拒绝缺少 allowed/forbidden actions、success criteria 或 evidence requirements 的 spec。
+```
+
+### 2026-05-13 02:02 UTC: Phase 2 Intent-to-Spec TaskSpec Builder Gate
+
+本轮目标：推进最早未完成的 Phase 2，把 runner 内部模板化 TaskSpec 提炼为可独立构建、校验和 smoke test 的执行前规格层。
+
+Active phase：
+
+```text
+Phase 2: Intent-to-Spec and task specification
+```
+
+Selected slice：
+
+```text
+Add an independent regression TaskSpec builder/validator so that python3 scripts/validate_repo.py proves goal + log path produce a reviewable spec and malformed specs are rejected before runner execution.
+```
+
+为什么这是下一步：Phase 1b 已能对单个本地 log 生成 evidence packet；进入 Phase 3 capability contract 前，计划要求先保证自然语言 goal 和 log path 被转换成可审查的 `TaskSpec`，避免 workflow 从 prompt 直接行动。
+
+实现摘要：
+
+- 新增 `scripts/task_spec.py`，提供 `RegressionTaskSpecV1` builder、validator 和 CLI：`python3 scripts/task_spec.py --goal <goal> --input-log-path <log> --out <task_spec.json>`。
+- `RegressionTaskSpecV1.schemaVersion` 固定为 `regression-task-spec-v1`。
+- `scripts/fixture_runner.py` 和 `scripts/local_readonly_runner.py` 复用同一个 TaskSpec builder / validator；local runner 在读取和分类 log 前先构建 spec。
+- `scripts/validate_repo.py` 新增 TaskSpec CLI smoke gate，并验证缺少 `allowedActions`、`forbiddenActions`、`successCriteria`、`requiredEvidence` 或 `approvalPoints` 的 spec 会被拒绝。
+- 重新生成 committed `artifacts/runs/*`，使 `run.json#taskSpec` 包含 schema version 和统一的 Phase 2 spec 字段。
+
+验收标准：
+
+- TaskSpec CLI 能从 goal + log path 生成可校验 spec。
+- fixture runner 和 local read-only runner 均复用独立 TaskSpec builder / validator。
+- validation gate 能拒绝缺失核心动作、约束、成功标准、证据要求或审批点的 malformed spec。
+- Phase 2 本切片不引入 LLM、daemon、SQLite、CUA、IDE、browser、multi-agent 或外部副作用。
+
+验证命令：
+
+```text
+python3 scripts/validate_repo.py
+python3 -m py_compile scripts/fixture_runner.py scripts/validate_repo.py scripts/local_readonly_runner.py scripts/task_spec.py
+python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase2-task-spec.json
+python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --out-dir /tmp/phase2-local-readonly-smoke
+```
+
+验证结果：
+
+```text
+- `python3 scripts/validate_repo.py`：通过，覆盖 Phase 1a fixture/schema/verifier gate、Phase 1b local read-only smoke gate 和 Phase 2 TaskSpec builder/malformed spec gate。
+- `python3 -m py_compile scripts/fixture_runner.py scripts/validate_repo.py scripts/local_readonly_runner.py scripts/task_spec.py`：通过。
+- `python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase2-task-spec.json`：通过，生成 `/tmp/phase2-task-spec.json`。
+- `python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --out-dir /tmp/phase2-local-readonly-smoke`：通过，生成 `/tmp/phase2-local-readonly-smoke/all_passed` artifact packet。
+- `git diff --check`：通过。
+- `python scripts/validate_repo.py`：本地环境缺少 `python` 命令，返回 command not found；GitHub Actions 的 `actions/setup-python` 环境预期提供 `python`。
+```
+
+剩余风险：
+
+- 当前 `RegressionTaskSpecV1` 仍是 deterministic 模板，尚未处理多意图澄清、用户审查 UI 或 LLM 草稿校验。
+- 当前 TaskSpec 作为 `run.json#taskSpec` 嵌入 artifact packet；是否需要单独 committed `task_spec.json` artifact 仍留给后续 Phase 2/3 切片。
+
+下一轮建议：
+
+```text
+进入 Phase 3 capability interface standardization 的最小切片：
+定义 read_log / extract_regression_result / write_artifact 的 capability metadata envelope（permission、sideEffect、input/output contract、timeout），并让现有 runner 通过该 envelope 记录 step/capability 信息，但仍保持同进程、只读、无外部副作用。
 ```
 
 ## 22. Parking Lot
