@@ -16,7 +16,7 @@ todos:
     status: in_progress
   - id: design-context-broker
     content: 设计 Context Broker：上下文检索、压缩、引用来源和 token budget
-    status: in_progress
+    status: completed
   - id: design-policy-artifacts
     content: 设计 Policy/Approval Engine 和 Artifact System，保证可控、可审计、可交付
     status: pending
@@ -871,7 +871,25 @@ Build vs Integrate：
 - Build：最小 ContextPack runtime consumption/enforcement，保证 Context Broker 不只是静态 artifact，而是进入执行路径。
 - Integrate later：动态 source selection、token/line budget policy、symbol/docs/issues/CI adapters、ContextPack cache、embedding/vector retrieval 和 model-facing context broker service。
 
-当前 Phase 4 仍在进行中：静态 provenance 和 local runner consumption 已满足；下一步应补一个明确的 ContextPack budget/source-selection policy，例如限制最大 log excerpt 数/行数并用负例证明超预算 ContextPack 会被拒绝，然后再进入 Phase 5 Evidence List / MVP Verifier Runtime。
+本 gate 完成时的下一步是补一个明确的 ContextPack budget/source-selection policy，例如限制最大 log excerpt 数/行数并用负例证明超预算 ContextPack 会被拒绝，然后再进入 Phase 5 Evidence List / MVP Verifier Runtime。
+
+#### Phase 4 ContextPackV1 Budget / Source-Selection Gate
+
+2026-05-13 07:16 UTC 自动化实现结论：Phase 4 的第三个执行切片把 ContextPack 从“包含若干 excerpt”收敛为有显式预算的 bounded context artifact。`context-pack-v1` 现在包含 `context-budget-v1`，声明 `maxLogExcerptItems`、`maxLogExcerptLines`、实际 excerpt 数/行数、selection rule 和 overflow behavior；validator 会拒绝超过预算的 ContextPack。
+
+本切片完成后：
+
+- `scripts/context_pack.py` 定义 `context-budget-v1`，当前 read-only regression MVP 固定 `maxLogExcerptItems=8`、`maxLogExcerptLines=8`、`selectionRule=ordered_unique_log_evidence_markers`、`overflowBehavior=reject_context_pack`。
+- committed `artifacts/context/<fixture_id>/context_pack.json` 全部重新生成，包含 deterministic budget block，并保持 POSIX relative paths、normalized content hashes 和 builder 可重放。
+- `scripts/validate_repo.py` 校验主计划包含 `context-budget-v1` 标记，比较 committed ContextPack 与 deterministic builder 输出，并新增 forced-failure：注入第 9 条 log excerpt 时必须因超过 ContextPack budget 被拒绝。
+- local read-only runner 继续通过 `validate_context_pack(...)` 消费该预算合约；超预算 ContextPack 无法进入 evidence enforcement。
+
+Build vs Integrate：
+
+- Build：Phase 4 read-only MVP 的最小 context budget contract、source-selection rule、deterministic artifact regeneration 和超预算 validation gate。
+- Integrate later：动态 token estimator、ranking/retrieval policy、embedding/vector store、symbol/docs/issues/CI adapters、ContextPack cache 和 broker service。
+
+当前 Phase 4 regression-log MVP gate 已满足：ContextPack 具备静态 provenance、runtime consumption/evidence enforcement 和最小 budget/source-selection policy。动态 Context Broker service、retrieval/ranking、cache 和外部 source adapters 后移，不阻塞进入 Phase 5 Evidence List / MVP Verifier Runtime。
 
 #### Phase 4 ContextPackV1 Budget / Source Selection Gate
 
