@@ -31,6 +31,11 @@
       "type": "verifier_report"
     }
   ],
+  "budget": {
+    "maxLogExcerptItems": 4,
+    "maxLogExcerptLines": 4,
+    "sourceSelection": "evidence_items_only_v1"
+  },
   "capabilityCatalogRef": "artifacts/capabilities/phase3_capability_catalog.json",
   "contextItems": [
     {

@@ -614,6 +614,16 @@ def validate_committed_context_packs() -> None:
     else:
         raise AssertionError("ContextPack hash forced-failure unexpectedly passed validation")
 
+    tampered = load_json(CONTEXT_PACK_DIR / "all_passed/context_pack.json")
+    tampered["budget"]["maxLogExcerptLines"] = 1
+    try:
+        validate_context_pack(tampered, ROOT)
+    except ValueError as exc:
+        if "log_excerpt line budget exceeded" not in str(exc):
+            raise AssertionError(f"ContextPack budget forced-failure rejected for the wrong reason: {exc}") from exc
+    else:
+        raise AssertionError("ContextPack budget forced-failure unexpectedly passed validation")
+
 
 def run_context_pack_builder(out_dir: Path) -> None:
     command = [
