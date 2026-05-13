@@ -7,6 +7,100 @@
     "events.jsonl",
     "verifier_report.json"
   ],
+  "capabilityEnvelope": {
+    "items": [
+      {
+        "inputContract": {
+          "properties": {
+            "sourcePath": "string:path"
+          },
+          "required": [
+            "sourcePath"
+          ],
+          "schema": "ReadLogInputV1"
+        },
+        "name": "read_log",
+        "outputContract": {
+          "produces": [
+            "logTextRef"
+          ],
+          "properties": {
+            "logTextRef": "string:memory-ref"
+          },
+          "schema": "ReadLogOutputV1"
+        },
+        "permission": "read",
+        "ref": "capability://phase3/read_log",
+        "schemaVersion": "capability-metadata-v1",
+        "sideEffect": false,
+        "timeoutMs": 1000
+      },
+      {
+        "inputContract": {
+          "properties": {
+            "logTextRef": "string:memory-ref",
+            "taskSpecRef": "string:run-json-pointer"
+          },
+          "required": [
+            "logTextRef",
+            "taskSpecRef"
+          ],
+          "schema": "ExtractRegressionResultInputV1"
+        },
+        "name": "extract_regression_result",
+        "outputContract": {
+          "produces": [
+            "evidenceItems",
+            "regressionResultCandidate"
+          ],
+          "properties": {
+            "evidenceItems": "LogEvidenceV1[]",
+            "regressionResultCandidate": "RegressionResultArtifactV1"
+          },
+          "schema": "ExtractRegressionResultOutputV1"
+        },
+        "permission": "read",
+        "ref": "capability://phase3/extract_regression_result",
+        "schemaVersion": "capability-metadata-v1",
+        "sideEffect": false,
+        "timeoutMs": 1000
+      },
+      {
+        "inputContract": {
+          "properties": {
+            "emailDraftRef": "string:artifact-ref",
+            "evidenceRef": "string:artifact-ref",
+            "regressionResultRef": "string:artifact-ref",
+            "runRef": "string:run-json-pointer"
+          },
+          "required": [
+            "runRef",
+            "evidenceRef",
+            "regressionResultRef",
+            "emailDraftRef"
+          ],
+          "schema": "WriteArtifactInputV1"
+        },
+        "name": "write_artifact",
+        "outputContract": {
+          "effectBoundary": "local_artifact_output_only",
+          "produces": [
+            "artifactPaths"
+          ],
+          "properties": {
+            "artifactPaths": "string:path[]"
+          },
+          "schema": "WriteArtifactOutputV1"
+        },
+        "permission": "write",
+        "ref": "capability://phase3/write_artifact",
+        "schemaVersion": "capability-metadata-v1",
+        "sideEffect": false,
+        "timeoutMs": 1000
+      }
+    ],
+    "schemaVersion": "capability-envelope-v1"
+  },
   "events": [
     "event-ambiguous_summary-001",
     "event-ambiguous_summary-002",
@@ -24,16 +118,19 @@
   "steps": [
     {
       "capability": "read_log",
+      "capabilityRef": "capability://phase3/read_log",
       "id": "step-read-log",
       "status": "completed"
     },
     {
       "capability": "extract_regression_result",
+      "capabilityRef": "capability://phase3/extract_regression_result",
       "id": "step-extract-regression-result",
       "status": "completed"
     },
     {
       "capability": "write_artifact",
+      "capabilityRef": "capability://phase3/write_artifact",
       "id": "step-write-artifact",
       "status": "completed"
     },
