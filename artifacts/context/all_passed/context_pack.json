@@ -1,0 +1,212 @@
+{
+  "artifactRefs": [
+    {
+      "contentHash": "ea997031445411aa4de7735e4a65a9db70475e8ab91f34615bd95f656c984900",
+      "path": "artifacts/runs/all_passed/run.json",
+      "type": "run"
+    },
+    {
+      "contentHash": "02f5a82d1765a4443aae0d3c50502e7ee0ae6e3dcd1c2201b6e2a83daae4a6fc",
+      "path": "artifacts/runs/all_passed/events.jsonl",
+      "type": "events"
+    },
+    {
+      "contentHash": "dd47a2a674c421081411fa76df5405cc93802b19fd2139d493749f7df3bd4ae5",
+      "path": "artifacts/runs/all_passed/evidence.json",
+      "type": "evidence"
+    },
+    {
+      "contentHash": "787c47a02d5a6303113d757693a5d70f97f806e0f74dbb078d0f91f34c23d5e1",
+      "path": "artifacts/runs/all_passed/regression_result.json",
+      "type": "regression_result"
+    },
+    {
+      "contentHash": "dc3f7d5b17d569e2acd9247fae6f0d6cb08638132e8fcfd1dd0b77b75b464bcd",
+      "path": "artifacts/runs/all_passed/email_draft.md",
+      "type": "email_draft"
+    },
+    {
+      "contentHash": "3e1a8c46a51802e7424961344e3b42525cca6b9a7f6892282084f20ef0947aec",
+      "path": "artifacts/runs/all_passed/verifier_report.json",
+      "type": "verifier_report"
+    }
+  ],
+  "capabilityCatalogRef": "artifacts/capabilities/phase3_capability_catalog.json",
+  "contextItems": [
+    {
+      "id": "ctx-task-goal",
+      "kind": "task_goal",
+      "sourceId": "source-task-spec",
+      "text": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email."
+    },
+    {
+      "allowedActions": [
+        "read_log",
+        "extract_regression_result",
+        "write_artifact"
+      ],
+      "approvalPoints": [
+        "send_email_requires_human_approval"
+      ],
+      "forbiddenActions": [
+        "modify_repo_or_log",
+        "execute_external_side_effect",
+        "send_email",
+        "call_gui_desktop_cua_or_browser_capability",
+        "claim_all_passed_without_sufficient_evidence"
+      ],
+      "id": "ctx-task-boundaries",
+      "kind": "task_boundaries",
+      "sourceId": "source-task-spec"
+    },
+    {
+      "capabilityRefs": [
+        "capability://phase3/read_log",
+        "capability://phase3/extract_regression_result",
+        "capability://phase3/write_artifact",
+        "capability://phase3/rule_verifier"
+      ],
+      "id": "ctx-capability-refs",
+      "kind": "capability_refs",
+      "sourceId": "source-capability-catalog"
+    },
+    {
+      "classification": "all_passed_marker",
+      "confidence": "high",
+      "evidenceId": "ev-all_passed-001",
+      "id": "ctx-log-evidence-001",
+      "kind": "log_excerpt",
+      "lineRange": [
+        4,
+        4
+      ],
+      "sourceId": "source-regression-log",
+      "text": "STATUS: PASSED"
+    },
+    {
+      "classification": "all_passed_marker",
+      "confidence": "high",
+      "evidenceId": "ev-all_passed-002",
+      "id": "ctx-log-evidence-002",
+      "kind": "log_excerpt",
+      "lineRange": [
+        6,
+        6
+      ],
+      "sourceId": "source-regression-log",
+      "text": "failed_tests: 0"
+    },
+    {
+      "classification": "all_passed_marker",
+      "confidence": "high",
+      "evidenceId": "ev-all_passed-003",
+      "id": "ctx-log-evidence-003",
+      "kind": "log_excerpt",
+      "lineRange": [
+        7,
+        7
+      ],
+      "sourceId": "source-regression-log",
+      "text": "incomplete_jobs: 0"
+    },
+    {
+      "classification": "all_passed_marker",
+      "confidence": "high",
+      "evidenceId": "ev-all_passed-004",
+      "id": "ctx-log-evidence-004",
+      "kind": "log_excerpt",
+      "lineRange": [
+        8,
+        8
+      ],
+      "sourceId": "source-regression-log",
+      "text": "ALL TESTS PASSED"
+    },
+    {
+      "evidenceIds": [
+        "ev-all_passed-001",
+        "ev-all_passed-002",
+        "ev-all_passed-003",
+        "ev-all_passed-004"
+      ],
+      "id": "ctx-regression-verdict",
+      "kind": "regression_verdict",
+      "sourceId": "source-regression-result-json",
+      "summary": "All-pass markers were found with no conflicting markers.",
+      "verdict": "passed"
+    }
+  ],
+  "fixtureId": "all_passed",
+  "id": "context-pack-all_passed",
+  "purpose": "Bounded regression context for evidence extraction and verification.",
+  "runRef": "artifacts/runs/all_passed/run.json",
+  "schemaVersion": "context-pack-v1",
+  "sources": [
+    {
+      "contentHash": "8227b51a438db2340c404ac5751921f92b1f7c5c8db194cbaa7183f16f242e71",
+      "id": "source-task-spec",
+      "jsonPointer": "/taskSpec",
+      "path": "artifacts/runs/all_passed/run.json",
+      "role": "task_spec",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "5c9da2f9a45eef15aed742fa187b999b8fe34b1dacd72cd75cd6558f5f8b94bd",
+      "id": "source-regression-log",
+      "lineCount": 9,
+      "path": "fixtures/regression/all_passed/input.log",
+      "role": "regression_log",
+      "type": "log"
+    },
+    {
+      "contentHash": "531bbbbb30b4793d94effe78c4e1ce37d79ceb0f53b5c3da9d652f7ecf465d1a",
+      "id": "source-capability-catalog",
+      "path": "artifacts/capabilities/phase3_capability_catalog.json",
+      "role": "capability_catalog",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "ea997031445411aa4de7735e4a65a9db70475e8ab91f34615bd95f656c984900",
+      "id": "source-run-json",
+      "path": "artifacts/runs/all_passed/run.json",
+      "role": "run_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "02f5a82d1765a4443aae0d3c50502e7ee0ae6e3dcd1c2201b6e2a83daae4a6fc",
+      "id": "source-events-jsonl",
+      "path": "artifacts/runs/all_passed/events.jsonl",
+      "role": "events_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "dd47a2a674c421081411fa76df5405cc93802b19fd2139d493749f7df3bd4ae5",
+      "id": "source-evidence-json",
+      "path": "artifacts/runs/all_passed/evidence.json",
+      "role": "evidence_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "787c47a02d5a6303113d757693a5d70f97f806e0f74dbb078d0f91f34c23d5e1",
+      "id": "source-regression-result-json",
+      "path": "artifacts/runs/all_passed/regression_result.json",
+      "role": "regression_result_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "dc3f7d5b17d569e2acd9247fae6f0d6cb08638132e8fcfd1dd0b77b75b464bcd",
+      "id": "source-email-draft-md",
+      "path": "artifacts/runs/all_passed/email_draft.md",
+      "role": "email_draft_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "3e1a8c46a51802e7424961344e3b42525cca6b9a7f6892282084f20ef0947aec",
+      "id": "source-verifier-report-json",
+      "path": "artifacts/runs/all_passed/verifier_report.json",
+      "role": "verifier_report_artifact",
+      "type": "artifact"
+    }
+  ],
+  "taskSpecRef": "artifacts/runs/all_passed/run.json#/taskSpec"
+}

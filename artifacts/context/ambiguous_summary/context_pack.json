@@ -1,0 +1,212 @@
+{
+  "artifactRefs": [
+    {
+      "contentHash": "f9cc3781315038709d8ecc5863afc5fc238dbab8c55c975785bc9e4788f5978e",
+      "path": "artifacts/runs/ambiguous_summary/run.json",
+      "type": "run"
+    },
+    {
+      "contentHash": "a5455036df097eec705c258c4acdc780212b6448eb5ca36cdcc4cf75f7ed664d",
+      "path": "artifacts/runs/ambiguous_summary/events.jsonl",
+      "type": "events"
+    },
+    {
+      "contentHash": "d08f25542af22fb1d9d7873a019235a10a22bbfe8aabf13b3a86543d8d44dad1",
+      "path": "artifacts/runs/ambiguous_summary/evidence.json",
+      "type": "evidence"
+    },
+    {
+      "contentHash": "a4f0aed6b12fc29a9f1eef091fd60bb96e1c82e2d9ce0c94a8ace3a00db51666",
+      "path": "artifacts/runs/ambiguous_summary/regression_result.json",
+      "type": "regression_result"
+    },
+    {
+      "contentHash": "f0638d8519b096bc9d3eaae7e199e6615b5af7c1d55ba813639a74c6c598b282",
+      "path": "artifacts/runs/ambiguous_summary/email_draft.md",
+      "type": "email_draft"
+    },
+    {
+      "contentHash": "bd822f5559ce9be4d5ea90149c9d939be9313202cf45179ecef75f938764b474",
+      "path": "artifacts/runs/ambiguous_summary/verifier_report.json",
+      "type": "verifier_report"
+    }
+  ],
+  "capabilityCatalogRef": "artifacts/capabilities/phase3_capability_catalog.json",
+  "contextItems": [
+    {
+      "id": "ctx-task-goal",
+      "kind": "task_goal",
+      "sourceId": "source-task-spec",
+      "text": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email."
+    },
+    {
+      "allowedActions": [
+        "read_log",
+        "extract_regression_result",
+        "write_artifact"
+      ],
+      "approvalPoints": [
+        "send_email_requires_human_approval"
+      ],
+      "forbiddenActions": [
+        "modify_repo_or_log",
+        "execute_external_side_effect",
+        "send_email",
+        "call_gui_desktop_cua_or_browser_capability",
+        "claim_all_passed_without_sufficient_evidence"
+      ],
+      "id": "ctx-task-boundaries",
+      "kind": "task_boundaries",
+      "sourceId": "source-task-spec"
+    },
+    {
+      "capabilityRefs": [
+        "capability://phase3/read_log",
+        "capability://phase3/extract_regression_result",
+        "capability://phase3/write_artifact",
+        "capability://phase3/rule_verifier"
+      ],
+      "id": "ctx-capability-refs",
+      "kind": "capability_refs",
+      "sourceId": "source-capability-catalog"
+    },
+    {
+      "classification": "ambiguous",
+      "confidence": "low",
+      "evidenceId": "ev-ambiguous_summary-001",
+      "id": "ctx-log-evidence-001",
+      "kind": "log_excerpt",
+      "lineRange": [
+        2,
+        2
+      ],
+      "sourceId": "source-regression-log",
+      "text": "RUN_ID: synth-ambiguous-summary-001"
+    },
+    {
+      "classification": "ambiguous",
+      "confidence": "low",
+      "evidenceId": "ev-ambiguous_summary-002",
+      "id": "ctx-log-evidence-002",
+      "kind": "log_excerpt",
+      "lineRange": [
+        4,
+        4
+      ],
+      "sourceId": "source-regression-log",
+      "text": "SUMMARY unavailable"
+    },
+    {
+      "classification": "ambiguous",
+      "confidence": "low",
+      "evidenceId": "ev-ambiguous_summary-003",
+      "id": "ctx-log-evidence-003",
+      "kind": "log_excerpt",
+      "lineRange": [
+        5,
+        5
+      ],
+      "sourceId": "source-regression-log",
+      "text": "No final verdict was emitted by the regression wrapper."
+    },
+    {
+      "classification": "ambiguous",
+      "confidence": "low",
+      "evidenceId": "ev-ambiguous_summary-004",
+      "id": "ctx-log-evidence-004",
+      "kind": "log_excerpt",
+      "lineRange": [
+        6,
+        6
+      ],
+      "sourceId": "source-regression-log",
+      "text": "Operator note: ambiguous handoff state after infrastructure maintenance."
+    },
+    {
+      "evidenceIds": [
+        "ev-ambiguous_summary-001",
+        "ev-ambiguous_summary-002",
+        "ev-ambiguous_summary-003",
+        "ev-ambiguous_summary-004"
+      ],
+      "id": "ctx-regression-verdict",
+      "kind": "regression_verdict",
+      "sourceId": "source-regression-result-json",
+      "summary": "No sufficient pass/fail/incomplete marker was found.",
+      "verdict": "unknown"
+    }
+  ],
+  "fixtureId": "ambiguous_summary",
+  "id": "context-pack-ambiguous_summary",
+  "purpose": "Bounded regression context for evidence extraction and verification.",
+  "runRef": "artifacts/runs/ambiguous_summary/run.json",
+  "schemaVersion": "context-pack-v1",
+  "sources": [
+    {
+      "contentHash": "f23b6257171ae5e66b33b82f9ddc2c17931d70a41b1fc0f9c1eb2d5be829f6ca",
+      "id": "source-task-spec",
+      "jsonPointer": "/taskSpec",
+      "path": "artifacts/runs/ambiguous_summary/run.json",
+      "role": "task_spec",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "cfff19fd7bf6e7e43a09bbb0e9be2ce4e85924d21bee901d12e6d82d067fd22a",
+      "id": "source-regression-log",
+      "lineCount": 6,
+      "path": "fixtures/regression/ambiguous_summary/input.log",
+      "role": "regression_log",
+      "type": "log"
+    },
+    {
+      "contentHash": "531bbbbb30b4793d94effe78c4e1ce37d79ceb0f53b5c3da9d652f7ecf465d1a",
+      "id": "source-capability-catalog",
+      "path": "artifacts/capabilities/phase3_capability_catalog.json",
+      "role": "capability_catalog",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "f9cc3781315038709d8ecc5863afc5fc238dbab8c55c975785bc9e4788f5978e",
+      "id": "source-run-json",
+      "path": "artifacts/runs/ambiguous_summary/run.json",
+      "role": "run_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "a5455036df097eec705c258c4acdc780212b6448eb5ca36cdcc4cf75f7ed664d",
+      "id": "source-events-jsonl",
+      "path": "artifacts/runs/ambiguous_summary/events.jsonl",
+      "role": "events_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "d08f25542af22fb1d9d7873a019235a10a22bbfe8aabf13b3a86543d8d44dad1",
+      "id": "source-evidence-json",
+      "path": "artifacts/runs/ambiguous_summary/evidence.json",
+      "role": "evidence_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "a4f0aed6b12fc29a9f1eef091fd60bb96e1c82e2d9ce0c94a8ace3a00db51666",
+      "id": "source-regression-result-json",
+      "path": "artifacts/runs/ambiguous_summary/regression_result.json",
+      "role": "regression_result_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "f0638d8519b096bc9d3eaae7e199e6615b5af7c1d55ba813639a74c6c598b282",
+      "id": "source-email-draft-md",
+      "path": "artifacts/runs/ambiguous_summary/email_draft.md",
+      "role": "email_draft_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "bd822f5559ce9be4d5ea90149c9d939be9313202cf45179ecef75f938764b474",
+      "id": "source-verifier-report-json",
+      "path": "artifacts/runs/ambiguous_summary/verifier_report.json",
+      "role": "verifier_report_artifact",
+      "type": "artifact"
+    }
+  ],
+  "taskSpecRef": "artifacts/runs/ambiguous_summary/run.json#/taskSpec"
+}
