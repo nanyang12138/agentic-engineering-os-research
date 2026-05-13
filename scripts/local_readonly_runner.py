@@ -6,6 +6,7 @@ import re
 import shutil
 from pathlib import Path
 
+from capability_contract import build_capability_envelope, capability_ref
 from fixture_runner import (
     EXPECTED_ARTIFACTS,
     GENERATED_AT,
@@ -87,10 +88,26 @@ def write_local_run(log_path: Path, goal: str, out_dir: Path, task_spec_path: Pa
         "fixtureId": case_id,
         "task": goal,
         "taskSpec": task_spec,
+        "capabilityEnvelope": build_capability_envelope(),
         "steps": [
-            {"id": "step-read-log", "capability": "read_log", "status": "completed"},
-            {"id": "step-extract-regression-result", "capability": "extract_regression_result", "status": "completed"},
-            {"id": "step-write-artifact", "capability": "write_artifact", "status": "completed"},
+            {
+                "id": "step-read-log",
+                "capability": "read_log",
+                "capabilityRef": capability_ref("read_log"),
+                "status": "completed",
+            },
+            {
+                "id": "step-extract-regression-result",
+                "capability": "extract_regression_result",
+                "capabilityRef": capability_ref("extract_regression_result"),
+                "status": "completed",
+            },
+            {
+                "id": "step-write-artifact",
+                "capability": "write_artifact",
+                "capabilityRef": capability_ref("write_artifact"),
+                "status": "completed",
+            },
             {"id": "step-verify", "capability": "rule_verifier", "status": report_status},
         ],
         "events": [event["id"] for event in events],

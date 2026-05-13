@@ -7,6 +7,94 @@
     "events.jsonl",
     "verifier_report.json"
   ],
+  "capabilityEnvelope": {
+    "capabilities": [
+      {
+        "inputSchema": {
+          "properties": {
+            "logPath": "string"
+          },
+          "required": [
+            "logPath"
+          ],
+          "type": "object"
+        },
+        "name": "read_log",
+        "outputSchema": {
+          "properties": {
+            "logTextRef": "string",
+            "sourcePath": "string"
+          },
+          "required": [
+            "logTextRef",
+            "sourcePath"
+          ],
+          "type": "object"
+        },
+        "permission": "read",
+        "schemaVersion": "capability-metadata-v1",
+        "sideEffect": false,
+        "timeoutMs": 1000
+      },
+      {
+        "inputSchema": {
+          "properties": {
+            "logTextRef": "string",
+            "taskSpecRef": "string"
+          },
+          "required": [
+            "logTextRef",
+            "taskSpecRef"
+          ],
+          "type": "object"
+        },
+        "name": "extract_regression_result",
+        "outputSchema": {
+          "properties": {
+            "evidenceArtifact": "evidence.json",
+            "regressionResultArtifact": "regression_result.json"
+          },
+          "required": [
+            "evidenceArtifact",
+            "regressionResultArtifact"
+          ],
+          "type": "object"
+        },
+        "permission": "read",
+        "schemaVersion": "capability-metadata-v1",
+        "sideEffect": false,
+        "timeoutMs": 1000
+      },
+      {
+        "inputSchema": {
+          "properties": {
+            "artifactPayloads": "object",
+            "outDir": "string"
+          },
+          "required": [
+            "artifactPayloads",
+            "outDir"
+          ],
+          "type": "object"
+        },
+        "name": "write_artifact",
+        "outputSchema": {
+          "properties": {
+            "artifactPaths": "string[]"
+          },
+          "required": [
+            "artifactPaths"
+          ],
+          "type": "object"
+        },
+        "permission": "write",
+        "schemaVersion": "capability-metadata-v1",
+        "sideEffect": false,
+        "timeoutMs": 1000
+      }
+    ],
+    "schemaVersion": "capability-envelope-v1"
+  },
   "events": [
     "event-ambiguous_summary-001",
     "event-ambiguous_summary-002",
@@ -24,16 +112,19 @@
   "steps": [
     {
       "capability": "read_log",
+      "capabilityRef": "capability-envelope-v1#read_log",
       "id": "step-read-log",
       "status": "completed"
     },
     {
       "capability": "extract_regression_result",
+      "capabilityRef": "capability-envelope-v1#extract_regression_result",
       "id": "step-extract-regression-result",
       "status": "completed"
     },
     {
       "capability": "write_artifact",
+      "capabilityRef": "capability-envelope-v1#write_artifact",
       "id": "step-write-artifact",
       "status": "completed"
     },
