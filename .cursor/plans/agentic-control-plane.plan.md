@@ -851,7 +851,7 @@ Build vs Integrate：
 
 #### Phase 4 ContextPackV1 Runtime Consumption Gate
 
-2026-05-13 07:08 UTC 自动化实现结论：Phase 4 的第二个执行切片让 local read-only runner 可选加载 `ContextPackV1`，并在读取/分类 log 后验证所有 `LogEvidenceV1` 都由 ContextPack 声明的 `log_excerpt` source ref、line range 和文本支持。这个 gate 仍然是 read-only/same-process，不引入动态 retrieval、embedding store、外部 docs/issues/CI adapter、CUA 或 IDE adapter。
+2026-05-13 07:01 UTC 自动化实现结论：Phase 4 的第二个执行切片让 local read-only runner 可选加载 `ContextPackV1`，并在读取/分类 log 后验证所有 `LogEvidenceV1` 都由 ContextPack 声明的 `log_excerpt` source ref、line range 和文本支持。这个 gate 仍然是 read-only/same-process，不引入动态 retrieval、embedding store、外部 docs/issues/CI adapter、CUA 或 IDE adapter。
 
 本切片完成后：
 
@@ -1845,7 +1845,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-13 05:20 UTC：Phase 3 Rule Verifier Capability Boundary Gate 已实现；决定把现有 `step-verify` 的 `rule_verifier` 纳入同一最小 capability envelope，以保证当前 run 的每个 step 都有 `capabilityRef`。这不等于进入完整 Phase 5 Verifier Runtime；可插拔 verifier、review agent、human verifier 和 policy engine 继续后移。
 - 2026-05-13 05:40 UTC：Phase 3 Capability Catalogue Artifact Gate 已实现；决定将当前 read-only regression MVP 的 capability envelope 导出为 committed `capability-catalog-v1` artifact，并由 `scripts/validate_repo.py` 比对 deterministic builder 输出。动态 registry、provider discovery、adapter lifecycle 和 policy backend 继续后移；Phase 4 可从独立 catalogue 引用 capability provenance。
 - 2026-05-13 06:03 UTC：Phase 4 ContextPackV1 Static Provenance Gate 已实现；决定先自研 deterministic `context-pack-v1` artifact，把 TaskSpec、regression log excerpts、capability catalogue 和 run artifact refs 统一成带 POSIX relative path 与 contentHash 的 context provenance。动态 retrieval、symbol/docs/issues/CI adapters、embedding store 和 ContextPack runtime injection 后移。
-- 2026-05-13 07:08 UTC：Phase 4 ContextPackV1 Runtime Consumption Gate 已实现；决定让 local read-only runner 可选消费 committed ContextPack，并强制每条 log evidence 必须由 ContextPack 声明的 `log_excerpt` source ref 支持。动态 retrieval、cache、broker service 和 token budget optimizer 继续后移；下一步优先补最小 budget/source-selection policy。
+- 2026-05-13 07:01 UTC：Phase 4 ContextPackV1 Runtime Consumption Gate 已实现；决定让 local read-only runner 可选消费 committed ContextPack，并强制每条 log evidence 必须由 ContextPack 声明的 `log_excerpt` source ref 支持。动态 retrieval、cache、broker service 和 token budget optimizer 继续后移；下一步优先补最小 budget/source-selection policy。
 
 ## 20. Open Questions
 
@@ -1871,7 +1871,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - Phase 2 regression-log MVP gate 已收敛为 deterministic TaskSpec builder + runner intake：`task_spec.py` 生成审查对象，`local_readonly_runner.py --task-spec-path` 在执行前校验并使用该 spec。
 - Phase 3 的最小 capability metadata envelope 已收敛为 `capability-envelope-v1` / `capability-metadata-v1`，覆盖 `schemaVersion`、`name`、`ref`、`permission`、`sideEffect`、`timeoutMs`、`inputContract` 和 `outputContract`；当前 regression demo 的 `read_log`、`extract_regression_result`、`write_artifact`、`rule_verifier` 都必须有 `capabilityRef`，正式 registry、daemon、adapter plugin 和外部 provider 继续后移。
 - `capability-envelope-v1` 先作为 `artifacts/capabilities/phase3_capability_catalog.json` 独立 artifact 提交和验证；Phase 4 Context Broker 可引用该静态 catalogue，动态 registry / provider discovery 后移。
-- Phase 4 的 Context Broker artifact 固定为 `ContextPackV1` / `context-pack-v1`：先用静态 builder 收敛 TaskSpec、log excerpts、capability catalogue 和 artifact refs，并用 contentHash 验证来源可复查；local runner 可选消费 committed ContextPack 并拒绝未声明的 log evidence，动态 retrieval 与 broker service 后移。
+- Phase 4 的首个 Context Broker artifact 固定为 `ContextPackV1` / `context-pack-v1`：先用静态 builder 收敛 TaskSpec、log excerpts、capability catalogue 和 artifact refs，并用 contentHash 验证来源可复查；动态 retrieval 与 runtime consumption 后移到后续 Phase 4 slice。
 
 ### 20.2 仍开放的问题
 
@@ -3319,7 +3319,7 @@ git diff --check
 让 local read-only runner 在执行前生成或加载 ContextPackV1，并验证 evidence extraction 只能使用 ContextPack 声明的 source refs / log excerpts；同时加入一个负例证明未声明 source 的 evidence 会被拒绝。
 ```
 
-### 2026-05-13 07:08 UTC Automation Implementation Log - Phase 4 ContextPackV1 Runtime Consumption Gate
+### 2026-05-13 07:01 UTC Automation Implementation Log - Phase 4 ContextPackV1 Runtime Consumption Gate
 
 Active phase：
 
@@ -3365,12 +3365,12 @@ git diff --check
 
 ```text
 - Python executable resolved for this run: python3.
-- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 Phase 1a/1b/2/3 gates、Phase 4 ContextPack static provenance，以及 local runner ContextPack consumption/forced-failure gate。
-- `/usr/bin/python3 -m py_compile ...`：通过。
-- `/usr/bin/python3 scripts/task_spec.py ... --out /tmp/phase4-context-task-spec.json`：通过。
-- `/usr/bin/python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json ...`：通过。
-- `/usr/bin/python3 scripts/context_pack.py ... --out-dir /tmp/phase4-context-pack-smoke`：通过，写出 5 个 ContextPack artifacts。
-- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase4-fixture-smoke`：通过。
+- `python3 scripts/validate_repo.py`：通过，覆盖 Phase 1a/1b/2/3 gates、Phase 4 ContextPack static provenance，以及 local runner ContextPack consumption/forced-failure gate。
+- `python3 -m py_compile ...`：通过。
+- `python3 scripts/task_spec.py ... --out /tmp/phase4-context-task-spec.json`：通过。
+- `python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json ...`：通过。
+- `python3 scripts/context_pack.py ... --out-dir /tmp/phase4-context-pack-smoke`：通过，写出 5 个 ContextPack artifacts。
+- `python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase4-fixture-smoke`：通过。
 - `git diff --check`：通过。
 ```
 
@@ -3378,7 +3378,7 @@ git diff --check
 
 - ContextPack 仍由静态 artifact 提供，尚未实现动态 context broker service 或 source selection/ranking。
 - 当前 enforcement 验证 evidence 是否来自声明的 `log_excerpt`，但尚未限制 ContextPack 总大小、最大行数或 token budget。
-- 开放 PR #49 已实现同一 Phase 4 切片但仍为 draft；本环境没有写权限工具可关闭或标记 ready，当前分支会使 #49 被本轮 PR supersede。
+- 本环境没有写权限 GitHub merge tool；如果 PR 被创建为 draft，无法通过 `gh pr ready` 或 auto-merge 写操作解除。
 
 下一轮建议：
 
