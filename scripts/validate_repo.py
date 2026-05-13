@@ -72,6 +72,7 @@ REQUIRED_FILES = [
     "docs/automation/cloud-automation-prompt.md",
     ".github/workflows/validate.yml",
     "scripts/fixture_runner.py",
+    "scripts/local_readonly_runner.py",
 ]
 
 PLAN_REQUIRED_MARKERS = [
@@ -168,6 +169,27 @@ def run_fixture_runner(out_dir: Path) -> None:
     if result.returncode != 0:
         raise AssertionError(
             "Fixture runner failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
+def run_local_readonly_runner(out_dir: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/local_readonly_runner.py"),
+        "--log-path",
+        str(FIXTURE_DIR / "all_passed/input.log"),
+        "--goal",
+        "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",
+        "--out-dir",
+        str(out_dir),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "Local read-only runner failed.\n"
             f"Command: {' '.join(command)}\n"
             f"stdout:\n{result.stdout}\n"
             f"stderr:\n{result.stderr}"
@@ -494,6 +516,33 @@ def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
     )
 
 
+def validate_local_readonly_runner(out_dir: Path) -> None:
+    run_local_readonly_runner(out_dir)
+    run_dir = out_dir / "all_passed"
+    for filename in ARTIFACT_FILES:
+        if not (run_dir / filename).is_file():
+            raise AssertionError(f"Missing local read-only runner artifact: {filename}")
+
+    run = load_json(run_dir / "run.json")
+    evidence = load_json(run_dir / "evidence.json")
+    result = load_json(run_dir / "regression_result.json")
+    report = load_json(run_dir / "verifier_report.json")
+    email = (run_dir / "email_draft.md").read_text(encoding="utf-8")
+    events = [
+        json.loads(line)
+        for line in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    validate_schema_structure("all_passed", run, evidence, result, report, events)
+    if result["verdict"] != "passed":
+        raise AssertionError(f"Local read-only runner expected passed verdict, got {result['verdict']}")
+    if report["status"] != "passed":
+        raise AssertionError(f"Local read-only runner verifier_report status must be passed, got {report['status']}")
+    if result["id"].lower() not in email.lower():
+        raise AssertionError("Local read-only runner email must reference regression_result artifact id")
+
+
 def main() -> None:
     for path in REQUIRED_FILES:
         require_file(path)
@@ -517,6 +566,7 @@ def main() -> None:
         require_forced_failure_checks(ARTIFACT_DIR)
         compare_artifact_packets(ARTIFACT_DIR, generated_artifacts)
         validate_forced_failure_cases(generated_artifacts, Path(temp_dir) / "forced-failures")
+        validate_local_readonly_runner(Path(temp_dir) / "local-readonly")
 
     print("Repository validation passed.")
 
