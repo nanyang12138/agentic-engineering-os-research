@@ -1185,6 +1185,25 @@ Build vs Integrate：
 
 当前 Phase 9 contract-only MVP gate 已满足：multi-agent handoff / ownership 与 delivery readiness / blocker report 均有 deterministic artifact 和 validation。完整多 agent runtime、真实 external delivery 和 human approval backend 仍后移；下一步应进行计划收敛/完成度评审，决定 whole-plan MVP 是否以 contract-only Read-only Regression Evidence Demo 结项，或追加 Evaluation/learning loop 的最小验证 artifact。
 
+#### Phase 9 / Whole-plan EvaluationReportV1 MVP Completion Gate
+
+2026-05-13 20:02 UTC 自动化实现结论：Phase 1a-9 的 contract-only Read-only Regression Evidence Demo 已经具备完整机器可验证 artifact 链路，但需要一个最终评估 artifact 把“各阶段 MVP gate 已满足”和“完整产品仍未完成”同时固化下来。最小实现不是 production learning system、dashboard 或真实指标管道，而是 deterministic `EvaluationReportV1`，聚合已提交 artifact source hashes、phase coverage、known blockers、out-of-scope providers 和下一步建议。
+
+最小 EvaluationReportV1 contract：
+
+- `artifacts/evaluation/phase9_mvp_evaluation_report.json` 采用 `mvp-evaluation-report-v1`，引用 Phase 1a fixture runner outputs、Phase 1b/2 scripts、Phase 3 capability catalog、Phase 4 context packs、Phase 5 verifier rule catalog、Phase 6 recovery fixture、Phase 7 computer runtime artifacts、Phase 8 IDE artifacts、Phase 9 delivery artifacts 和 `scripts/validate_repo.py` 的 POSIX 相对路径与 content hash。
+- `phaseCoverage[]` 必须按 `phase1a`、`phase1b`、`phase2`、`phase3`、`phase4`、`phase5`、`phase6`、`phase7`、`phase8`、`phase9` 顺序覆盖，并全部标记为 `mvp_gate_satisfied`。
+- `mvpCompletionDecision` 明确：`contractOnlyMvpComplete=true`、`machineVerifiable=true`、`fullAgenticEngineeringOsComplete=false`、`readyForExternalDelivery=false`、`readyForExternalSideEffects=false`。
+- `knownBlockers[]` 至少包含 human approval missing、external delivery disabled by MVP policy、real provider execution out of scope、full product runtime out of scope；`outOfScope[]` 明确真实 CUA provider、真实 IDE execution、external delivery adapters、durable multi-agent scheduler、full Evidence Graph database 和 full learning/evaluation analytics loop。
+- validator 拒绝关键错误：缺少任一 phase coverage、声称完整产品已完成、允许 external side effects、source hash 漂移、缺少 real provider blocker 或缺少 CUA out-of-scope 声明。
+
+Build vs Integrate：
+
+- Build：Whole-plan MVP completion 的最小 `EvaluationReportV1` schema、builder/validator/CLI、committed artifact、source hash comparison 和 forced-failure validation gate。
+- Integrate later：production learning/evaluation loop、longitudinal metrics store、dashboard、human approval decision store、real adapter provider telemetry、multi-agent scheduler metrics。
+
+当前 whole-plan contract-only MVP gate 已满足：主链路 Intent -> Spec -> Plan -> DAG/Step -> ToolCall/Capability -> Observation -> Evidence -> Artifact -> Delivery 已由 Phase 1a-9 的 deterministic artifacts 和 `EvaluationReportV1` 汇总验证。完整 Agentic Engineering OS 产品仍在进行中，因为真实 durable runtime、approval backend、provider integrations、external delivery 和 learning analytics 明确后移。
+
 ## 13. 第一版应该证明什么
 
 第一版只需要证明一个核心闭环：
@@ -1812,11 +1831,13 @@ Add forced-failure verifier checks so that python3 scripts/validate_repo.py prov
 7. Local Read-only Runner：已实现 Phase 1b one-shot CLI `python3 scripts/local_readonly_runner.py --log-path <log> --goal <goal> --out-dir <out>`；该 runner 复用 Phase 1a schema、evidence list、email grounding 和 verifier report，`scripts/validate_repo.py` 已加入本地 read-only smoke gate。SQLite event store、daemon、正式 capability registry、真实外部 adapter 和更完整 run state 仍后移。
 8. Capability Metadata Gate：已实现 Phase 3 最小 `capability-envelope-v1` / `capability-metadata-v1`，覆盖 `read_log`、`extract_regression_result`、`write_artifact` 和 `rule_verifier` 的 permission、sideEffect、timeout、input/output contract；`run.json` 和 `events.jsonl` 引用 capability ref，`artifacts/capabilities/phase3_capability_catalog.json` 作为独立 catalogue artifact，`scripts/validate_repo.py` 会拒绝缺失 permission、声明外部 side effect、缺失 `step-verify.capabilityRef` 或 catalogue 缺失当前 capability 的契约。
 9. CUA Adapter Contract：Phase 7 contract-only MVP 已实现 `ComputerRuntimeAdapterV1`、`TrajectoryObservationV1`、`AdapterPolicyManifestV1` 和 `ObservationRedactionPolicyV1`，只定义 `computer.*` / `sandbox.*` / `trajectory.*` adapter boundary、permission overlay 与 redaction/source policy，不实际集成 GUI/CUA provider。
-10. IDE Adapter Contract：Phase 8 已启动，当前实现 `IDEAdapterContractV1` 和 `WorkspaceObservationV1`，只定义 IDE workspace/current file/diagnostics/diff/terminal/approval surface 的 contract-only boundary；`scripts/validate_repo.py` 会拒绝 IDE side effect、绕过 approval、workspace observation 缺失 source binding 或声明 task verdict。
-11. Phase 1a Evidence Intake Review：在 fixture runner 输出完整 artifact packet 前，后续优化只允许维护评分、Decision Log、Open Questions 和 Research Sprint Log；只有 `verifier_report.json` 失败、grounded email 问题、真实脱敏日志差异或 Build vs Integrate 运行证据出现后，才修改正式设计章节。
-12. Evidence Packet Stop Rule：已由 2026-05-12 14:39 UTC artifact packet 解锁；后续修改必须基于 committed `artifacts/runs/*`、`verifier_report.json` failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据，不再无证据扩写 adapter mapping 或正式设计章节。
-13. Phase 1a Verifier Hardening：已实现 deterministic negative validation，`scripts/validate_repo.py` 会验证 malformed schema、missing evidence refs、failure-marker-to-passed tamper 和 pass-style email injection 均被拒绝或生成 failed verifier report。
-14. RunControlV1 State / Permission / Recovery：Phase 6 regression MVP gate 基本满足：`scripts/run_control.py` 提供 `RunControlV1` validator / CLI，`run.json#runControl` 使用 `run-control-v1`、`permission-policy-v1` 和 `recovery-snapshot-v1` 记录 stateHistory、permissionPolicy、stepAttempts 和 recoverySnapshot；`scripts/validate_repo.py` 会拒绝 state history 漂移、允许 external side effects、recovery last event 损坏或 non-terminal recovery 缺失 `resumeTarget` 的契约。`scripts/recovery_fixture.py` 生成 committed `artifacts/recovery/interrupted_after_extract/*`，证明 interrupted `running` 状态可以指向下一步 `write_artifact` resume action。
+10. IDE Adapter Contract：Phase 8 contract-only MVP 已实现 `IDEAdapterContractV1`、`WorkspaceObservationV1` 和 `IDEApprovalHandoffManifestV1`，只定义 IDE workspace/current file/diagnostics/diff/terminal/approval surface 的 boundary；`scripts/validate_repo.py` 会拒绝 IDE side effect、绕过 approval、workspace observation 缺失 source binding、声明 task verdict、terminal execution 或真实 IDE execution。
+11. Multi-agent / Delivery Loop：Phase 9 contract-only MVP 已实现 `MultiAgentDeliveryManifestV1` 和 `DeliveryReportV1`，证明 planner/context/executor/reviewer/reporter handoff、verifier-owned verdict、draft delivery readiness 和 human approval / external delivery blockers；不运行真实 multi-agent scheduler、不发邮件、不创建 PR。
+12. Whole-plan MVP Evaluation：已实现 `EvaluationReportV1` / `mvp-evaluation-report-v1`，入口为 `python3 scripts/evaluation_report.py --report-out artifacts/evaluation/phase9_mvp_evaluation_report.json`；`scripts/validate_repo.py` 会验证 Phase 1a/1b/2/3/4/5/6/7/8/9 coverage、source hashes、MVP completion decision、known blockers 和 out-of-scope providers。结论是 contract-only Read-only Regression Evidence Demo MVP 已完成，完整 Agentic Engineering OS 产品仍未完成。
+13. Phase 1a Evidence Intake Review：在 fixture runner 输出完整 artifact packet 前，后续优化只允许维护评分、Decision Log、Open Questions 和 Research Sprint Log；只有 `verifier_report.json` 失败、grounded email 问题、真实脱敏日志差异或 Build vs Integrate 运行证据出现后，才修改正式设计章节。
+14. Evidence Packet Stop Rule：已由 2026-05-12 14:39 UTC artifact packet 解锁；后续修改必须基于 committed `artifacts/runs/*`、`verifier_report.json` failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据，不再无证据扩写 adapter mapping 或正式设计章节。
+15. Phase 1a Verifier Hardening：已实现 deterministic negative validation，`scripts/validate_repo.py` 会验证 malformed schema、missing evidence refs、failure-marker-to-passed tamper 和 pass-style email injection 均被拒绝或生成 failed verifier report。
+16. RunControlV1 State / Permission / Recovery：Phase 6 regression MVP gate 基本满足：`scripts/run_control.py` 提供 `RunControlV1` validator / CLI，`run.json#runControl` 使用 `run-control-v1`、`permission-policy-v1` 和 `recovery-snapshot-v1` 记录 stateHistory、permissionPolicy、stepAttempts 和 recoverySnapshot；`scripts/validate_repo.py` 会拒绝 state history 漂移、允许 external side effects、recovery last event 损坏或 non-terminal recovery 缺失 `resumeTarget` 的契约。`scripts/recovery_fixture.py` 生成 committed `artifacts/recovery/interrupted_after_extract/*`，证明 interrupted `running` 状态可以指向下一步 `write_artifact` resume action。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -4500,6 +4521,70 @@ git diff --check
 ```text
 进行 whole-plan MVP completion / scope decision sprint：
 读取当前 Phase 1a-9 artifacts 和 validation gates，决定 Read-only Regression Evidence Demo 是否作为 contract-only MVP 结项；若继续实现，优先新增 EvaluationReportV1 / milestone report 来汇总全链路 artifact coverage、known blockers 和 out-of-scope adapters，而不是直接接入真实 side-effect providers。
+```
+
+### 2026-05-13 20:02 UTC: Phase 9 / Whole-plan EvaluationReportV1 MVP Completion Gate
+
+Active phase：Phase 9 / whole-plan MVP completion。
+
+Selected slice：
+
+```text
+Add EvaluationReportV1 so that /usr/bin/python3 scripts/validate_repo.py proves Phase 1a-9 artifact coverage, MVP completion decision, known blockers, and out-of-scope providers are machine-auditable without claiming the full product is complete.
+```
+
+为什么这是下一步：`validate.yml` 和 `auto-merge-cursor-pr.yml` 均存在；Phase 9 已完成 `MultiAgentDeliveryManifestV1` 和 `DeliveryReportV1`。主计划的下一步是 whole-plan MVP completion / scope decision，最小可验证实现是新增一个 deterministic evaluation artifact，把当前 contract-only MVP 的完成范围、证据来源、剩余 blocker 和后移范围固定下来。
+
+实现摘要：
+
+- 新增 `scripts/evaluation_report.py`，提供 `mvp-evaluation-report-v1` / `EvaluationReportV1` builder、validator 和 CLI。
+- 新增 committed `artifacts/evaluation/phase9_mvp_evaluation_report.json`，绑定 Phase 1a-9 关键 scripts/artifacts、`DeliveryReportV1` 和 `scripts/validate_repo.py` 的 source hashes。
+- `phaseCoverage[]` 按 phase1a、phase1b、phase2、phase3、phase4、phase5、phase6、phase7、phase8、phase9 顺序记录全部 `mvp_gate_satisfied`。
+- `mvpCompletionDecision` 明确 contract-only MVP complete、machine-verifiable、ready for human review，但 full Agentic Engineering OS product incomplete、external delivery / external side effects not ready。
+- `knownBlockers[]` 和 `outOfScope[]` 明确 human approval、external delivery、real provider execution、full runtime、真实 CUA/IDE provider、durable scheduler、full Evidence Graph 和 learning analytics 均不在当前 MVP 中。
+- `scripts/validate_repo.py` 纳入 EvaluationReportV1 required file/markers、committed artifact validation、deterministic CLI output comparison，以及 forced-failure：缺少 phase coverage、错误声称 full product complete、允许 external side effects、source hash mismatch、缺少 real provider blocker、缺少 CUA out-of-scope。
+
+验收标准：
+
+- `phase9_mvp_evaluation_report.json` 可 deterministic 生成并通过 validation。
+- report 必须覆盖 Phase 1a/1b/2/3/4/5/6/7/8/9，并绑定关键 artifact source hashes。
+- report 必须声明 contract-only MVP complete，但 full Agentic Engineering OS product incomplete。
+- validator 必须拒绝缺失 phase、source hash 漂移、external side effects ready、full product complete claim、缺少 blocker 或缺少 out-of-scope 声明。
+- 不执行真实 multi-agent runtime、workspace mutation、PR 创建、邮件发送、IDE/CUA provider 或外部 side effect。
+
+验证命令：
+
+```text
+/usr/bin/python3 scripts/validate_repo.py
+/usr/bin/python3 -m py_compile scripts/*.py
+/usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json
+/usr/bin/python3 scripts/evaluation_report.py --report-out /tmp/phase9_mvp_evaluation_report.json
+/usr/bin/python3 scripts/multi_agent_delivery.py --validate-manifest artifacts/delivery/phase9_multi_agent_delivery_manifest.json --validate-delivery-report artifacts/delivery/phase9_delivery_report.json
+/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase9-evaluation-fixture-smoke
+/usr/bin/python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase9-evaluation-task-spec.json
+/usr/bin/python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --out-dir /tmp/phase9-evaluation-local-smoke --task-spec-path /tmp/phase9-evaluation-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json
+git diff --check
+```
+
+验证结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline `/usr/bin/python3 scripts/validate_repo.py` before edits：通过。
+- 待本次实现验证完成后更新为最终结果；PR body 也必须记录实际命令和结果。
+```
+
+剩余风险：
+
+- EvaluationReportV1 是 deterministic milestone artifact，不是 production learning/evaluation loop、dashboard、metrics store 或 human approval backend。
+- 当前结项只覆盖 contract-only Read-only Regression Evidence Demo；真实 durable runtime、provider integrations、external delivery、workspace mutation 和 multi-agent scheduler 仍为 post-MVP。
+- Full plan 的 phase order 已覆盖到 Phase 9，但完整 Agentic Engineering OS 产品仍在进行中，不应把 MVP complete 误读为产品 complete。
+
+下一轮建议：
+
+```text
+进入 post-MVP 前置切片：
+在保持当前 no-side-effect MVP contract 的前提下，选择一个最小 durable run store 或 human approval decision fixture；不要直接接入真实 CUA/IDE provider、邮件发送或 PR 创建。
 ```
 
 ## 22. Parking Lot
