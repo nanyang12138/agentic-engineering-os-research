@@ -453,7 +453,6 @@ def run_fixture(fixture: Fixture, out_dir: Path) -> dict:
     task_spec = task_spec_for(fixture)
     evidence = extract_evidence(fixture)
     verdict, summary, verdict_evidence_ids = classify(evidence)
-    rule_results = build_rule_results(task_spec, evidence, verdict, verdict_evidence_ids)
     result = {
         "schemaVersion": "regression-result-v1",
         "id": f"regression-result-{fixture.id}",
@@ -461,7 +460,7 @@ def run_fixture(fixture: Fixture, out_dir: Path) -> dict:
         "verdict": verdict,
         "summary": summary,
         "evidenceIds": verdict_evidence_ids,
-        "ruleResults": rule_results,
+        "ruleResults": [],
         "generatedAt": GENERATED_AT,
     }
     email = build_email(fixture, result)

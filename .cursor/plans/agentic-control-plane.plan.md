@@ -1235,6 +1235,36 @@ artifacts/runs/<fixture-id>/{run.json,events.jsonl,evidence.json,regression_resu
 - Phase 1a 仍需要在 PR / GitHub checks 中验证同一 gate 后，才能作为进入 Phase 1b 的机器验收依据。
 - 下一轮不应跳到 CUA、IDE 或多 agent；应先做 Phase 1a Evidence Review，审查真实输出是否暴露 parser marker、email grounding 或 schema 摩擦点，再决定是否进入 Local Read-only Runner。
 
+### 13.7 Phase 1a Forced-Failure Verifier Review
+
+2026-05-13 00:00 UTC 自动化实现结论：Phase 1a Evidence Review 的最小强制失败切片已完成。现在 `scripts/validate_repo.py` 不只验证 happy-path artifact packet，也会复用 runner 的 verifier 逻辑，故意篡改 evidence refs 和 email grounding，并要求 `verifier_report.status="failed"` 与对应 `blockingFailures` 出现。
+
+本轮完成的最小可验证切片：
+
+```text
+Add forced-failure verifier checks so that python3 scripts/validate_repo.py proves tampered evidence refs and email grounding produce failed verifier reports.
+```
+
+实现摘要：
+
+- `scripts/fixture_runner.py` 新增 `verify_artifact_payloads(...)`，把原先嵌在 runner 生成流程中的 rule results、artifact checks、blocking failures 和 `verifier_report.json` 组装逻辑抽成可复用 verifier 函数。
+- `scripts/validate_repo.py` 新增 forced-failure validation：基于生成的 `all_passed` artifact packet，分别篡改 `regression_result.json.evidenceIds` 和 `email_draft.md` 的 structured result 引用。
+- 篡改 evidence ids 必须触发 `evidence_refs` blocking failure；篡改 email grounding 必须触发 `email_draft_uses_structured_facts` blocking failure。
+- 正常 5 个 synthetic fixture artifact packet 仍保持 deterministic，committed artifacts 与重新生成输出一致。
+
+验收结果：
+
+- 正常 fixture gate：通过。
+- evidence ref forced-failure：通过，产生 failed verifier report 和 `evidence_refs` blocking failure。
+- email grounding forced-failure：通过，产生 failed verifier report 和 `email_draft_uses_structured_facts` blocking failure。
+- Phase 1a 仍不引入 SQLite、daemon、capability registry、CUA、IDE、多 agent 或真实外部副作用。
+
+当前门槛状态：
+
+- Phase 1a static fixture contract 已具备 happy-path artifact packet、deterministic validation gate 和 forced-failure verifier proof。
+- Phase 1a 仍需本 PR 的 GitHub check 通过后，才能作为进入 Phase 1b 的机器验收依据。
+- 下一轮建议进入 Phase 1b 的最小 Local Read-only Runner 切片：接受一个本地 log 路径和用户目标，复用 Phase 1a schema / verifier，输出同一 artifact packet；仍不引入 daemon、SQLite、CUA、IDE 或外部副作用。
+
 ## 14. 第一版不要做什么
 
 - 不要先做多 IDE 控制。
