@@ -1147,6 +1147,25 @@ Build vs Integrate：
 
 成功标准：系统不只是“回答问题”，而是能把一个开发任务推进到可交付状态。
 
+#### Phase 9 MultiAgentDeliveryManifestV1 Handoff / Delivery Gate
+
+2026-05-13 18:01 UTC 自动化实现结论：Phase 9 的第一步不是引入真实多 agent runtime、LangGraph/AutoGen/CrewAI、并发调度器、PR 创建器或邮件发送器，而是先把 planner/context/executor/reviewer/reporter 的职责、交接和 Delivery ownership 固化为可机器校验的 contract-only artifact。多 agent 层只能编排已有 TaskSpec、ContextPack、Run、EvidenceList、VerifierReport 和 Delivery draft refs；任务 verdict 仍由 `verifier-runtime-v1` 拥有，发送邮件仍由 `permission-policy-v1` / human approval gate 控制。
+
+最小 multi-agent delivery contract：
+
+- `artifacts/delivery/phase9_multi_agent_delivery_manifest.json` 采用 `multi-agent-delivery-manifest-v1`，每个交接采用 `agent-handoff-v1`。
+- manifest 覆盖 `planner_agent`、`context_agent`、`executor_agent`、`reviewer_agent`、`reporter_agent` 五个最小角色，并绑定已有 `artifacts/runs/all_passed/run.json`、`artifacts/context/all_passed/context_pack.json`、`evidence.json`、`regression_result.json`、`verifier_report.json`、`email_draft.md` 和 Phase 8 `phase8_ide_approval_handoff_manifest.json` 的 POSIX 相对路径与 content hash。
+- handoff sequence 固定为 `planner_to_context`、`context_to_executor`、`executor_to_reviewer`、`reviewer_to_reporter`、`reporter_to_delivery_gate`；所有 handoff 都必须 `sideEffectAllowed=false`、`executionAllowed=false`、`taskVerdictOwner="verifier-runtime-v1"`。
+- delivery artifact 固定为现有 `email_draft.md`，要求 `verifierStatus="passed"`、`humanApprovalRequired=true`、`humanApprovalSatisfied=false`、`sendEmailAllowed=false`，并绑定 TaskSpec 的 `send_email_requires_human_approval` 与 Phase 8 IDE approval handoff。
+- validator 拒绝关键错误：缺少 reviewer agent、handoff 允许 side effect、reporter 接管 task verdict、verifier 未通过、delivery 允许发送邮件或合成人类 approval。
+
+Build vs Integrate：
+
+- Build：Phase 9 最小 `MultiAgentDeliveryManifestV1` schema、`AgentHandoffV1` handoff contract、deterministic builder/validator/CLI、committed artifact 和 forced-failure validation gate。
+- Integrate later：真实多 agent runtime、agent scheduler、parallel reviewer、agent memory、delivery dashboard、PR 创建器、邮件发送器、Slack/Web/IDE delivery synchronization。
+
+当前 Phase 9 已启动但未完成完整多 agent runtime：本 gate 证明多 agent/交付闭环可以作为 OS contract 编排已有可验证 artifacts，而不会绕过 Evidence、Verifier、Policy 或 Human Gate。下一步应补 Phase 9 的 delivery readiness/report contract，例如把 `verifier_report.json`、approval handoff 和 delivery draft 聚合为最终可审计 `DeliveryReportV1`，仍不实际发送邮件或创建 PR。
+
 ## 13. 第一版应该证明什么
 
 第一版只需要证明一个核心闭环：
@@ -2072,6 +2091,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-13 09:27 UTC：Phase 6 InterruptedRecoveryFixtureV1 Non-terminal Resume Gate 已实现；决定先用 committed interrupted fixture 证明 `RunControlV1` 的 non-terminal recovery contract，`resumeTarget` 指向下一步 `write_artifact`，而不是提前引入 durable workflow backend、真实 resume executor、CUA 或 IDE adapter。Phase 6 regression MVP gate 视为基本满足；下一轮可以进入 Phase 7 adapter contract boundary。
 - 2026-05-13 15:02 UTC：Phase 7 ObservationRedactionPolicyV1 Source / Redaction Gate 已实现；决定将 Phase 7 contract-only MVP 收敛为 adapter boundary + trajectory observation + permission overlay + redaction/source policy 四件套。真实 trycua/cua provider、desktop automation、screen redaction engine、trajectory replay 和 IDE/CUA runtime scheduling 继续后移；下一轮可以进入 Phase 8 IDE Adapter contract。
 - 2026-05-13 16:03 UTC：Phase 8 IDEAdapterContractV1 Static Workspace Observation Gate 已实现；决定先把 IDE 接入收敛为 contract-only `IDEAdapterContractV1` 和 source-bound `WorkspaceObservationV1`，不执行真实 IDE provider、open file、diff view、terminal 或 workspace mutation。真实 IDE extension bridge、diagnostics streaming、approval UI 和 CLI/Web/IDE history synchronization 继续后移；下一轮应补 IDE approval handoff manifest。
+- 2026-05-13 18:01 UTC：Phase 9 MultiAgentDeliveryManifestV1 Handoff / Delivery Gate 已实现；决定先把多 agent 协作收敛为 contract-only `multi-agent-delivery-manifest-v1` 和 `agent-handoff-v1`，五个 agent 只通过已有 TaskSpec、ContextPack、Run、Evidence、Verifier、IDE approval handoff 和 Delivery draft refs 交接。真实多 agent runtime、调度器、PR 创建器、邮件发送器和 delivery dashboard 继续后移；下一轮应补最终 `DeliveryReportV1` / readiness summary contract。
 
 ## 20. Open Questions
 
@@ -4323,6 +4343,76 @@ git diff --check
 ```text
 进入 Phase 9：
 新增 MultiAgentDeliveryManifestV1，定义 planner/context/executor/reviewer/reporter 的最小 handoff artifact、Evidence/Verifier/Delivery ownership 和 forced-failure cases，先不引入完整多 agent runtime。
+```
+
+### 2026-05-13 18:01 UTC: Phase 9 MultiAgentDeliveryManifestV1 Handoff / Delivery Gate
+
+Active phase：Phase 9 multi-agent and delivery loop。
+
+Selected slice：
+
+```text
+Add MultiAgentDeliveryManifestV1 so that /usr/bin/python3 scripts/validate_repo.py proves planner/context/executor/reviewer/reporter handoffs are source-bound and delivery remains verifier- and human-gate-controlled without a real multi-agent runtime.
+```
+
+为什么这是下一步：`validate.yml` 和 `auto-merge-cursor-pr.yml` 均存在；Phase 8 已完成 IDE workspace observation 与 approval handoff gate。主计划下一阶段是多 agent 和交付闭环，最小可验证前置不是运行真实多 agent framework，而是定义 agent handoff / delivery ownership contract，证明多 agent 层不会绕过 TaskSpec、ContextPack、Evidence、Verifier、Policy 或 Human Gate。
+
+实现摘要：
+
+- 新增 `scripts/multi_agent_delivery.py`，提供 `multi-agent-delivery-manifest-v1` / `MultiAgentDeliveryManifestV1` 和 `agent-handoff-v1` builder、validator 和 CLI。
+- 新增 committed `artifacts/delivery/phase9_multi_agent_delivery_manifest.json`，绑定 `all_passed` TaskSpec、ContextPack、Run、EvidenceList、RegressionResult、VerifierReport、email draft 和 Phase 8 IDE approval handoff 的 source hashes。
+- manifest 固定 planner -> context -> executor -> reviewer -> reporter -> delivery gate 交接；所有 handoff 均 `sideEffectAllowed=false`、`executionAllowed=false`，task verdict owner 固定为 `verifier-runtime-v1`。
+- delivery artifact 仍是 `email_draft.md` draft，要求 verifier passed、human approval required、human approval unsatisfied、send email disallowed，并绑定 `send_email_requires_human_approval`。
+- `scripts/validate_repo.py` 纳入 Phase 9 required file/markers、committed artifact validation、deterministic CLI output comparison，以及 forced-failure：缺少 reviewer agent、handoff side effect、task verdict owner 被 reporter 接管、verifier status mismatch、delivery 允许发邮件、合成人类 approval。
+
+验收标准：
+
+- `phase9_multi_agent_delivery_manifest.json` 可 deterministic 生成并通过 validation：通过。
+- manifest 覆盖 planner/context/executor/reviewer/reporter 五个 agent 和完整 handoff sequence：通过。
+- Delivery draft 绑定 EvidenceList、RegressionResult、VerifierReport 和 IDE approval handoff，且不能发送邮件或合成人类 approval：通过。
+- validator 拒绝 side effect、verdict ownership bypass、缺失 reviewer、verifier 不一致和 delivery approval bypass：通过。
+- 不执行真实多 agent runtime、workspace mutation、PR 创建、邮件发送或外部 side effect：通过。
+
+验证命令：
+
+```text
+/usr/bin/python3 scripts/validate_repo.py
+/usr/bin/python3 -m py_compile scripts/*.py
+/usr/bin/python3 scripts/multi_agent_delivery.py --validate-manifest artifacts/delivery/phase9_multi_agent_delivery_manifest.json
+/usr/bin/python3 scripts/multi_agent_delivery.py --manifest-out /tmp/phase9_multi_agent_delivery_manifest.json
+/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase9-delivery-fixture-smoke
+/usr/bin/python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase9-delivery-task-spec.json
+/usr/bin/python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --out-dir /tmp/phase9-delivery-local-smoke --task-spec-path /tmp/phase9-delivery-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json
+git diff --check
+```
+
+验证结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline `/usr/bin/python3 scripts/validate_repo.py` before edits：通过。
+- 首次 `/usr/bin/python3 -m py_compile scripts/*.py && /usr/bin/python3 scripts/validate_repo.py`：py_compile 通过；validate 失败，原因是主计划尚未包含 Phase 9 required markers；已通过本日志和 Phase 9 正文更新修复。
+- 修复后 `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- 修复后 `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 MultiAgentDeliveryManifestV1 committed artifact、deterministic builder output，以及 missing reviewer / handoff side effect / task verdict ownership / verifier mismatch / email send / synthesized approval forced-failure cases。
+- `/usr/bin/python3 scripts/multi_agent_delivery.py --validate-manifest artifacts/delivery/phase9_multi_agent_delivery_manifest.json`：通过。
+- `/usr/bin/python3 scripts/multi_agent_delivery.py --manifest-out /tmp/phase9_multi_agent_delivery_manifest.json`：通过，可 deterministic 生成 Phase 9 manifest artifact。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase9-delivery-fixture-smoke`：通过。
+- `/usr/bin/python3 scripts/task_spec.py ... --out /tmp/phase9-delivery-task-spec.json`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json`：通过。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- MultiAgentDeliveryManifestV1 仍是 contract-only artifact，不是实际多 agent runtime、scheduler、agent memory 或并行 reviewer。
+- 当前 delivery artifact 只覆盖 read-only regression email draft；真实代码修改、PR、release、Slack/Web/IDE delivery synchronization 继续后移。
+- Phase 9 只证明 handoff / delivery ownership，不证明复杂 agent 协作质量、冲突仲裁或 long-running workflow runtime。
+
+下一轮建议：
+
+```text
+继续 Phase 9：
+新增 DeliveryReportV1 / DeliveryReadinessSummary contract，把 verifier_report、human approval state、delivery artifact refs 和 remaining blockers 聚合为最终可审计交付报告；仍不发送邮件、不创建 PR、不运行真实多 agent scheduler。
 ```
 
 ## 22. Parking Lot
