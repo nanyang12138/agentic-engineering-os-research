@@ -36,6 +36,11 @@ from evidence_list import (
     EVIDENCE_CONFIDENCE,
     validate_evidence_list,
 )
+from evaluation_report import (
+    REPORT_ARTIFACT_PATH as EVALUATION_REPORT_ARTIFACT_PATH,
+    build_evaluation_report,
+    validate_evaluation_report,
+)
 from fixture_runner import load_fixture
 from ide_adapter import (
     APPROVAL_HANDOFF_ARTIFACT_PATH as IDE_APPROVAL_HANDOFF_ARTIFACT_PATH,
@@ -84,6 +89,7 @@ IDE_WORKSPACE_OBSERVATION_PATH = ROOT / IDE_OBSERVATION_ARTIFACT_PATH
 IDE_APPROVAL_HANDOFF_MANIFEST_PATH = ROOT / IDE_APPROVAL_HANDOFF_ARTIFACT_PATH
 MULTI_AGENT_DELIVERY_MANIFEST_PATH = ROOT / MULTI_AGENT_DELIVERY_MANIFEST_ARTIFACT_PATH
 DELIVERY_REPORT_PATH = ROOT / DELIVERY_REPORT_ARTIFACT_PATH
+EVALUATION_REPORT_PATH = ROOT / EVALUATION_REPORT_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -152,6 +158,7 @@ REQUIRED_FILES = [
     "artifacts/ide_adapter/phase8_ide_approval_handoff_manifest.json",
     "artifacts/delivery/phase9_multi_agent_delivery_manifest.json",
     "artifacts/delivery/phase9_delivery_report.json",
+    "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
 PLAN_REQUIRED_MARKERS = [
@@ -201,6 +208,9 @@ PLAN_REQUIRED_MARKERS = [
     "DeliveryReportV1",
     "delivery-report-v1",
     "phase9_delivery_report.json",
+    "EvaluationReportV1",
+    "mvp-evaluation-report-v1",
+    "phase9_mvp_evaluation_report.json",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -1682,6 +1692,117 @@ def run_delivery_report_builder(report_out: Path) -> None:
         )
 
 
+def expect_evaluation_report_validation_failure(
+    label: str,
+    report: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_evaluation_report(report, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"EvaluationReportV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"EvaluationReportV1 forced-failure case {label} unexpectedly passed validation")
+
+
+def validate_committed_evaluation_report_artifact() -> None:
+    report = load_json(EVALUATION_REPORT_PATH)
+    try:
+        validate_evaluation_report(report, ROOT)
+    except ValueError as exc:
+        raise AssertionError(f"Committed EvaluationReportV1 artifact failed validation: {exc}") from exc
+
+    expected_report = build_evaluation_report(ROOT)
+    if report != expected_report:
+        raise AssertionError("Committed EvaluationReportV1 artifact differs from deterministic builder output")
+
+    tampered_report = json.loads(json.dumps(report))
+    tampered_report["phaseCoverage"] = [
+        phase
+        for phase in tampered_report["phaseCoverage"]
+        if phase.get("phase") != "phase7"
+    ]
+    expect_evaluation_report_validation_failure(
+        "missing_phase7_coverage",
+        tampered_report,
+        "phaseCoverage must cover phases in order",
+    )
+
+    tampered_report = json.loads(json.dumps(report))
+    tampered_report["mvpCompletionDecision"]["fullAgenticEngineeringOsComplete"] = True
+    expect_evaluation_report_validation_failure(
+        "full_product_claimed_complete",
+        tampered_report,
+        "must not claim the full Agentic Engineering OS product is complete",
+    )
+
+    tampered_report = json.loads(json.dumps(report))
+    tampered_report["mvpCompletionDecision"]["readyForExternalSideEffects"] = True
+    expect_evaluation_report_validation_failure(
+        "external_side_effects_ready",
+        tampered_report,
+        "must not allow external side effects",
+    )
+
+    tampered_report = json.loads(json.dumps(report))
+    for source in tampered_report["sourceArtifacts"]:
+        if source.get("role") == "phase9_delivery_report":
+            source["contentHash"] = "0" * 64
+            break
+    expect_evaluation_report_validation_failure(
+        "delivery_report_hash_mismatch",
+        tampered_report,
+        "source hash mismatch",
+    )
+
+    tampered_report = json.loads(json.dumps(report))
+    tampered_report["knownBlockers"] = [
+        blocker
+        for blocker in tampered_report["knownBlockers"]
+        if blocker.get("id") != "real_provider_execution_out_of_scope"
+    ]
+    expect_evaluation_report_validation_failure(
+        "missing_real_provider_blocker",
+        tampered_report,
+        "knownBlockers must include",
+    )
+
+    tampered_report = json.loads(json.dumps(report))
+    tampered_report["outOfScope"] = [
+        item
+        for item in tampered_report["outOfScope"]
+        if item.get("id") != "real_cua_provider_integration"
+    ]
+    expect_evaluation_report_validation_failure(
+        "missing_cua_out_of_scope",
+        tampered_report,
+        "outOfScope must include",
+    )
+
+
+def run_evaluation_report_builder(report_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/evaluation_report.py"),
+        "--report-out",
+        str(report_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "EvaluationReportV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def compare_artifact_packets(expected_dir: Path, actual_dir: Path) -> None:
     for fixture_id in FIXTURE_IDS:
         for filename in ARTIFACT_FILES:
@@ -1961,6 +2082,7 @@ def main() -> None:
     validate_committed_ide_adapter_artifacts()
     validate_committed_multi_agent_delivery_artifact()
     validate_committed_delivery_report_artifact()
+    validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_root = Path(temp_dir)
@@ -2025,6 +2147,10 @@ def main() -> None:
         run_delivery_report_builder(generated_delivery_report)
         if load_json(generated_delivery_report) != load_json(DELIVERY_REPORT_PATH):
             raise AssertionError("Committed DeliveryReportV1 artifact differs from deterministic CLI output")
+        generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
+        run_evaluation_report_builder(generated_evaluation_report)
+        if load_json(generated_evaluation_report) != load_json(EVALUATION_REPORT_PATH):
+            raise AssertionError("Committed EvaluationReportV1 artifact differs from deterministic CLI output")
 
     print("Repository validation passed.")
 

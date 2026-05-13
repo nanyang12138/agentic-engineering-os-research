@@ -1,0 +1,426 @@
+{
+  "coverageSummary": {
+    "earliestIncompleteGate": null,
+    "machineVerificationCommand": "/usr/bin/python3 scripts/validate_repo.py",
+    "satisfiedGates": 10,
+    "totalGates": 10
+  },
+  "deliveryReportBlockers": [
+    "human_approval_missing",
+    "external_delivery_disabled_by_mvp_policy"
+  ],
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "read-only-regression-evidence-demo-mvp-evaluation",
+  "invariants": [
+    "EvaluationReportV1 summarizes existing committed artifacts; it does not create new evidence or override verifier verdicts.",
+    "The contract-only MVP can be complete while the full Agentic Engineering OS product remains in progress.",
+    "External delivery, real provider execution, workspace mutation, and human approval synthesis remain blocked."
+  ],
+  "knownBlockers": [
+    {
+      "id": "human_approval_missing",
+      "owner": "permission-policy-v1",
+      "sourceRef": "artifacts/delivery/phase9_delivery_report.json",
+      "status": "blocked_by_mvp_policy"
+    },
+    {
+      "id": "external_delivery_disabled_by_mvp_policy",
+      "owner": "multi-agent-delivery-policy",
+      "sourceRef": "artifacts/delivery/phase9_delivery_report.json",
+      "status": "blocked_by_mvp_policy"
+    },
+    {
+      "id": "real_provider_execution_out_of_scope",
+      "owner": "adapter-policy-manifest-v1",
+      "sourceRef": "artifacts/computer_runtime/phase7_adapter_policy_manifest.json",
+      "status": "post_mvp"
+    },
+    {
+      "id": "full_product_runtime_out_of_scope",
+      "owner": "agentic-engineering-os-roadmap",
+      "sourceRef": ".cursor/plans/agentic-control-plane.plan.md#parking-lot",
+      "status": "post_mvp"
+    }
+  ],
+  "mode": "static_contract_only",
+  "mvpCompletionDecision": {
+    "contractOnlyMvpComplete": true,
+    "decision": "contract_only_mvp_complete_full_product_in_progress",
+    "fullAgenticEngineeringOsComplete": false,
+    "machineVerifiable": true,
+    "mvpName": "Read-only Regression Evidence Demo",
+    "readyForExternalDelivery": false,
+    "readyForExternalSideEffects": false,
+    "readyForHumanReview": true
+  },
+  "nextRecommendedSlice": {
+    "mustRemainMachineVerifiable": true,
+    "phase": "post_mvp",
+    "slice": "Add a human approval decision fixture or durable run store only after preserving the current no-side-effect MVP contract."
+  },
+  "outOfScope": [
+    {
+      "id": "real_cua_provider_integration",
+      "reason": "Phase 7 MVP defines adapter contracts and policies only; no GUI, desktop, browser, sandbox, or CUA provider is executed."
+    },
+    {
+      "id": "real_ide_execution",
+      "reason": "Phase 8 MVP defines IDE observation and approval handoff contracts only; no workspace mutation, terminal execution, or UI operation is performed."
+    },
+    {
+      "id": "external_delivery_adapters",
+      "reason": "Phase 9 MVP produces a verified delivery draft and readiness report only; no email, PR, ticket, Slack, or web delivery adapter is invoked."
+    },
+    {
+      "id": "durable_multi_agent_scheduler",
+      "reason": "Phase 9 MVP records handoff ownership contracts; it does not run LangGraph, AutoGen, CrewAI, queues, workers, or concurrent agent scheduling."
+    },
+    {
+      "id": "full_evidence_graph_database",
+      "reason": "The MVP uses committed EvidenceListV1 JSON artifacts instead of a graph database or long-lived artifact registry."
+    },
+    {
+      "id": "learning_evaluation_analytics_loop",
+      "reason": "This report is a deterministic milestone evaluation artifact, not a production learning system with longitudinal metrics or user preference updates."
+    }
+  ],
+  "phaseCoverage": [
+    {
+      "artifactRoles": [
+        "phase1a_fixture_runner_script",
+        "phase1a_all_passed_run",
+        "phase1a_failed_tests_run",
+        "phase1a_incomplete_jobs_run",
+        "phase1a_passed_with_warning_or_waiver_run",
+        "phase1a_ambiguous_summary_run",
+        "phase1a_all_passed_verifier_report",
+        "phase1a_failed_tests_verifier_report",
+        "phase1a_incomplete_jobs_verifier_report",
+        "phase1a_passed_with_warning_or_waiver_verifier_report",
+        "phase1a_ambiguous_summary_verifier_report"
+      ],
+      "contractRefs": [
+        "Run",
+        "Step",
+        "Observation",
+        "Evidence",
+        "Artifact",
+        "Verifier"
+      ],
+      "gate": "Committed regression fixtures and artifact packets validate deterministic evidence, result, email draft, and verifier outputs.",
+      "phase": "phase1a",
+      "status": "mvp_gate_satisfied",
+      "title": "Static Fixture Contract / Read-only Regression Evidence Demo foundation"
+    },
+    {
+      "artifactRoles": [
+        "phase1b_local_readonly_runner_script",
+        "phase1a_all_passed_run"
+      ],
+      "contractRefs": [
+        "Run",
+        "Step",
+        "ToolCall",
+        "Observation",
+        "Artifact"
+      ],
+      "gate": "Local one-shot runner consumes a log, TaskSpec, and ContextPack without external side effects.",
+      "phase": "phase1b",
+      "status": "mvp_gate_satisfied",
+      "title": "Local Read-only Runner"
+    },
+    {
+      "artifactRoles": [
+        "phase2_task_spec_script",
+        "phase1a_all_passed_run"
+      ],
+      "contractRefs": [
+        "Intent",
+        "TaskSpec",
+        "Policy"
+      ],
+      "gate": "RegressionTaskSpecV1 builder and runner intake validate allowed actions, forbidden actions, required evidence, success criteria, and approval points.",
+      "phase": "phase2",
+      "status": "mvp_gate_satisfied",
+      "title": "Intent-to-Spec and task specification"
+    },
+    {
+      "artifactRoles": [
+        "phase3_capability_catalog"
+      ],
+      "contractRefs": [
+        "Capability",
+        "ToolCall",
+        "Policy"
+      ],
+      "gate": "Capability envelope and committed catalogue define read_log, extract_regression_result, write_artifact, and rule_verifier contracts.",
+      "phase": "phase3",
+      "status": "mvp_gate_satisfied",
+      "title": "Capability interface standardization"
+    },
+    {
+      "artifactRoles": [
+        "phase4_all_passed_context_pack",
+        "phase4_failed_tests_context_pack",
+        "phase4_incomplete_jobs_context_pack",
+        "phase4_passed_with_warning_or_waiver_context_pack",
+        "phase4_ambiguous_summary_context_pack"
+      ],
+      "contractRefs": [
+        "ContextPack",
+        "Observation",
+        "Evidence"
+      ],
+      "gate": "ContextPackV1 artifacts bind selected log excerpts to source paths, line ranges, hashes, and context budget policy.",
+      "phase": "phase4",
+      "status": "mvp_gate_satisfied",
+      "title": "Context Broker"
+    },
+    {
+      "artifactRoles": [
+        "phase5_verifier_rule_catalog",
+        "phase1a_all_passed_verifier_report"
+      ],
+      "contractRefs": [
+        "Evidence",
+        "Verifier",
+        "Artifact"
+      ],
+      "gate": "EvidenceListV1 and VerifierRuntimeV1 replay committed artifacts with rule catalog and forced-failure cases.",
+      "phase": "phase5",
+      "status": "mvp_gate_satisfied",
+      "title": "Evidence List and MVP Verifier Runtime"
+    },
+    {
+      "artifactRoles": [
+        "phase6_recovery_run",
+        "phase6_recovery_events",
+        "phase1a_all_passed_run"
+      ],
+      "contractRefs": [
+        "Run",
+        "Policy",
+        "Recovery"
+      ],
+      "gate": "RunControlV1, permission-policy-v1, recovery-snapshot-v1, and interrupted recovery fixture cover terminal replay and resume action contract.",
+      "phase": "phase6",
+      "status": "mvp_gate_satisfied",
+      "title": "State, permission, and recovery"
+    },
+    {
+      "artifactRoles": [
+        "phase7_computer_runtime_contract",
+        "phase7_trajectory_observation",
+        "phase7_adapter_policy_manifest",
+        "phase7_observation_redaction_policy"
+      ],
+      "contractRefs": [
+        "Capability",
+        "Observation",
+        "Policy"
+      ],
+      "gate": "Contract-only ComputerRuntimeAdapterV1, trajectory observation, adapter policy, and redaction policy define CUA boundary without real provider execution.",
+      "phase": "phase7",
+      "status": "mvp_gate_satisfied",
+      "title": "Computer Runtime and CUA Adapter"
+    },
+    {
+      "artifactRoles": [
+        "phase8_ide_adapter_contract",
+        "phase8_workspace_observation",
+        "phase8_ide_approval_handoff"
+      ],
+      "contractRefs": [
+        "Capability",
+        "Observation",
+        "Policy",
+        "HumanGate"
+      ],
+      "gate": "IDEAdapterContractV1, WorkspaceObservationV1, and approval handoff manifest define IDE boundary without workspace mutation or terminal execution.",
+      "phase": "phase8",
+      "status": "mvp_gate_satisfied",
+      "title": "IDE Adapter"
+    },
+    {
+      "artifactRoles": [
+        "phase9_multi_agent_delivery_manifest",
+        "phase9_delivery_report"
+      ],
+      "contractRefs": [
+        "Plan",
+        "DAG",
+        "Evidence",
+        "Verifier",
+        "Delivery"
+      ],
+      "gate": "MultiAgentDeliveryManifestV1 and DeliveryReportV1 prove source-bound handoffs, verifier-owned verdicts, draft delivery readiness, and external delivery blockers.",
+      "phase": "phase9",
+      "status": "mvp_gate_satisfied",
+      "title": "Multi-agent and delivery loop"
+    }
+  ],
+  "schemaVersion": "mvp-evaluation-report-v1",
+  "scope": "read_only_regression_evidence_demo_mvp_completion",
+  "sourceArtifacts": [
+    {
+      "contentHash": "0eed59ef72015defe944aa2300a791323a2173c91a72a0c52849b59a863505c0",
+      "path": "scripts/validate_repo.py",
+      "role": "validation_script"
+    },
+    {
+      "contentHash": "8275a2f51a39ead5326e191e6cf51623e9007b21e94f7d559d04495add52fd91",
+      "path": "scripts/fixture_runner.py",
+      "role": "phase1a_fixture_runner_script"
+    },
+    {
+      "contentHash": "952cb09b6ee5c0214b3dd65c443b5ea5217df386983b789e5bd16542c6493a79",
+      "path": "scripts/local_readonly_runner.py",
+      "role": "phase1b_local_readonly_runner_script"
+    },
+    {
+      "contentHash": "63b0bf38ff0d41c8480252ad3dd59859faac0890b7b24cedafb1105b521b9391",
+      "path": "scripts/task_spec.py",
+      "role": "phase2_task_spec_script"
+    },
+    {
+      "contentHash": "531bbbbb30b4793d94effe78c4e1ce37d79ceb0f53b5c3da9d652f7ecf465d1a",
+      "path": "artifacts/capabilities/phase3_capability_catalog.json",
+      "role": "phase3_capability_catalog"
+    },
+    {
+      "contentHash": "2ca55171c437b28ffbeb1f1cd6101f32523b823d879afa1c97796f8849fd9f54",
+      "path": "artifacts/verifier/phase5_verifier_rule_catalog.json",
+      "role": "phase5_verifier_rule_catalog"
+    },
+    {
+      "contentHash": "658b0060535181f3bb6a8d16147e82163da1434cc5b31076904288e41044c097",
+      "path": "artifacts/recovery/interrupted_after_extract/run.json",
+      "role": "phase6_recovery_run"
+    },
+    {
+      "contentHash": "404c2afe2b748e4a9d015842d6d13656645a6b427bff3cbcca543d5bb475cecb",
+      "path": "artifacts/recovery/interrupted_after_extract/events.jsonl",
+      "role": "phase6_recovery_events"
+    },
+    {
+      "contentHash": "a92a556d378903f21045f92701ae32599250ef9b658c61cc8cbf9f87d1a99e8b",
+      "path": "artifacts/computer_runtime/phase7_computer_runtime_contract.json",
+      "role": "phase7_computer_runtime_contract"
+    },
+    {
+      "contentHash": "f6d0c23448496f7295c7600ed279220eb50932a49690c41759bba728889b5ecb",
+      "path": "artifacts/computer_runtime/phase7_trajectory_observation.json",
+      "role": "phase7_trajectory_observation"
+    },
+    {
+      "contentHash": "464ecc02edbb263a9a3e33487fbb3738f902aa3bee814b162d7419af2c13b0e9",
+      "path": "artifacts/computer_runtime/phase7_adapter_policy_manifest.json",
+      "role": "phase7_adapter_policy_manifest"
+    },
+    {
+      "contentHash": "c01cd342957c941d02b8927b32668fe54437f81d4f1c2429b3e3850f5bbdbf45",
+      "path": "artifacts/computer_runtime/phase7_observation_redaction_policy.json",
+      "role": "phase7_observation_redaction_policy"
+    },
+    {
+      "contentHash": "81f2b253be3fe0ef40b80ec6d70a9ec14421e38b67e3cfc05264616e28d69505",
+      "path": "artifacts/ide_adapter/phase8_ide_adapter_contract.json",
+      "role": "phase8_ide_adapter_contract"
+    },
+    {
+      "contentHash": "b26d8120b2880979780da911cb210901ab2e791f31d49d2bd2113efa7129a15e",
+      "path": "artifacts/ide_adapter/phase8_workspace_observation.json",
+      "role": "phase8_workspace_observation"
+    },
+    {
+      "contentHash": "94c54703ba84302b8e1146150d0f2d768b4d19ae1b16605ea8a4b52839d9ef39",
+      "path": "artifacts/ide_adapter/phase8_ide_approval_handoff_manifest.json",
+      "role": "phase8_ide_approval_handoff"
+    },
+    {
+      "contentHash": "9dc9ceb06e47e90975f3100466397d4d3eab3839a72ddaf5dd2078391db889ba",
+      "path": "artifacts/delivery/phase9_multi_agent_delivery_manifest.json",
+      "role": "phase9_multi_agent_delivery_manifest"
+    },
+    {
+      "contentHash": "2a340e1323b927385a2844f59110439d3ff12078c37f63a874287b006bdf8e5e",
+      "path": "artifacts/delivery/phase9_delivery_report.json",
+      "role": "phase9_delivery_report"
+    },
+    {
+      "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
+      "path": "artifacts/runs/all_passed/run.json",
+      "role": "phase1a_all_passed_run"
+    },
+    {
+      "contentHash": "f6ec06f8bcc35f325451778d8b3d4985b5e75242b2d7ac9cad20bde244676f66",
+      "path": "artifacts/runs/all_passed/verifier_report.json",
+      "role": "phase1a_all_passed_verifier_report"
+    },
+    {
+      "contentHash": "66316ecb6dc942efe906c562f63fe9603f13a953ba85cd345d7c19fbc7827950",
+      "path": "artifacts/context/all_passed/context_pack.json",
+      "role": "phase4_all_passed_context_pack"
+    },
+    {
+      "contentHash": "e228de6fa2a80424ac43013dd6758e65c613bdd9fd24af7cdeac37ec9d88348b",
+      "path": "artifacts/runs/failed_tests/run.json",
+      "role": "phase1a_failed_tests_run"
+    },
+    {
+      "contentHash": "975efebc70f39be7f1c57616f27768c9d0b169f93f1ca479f6bdb7e64091af74",
+      "path": "artifacts/runs/failed_tests/verifier_report.json",
+      "role": "phase1a_failed_tests_verifier_report"
+    },
+    {
+      "contentHash": "8bd5da01c424a2e2701a156b966615e5a048a679950bde5649541bc71ef5e958",
+      "path": "artifacts/context/failed_tests/context_pack.json",
+      "role": "phase4_failed_tests_context_pack"
+    },
+    {
+      "contentHash": "4fad8538461da796ff6dcb24bc1954e7e4c363582c25ded97383298749cb71c6",
+      "path": "artifacts/runs/incomplete_jobs/run.json",
+      "role": "phase1a_incomplete_jobs_run"
+    },
+    {
+      "contentHash": "e2892ab220bfc62206e7bda49d4a6305a38f503af056747df13bd448787d6830",
+      "path": "artifacts/runs/incomplete_jobs/verifier_report.json",
+      "role": "phase1a_incomplete_jobs_verifier_report"
+    },
+    {
+      "contentHash": "e987b2ca18c5c00565043427e5eff7dceaec98cb51b766a3ee905c8ff9f0e7b0",
+      "path": "artifacts/context/incomplete_jobs/context_pack.json",
+      "role": "phase4_incomplete_jobs_context_pack"
+    },
+    {
+      "contentHash": "3efb05c6b4d27e0113968f0e6a5d014d46a44e1a8d97ae247cc9db6891122186",
+      "path": "artifacts/runs/passed_with_warning_or_waiver/run.json",
+      "role": "phase1a_passed_with_warning_or_waiver_run"
+    },
+    {
+      "contentHash": "3cc84b802832ec12963bc32a8c3e60ced4d2605cdf842bb63ecf07f727e46006",
+      "path": "artifacts/runs/passed_with_warning_or_waiver/verifier_report.json",
+      "role": "phase1a_passed_with_warning_or_waiver_verifier_report"
+    },
+    {
+      "contentHash": "513558b78494da310d97d44b9814d9a29bdb43b70ef7b68bb638f7b36ebedad0",
+      "path": "artifacts/context/passed_with_warning_or_waiver/context_pack.json",
+      "role": "phase4_passed_with_warning_or_waiver_context_pack"
+    },
+    {
+      "contentHash": "edf1e44b94ceec826ae0e7881952bae6673cdc5ae2b28de5693f50c3172d95f6",
+      "path": "artifacts/runs/ambiguous_summary/run.json",
+      "role": "phase1a_ambiguous_summary_run"
+    },
+    {
+      "contentHash": "20b8469ec3016d2c787a0f10c2375eb04dd57b3909fe0501347b142702b20c0b",
+      "path": "artifacts/runs/ambiguous_summary/verifier_report.json",
+      "role": "phase1a_ambiguous_summary_verifier_report"
+    },
+    {
+      "contentHash": "a413ac2d19f6159ef36e44c55582df4bbe1bf71670ebc9a1e71b03c60a8819f1",
+      "path": "artifacts/context/ambiguous_summary/context_pack.json",
+      "role": "phase4_ambiguous_summary_context_pack"
+    }
+  ]
+}
