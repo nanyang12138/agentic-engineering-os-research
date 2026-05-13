@@ -116,7 +116,7 @@
   "scope": "computer_runtime_permission_overlay",
   "sourceArtifacts": [
     {
-      "contentHash": "d42cae527d8970d7678cb78e86ba1cc72f49890283c93011bfecbf7097a0738f",
+      "contentHash": "a92a556d378903f21045f92701ae32599250ef9b658c61cc8cbf9f87d1a99e8b",
       "path": "artifacts/computer_runtime/phase7_computer_runtime_contract.json",
       "role": "computer_runtime_contract"
     },
