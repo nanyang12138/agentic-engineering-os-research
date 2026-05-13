@@ -17,8 +17,16 @@ from capability_contract import (
     validate_capability_envelope,
 )
 from context_pack import build_context_pack, validate_context_pack
-from fixture_runner import load_fixture, stable_hash, verify_artifacts
+from fixture_runner import load_fixture
 from task_spec import TASK_SPEC_SCHEMA_VERSION, build_regression_task_spec, validate_regression_task_spec
+from verifier_runtime import (
+    REQUIRED_ARTIFACT_CHECK_IDS,
+    REQUIRED_VERIFIER_RULE_IDS,
+    build_verifier_rule_catalog,
+    run_verifier_runtime,
+    validate_verifier_rule_catalog,
+    validate_verifier_runtime_ref,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,6 +34,7 @@ FIXTURE_DIR = ROOT / "fixtures/regression"
 ARTIFACT_DIR = ROOT / "artifacts/runs"
 CAPABILITY_CATALOG_PATH = ROOT / "artifacts/capabilities/phase3_capability_catalog.json"
 CONTEXT_PACK_DIR = ROOT / "artifacts/context"
+VERIFIER_RULE_CATALOG_PATH = ROOT / "artifacts/verifier/phase5_verifier_rule_catalog.json"
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -42,10 +51,7 @@ ARTIFACT_FILES = [
     "verifier_report.json",
 ]
 REQUIRED_REPORT_RULES = {
-    "schema_validation",
-    "evidence_refs",
-    "classification_consistency",
-    "email_draft_uses_structured_facts",
+    *REQUIRED_VERIFIER_RULE_IDS,
 }
 PASS_STYLE_PHRASES = ["all passed", "clean pass", "passed successfully", "no failures"]
 VERDICTS = {"passed", "failed", "incomplete", "warning_or_waiver", "unknown", "needs_human_check"}
@@ -87,7 +93,9 @@ REQUIRED_FILES = [
     "scripts/task_spec.py",
     "scripts/capability_contract.py",
     "scripts/context_pack.py",
+    "scripts/verifier_runtime.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
+    "artifacts/verifier/phase5_verifier_rule_catalog.json",
 ]
 
 PLAN_REQUIRED_MARKERS = [
@@ -101,6 +109,9 @@ PLAN_REQUIRED_MARKERS = [
     "context-pack-v1",
     "context-budget-v1",
     "ContextPackV1",
+    "verifier-runtime-v1",
+    "verifier-rule-catalog-v1",
+    "phase5_verifier_rule_catalog.json",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -342,9 +353,32 @@ def validate_artifact_consistency(fixture_id: str, fixture: dict, evidence: dict
     missing_rules = sorted(REQUIRED_REPORT_RULES - report_rule_ids)
     if missing_rules:
         raise AssertionError(f"Fixture {fixture_id} verifier_report is missing rules: {missing_rules}")
+    unknown_rules = sorted(report_rule_ids - REQUIRED_REPORT_RULES)
+    if unknown_rules:
+        raise AssertionError(f"Fixture {fixture_id} verifier_report has unknown rules: {unknown_rules}")
+
+    artifact_check_ids = {check["checkId"] for check in report["artifactChecks"]}
+    missing_checks = sorted(REQUIRED_ARTIFACT_CHECK_IDS - artifact_check_ids)
+    if missing_checks:
+        raise AssertionError(f"Fixture {fixture_id} verifier_report is missing artifact checks: {missing_checks}")
 
     if not fixture["allowAllPassedEmail"] and any(phrase in email.lower() for phrase in PASS_STYLE_PHRASES):
         raise AssertionError("Negative or uncertain fixtures must not generate a pass-style email")
+
+
+def validate_verifier_runtime_replay(fixture_id: str, fixture: dict, run: dict, evidence: dict, result: dict, report: dict, email: str) -> None:
+    expected_report = run_verifier_runtime(
+        fixture_id=fixture_id,
+        allow_all_passed_email=fixture["allowAllPassedEmail"],
+        run_id=run["id"],
+        fixture_hash=report["fixtureHash"],
+        task_spec=json.loads(json.dumps(run["taskSpec"])),
+        evidence=json.loads(json.dumps(evidence["items"])),
+        result=json.loads(json.dumps(result)),
+        email=email,
+    )
+    if report != expected_report:
+        raise AssertionError(f"Fixture {fixture_id} verifier_report differs from deterministic VerifierRuntimeV1 replay")
 
 
 def validate_schema_structure(
@@ -462,6 +496,7 @@ def validate_schema_structure(
             "status",
             "generatedAt",
             "fixtureHash",
+            "verifierRuntime",
             "ruleResults",
             "artifactChecks",
             "blockingFailures",
@@ -473,12 +508,18 @@ def validate_schema_structure(
     if report["fixtureId"] != fixture_id:
         raise AssertionError(f"Fixture {fixture_id} verifier_report.json fixtureId mismatch")
     require_enum(f"{fixture_id} verifier_report.status", report["status"], ARTIFACT_STATUSES)
+    try:
+        validate_verifier_runtime_ref(report["verifierRuntime"])
+    except ValueError as exc:
+        raise AssertionError(f"Fixture {fixture_id} verifierRuntime failed validation: {exc}") from exc
     validate_rule_results(f"{fixture_id} verifier_report", report["ruleResults"])
     if not isinstance(report["artifactChecks"], list) or not report["artifactChecks"]:
         raise AssertionError(f"Fixture {fixture_id} verifier_report.artifactChecks must be a non-empty list")
     for index, check in enumerate(report["artifactChecks"]):
         check_label = f"{fixture_id} artifactChecks[{index}]"
-        require_fields(check_label, check, ["artifactId", "artifactType", "status", "message"])
+        require_fields(check_label, check, ["checkId", "artifactId", "artifactType", "status", "message"])
+        if check["checkId"] not in REQUIRED_ARTIFACT_CHECK_IDS:
+            raise AssertionError(f"{check_label}.checkId is unknown: {check['checkId']}")
         require_enum(f"{check_label}.artifactType", check["artifactType"], ARTIFACT_TYPES)
         require_enum(f"{check_label}.status", check["status"], ARTIFACT_STATUSES)
     if not isinstance(report["blockingFailures"], list):
@@ -535,6 +576,7 @@ def validate_artifact_packet(base_dir: Path) -> None:
 
         validate_schema_structure(fixture_id, run, evidence, result, report, events)
         validate_artifact_consistency(fixture_id, fixture, evidence, result, report, email)
+        validate_verifier_runtime_replay(fixture_id, fixture, run, evidence, result, report, email)
 
         expected_verdict = fixture["expectedVerdict"]
         allowed_verdicts = {expected_verdict, "needs_human_check"}
@@ -570,6 +612,32 @@ def validate_committed_capability_catalog() -> None:
             raise AssertionError(f"Capability catalog forced-failure rejected for the wrong reason: {exc}") from exc
     else:
         raise AssertionError("Capability catalog forced-failure unexpectedly accepted missing rule_verifier")
+
+
+def validate_committed_verifier_rule_catalog() -> None:
+    catalog = load_json(VERIFIER_RULE_CATALOG_PATH)
+    try:
+        validate_verifier_rule_catalog(catalog)
+    except ValueError as exc:
+        raise AssertionError(f"Committed Phase 5 verifier rule catalog failed validation: {exc}") from exc
+
+    expected = build_verifier_rule_catalog()
+    if catalog != expected:
+        raise AssertionError("Committed Phase 5 verifier rule catalog differs from deterministic generated catalog")
+
+    tampered = json.loads(json.dumps(catalog))
+    tampered["rules"] = [
+        rule
+        for rule in tampered["rules"]
+        if rule.get("id") != "email_draft_uses_structured_facts"
+    ]
+    try:
+        validate_verifier_rule_catalog(tampered)
+    except ValueError as exc:
+        if "Verifier rule ids must equal" not in str(exc):
+            raise AssertionError(f"Verifier rule catalog forced-failure rejected for the wrong reason: {exc}") from exc
+    else:
+        raise AssertionError("Verifier rule catalog forced-failure unexpectedly accepted a missing email grounding rule")
 
 
 def validate_committed_context_packs() -> None:
@@ -645,6 +713,23 @@ def run_context_pack_builder(out_dir: Path) -> None:
     if result.returncode != 0:
         raise AssertionError(
             "ContextPack builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
+def run_verifier_rule_catalog_builder(out_file: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/verifier_runtime.py"),
+        "--catalog-out",
+        str(out_file),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "Verifier rule catalog builder failed.\n"
             f"Command: {' '.join(command)}\n"
             f"stdout:\n{result.stdout}\n"
             f"stderr:\n{result.stderr}"
@@ -879,10 +964,15 @@ def main() -> None:
     require_markers("automation prompt", automation_prompt, AUTOMATION_REQUIRED_MARKERS)
     require_fixture_layout()
     validate_committed_capability_catalog()
+    validate_committed_verifier_rule_catalog()
     validate_committed_context_packs()
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_root = Path(temp_dir)
+        generated_verifier_catalog = temp_root / "phase5_verifier_rule_catalog.json"
+        run_verifier_rule_catalog_builder(generated_verifier_catalog)
+        if load_json(generated_verifier_catalog) != load_json(VERIFIER_RULE_CATALOG_PATH):
+            raise AssertionError("Committed verifier rule catalog differs from deterministic CLI output")
         generated_artifacts = temp_root / "runs"
         run_fixture_runner(generated_artifacts)
         validate_artifact_packet(generated_artifacts)

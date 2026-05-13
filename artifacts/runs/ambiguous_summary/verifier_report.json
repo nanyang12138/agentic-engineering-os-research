@@ -3,18 +3,21 @@
     {
       "artifactId": "evidence.json",
       "artifactType": "evidence",
+      "checkId": "artifact.evidence_present",
       "message": "Evidence artifact contains at least one item.",
       "status": "passed"
     },
     {
       "artifactId": "regression-result-ambiguous_summary",
       "artifactType": "regression_result",
+      "checkId": "artifact.regression_result_valid",
       "message": "Regression result has a valid verdict and evidence ids.",
       "status": "passed"
     },
     {
       "artifactId": "email_draft.md",
       "artifactType": "email_draft",
+      "checkId": "artifact.email_draft_grounded",
       "message": "Email draft is grounded in regression_result.json and evidence ids.",
       "status": "passed"
     }
@@ -102,5 +105,12 @@
   "runId": "run-ambiguous_summary-ce7aae81",
   "schemaVersion": "verifier-report-v1",
   "status": "passed",
-  "summary": "Fixture ambiguous_summary produced verdict unknown; verifier status passed."
+  "summary": "Fixture ambiguous_summary produced verdict unknown; verifier status passed.",
+  "verifierRuntime": {
+    "id": "phase5-regression-verifier-runtime",
+    "mode": "same_process_readonly",
+    "ruleCatalogRef": "artifacts/verifier/phase5_verifier_rule_catalog.json",
+    "schemaVersion": "verifier-runtime-v1",
+    "sideEffect": false
+  }
 }

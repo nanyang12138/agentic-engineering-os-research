@@ -927,6 +927,25 @@ MVP verifier 只做三类检查：
 
 成功标准：系统输出的结论能回答“你凭什么这么说”。
 
+#### Phase 5 VerifierRuntimeV1 Rule Catalog / Replay Gate
+
+2026-05-13 07:45 UTC 自动化实现结论：Phase 5 的第一步不是引入完整 Evidence Graph、数据库、review agent 或 human approval backend，而是把当前内嵌在 fixture runner 的规则验证提升为独立的 `verifier-runtime-v1` / `verifier-rule-catalog-v1` contract。这样 `verifier_report.json` 不再只是 runner 的副产物，而是可以由同一 runtime 规则目录 deterministic replay 的可审计 artifact。
+
+最小 Verifier Runtime contract：
+
+- `artifacts/verifier/phase5_verifier_rule_catalog.json` 记录 Phase 5 regression MVP 的 rule catalog：schema validation、evidence refs、classification precedence、warning/incomplete/failure guard、passed sufficiency 和 email grounding。
+- `scripts/verifier_runtime.py` 提供 same-process read-only verifier runtime、catalog builder/validator 和 CLI replay；不发送邮件、不调用外部服务、不写仓库外 side effect。
+- `verifier_report.json#verifierRuntime` 引用 `phase5_verifier_rule_catalog.json`，并声明 `schemaVersion="verifier-runtime-v1"`、`mode="same_process_readonly"`、`sideEffect=false`。
+- `artifactChecks[]` 现在带稳定 `checkId`，让 artifact-level checks 也可被 catalog 验证。
+- `scripts/validate_repo.py` 校验 committed rule catalog 等于 deterministic builder 输出，并对每个 fixture replay `verifier_report.json`；缺失 email grounding rule 或 report rule 的负例必须失败。
+
+Build vs Integrate：
+
+- Build：最小 VerifierRuntimeV1、rule catalog artifact、CLI replay、report runtime ref、artifact check ids 和 deterministic validation gate。
+- Integrate later：JSON Schema 库、OPA/policy engine、review agent verifier、human verifier backend、数据库 Evidence Graph、外部 approval system 和可插拔 verifier provider。
+
+当前 Phase 5 已启动但未完成：本 gate 固化了 verifier runtime contract 和 replay 验证；下一步应把 Evidence List 从当前 `evidence.json` schema 校验提升为独立 EvidenceListV1 module/CLI，验证 evidence source refs、line ranges、ContextPack provenance 和 artifact backlinks 的完整闭环。
+
 ### Phase 6：状态、权限和恢复
 
 加入真正的控制平面能力：
@@ -1892,6 +1911,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-13 06:03 UTC：Phase 4 ContextPackV1 Static Provenance Gate 已实现；决定先自研 deterministic `context-pack-v1` artifact，把 TaskSpec、regression log excerpts、capability catalogue 和 run artifact refs 统一成带 POSIX relative path 与 contentHash 的 context provenance。动态 retrieval、symbol/docs/issues/CI adapters、embedding store 和 ContextPack runtime injection 后移。
 - 2026-05-13 07:01 UTC：Phase 4 ContextPackV1 Runtime Consumption Gate 已实现；决定让 local read-only runner 可选消费 committed ContextPack，并强制每条 log evidence 必须由 ContextPack 声明的 `log_excerpt` source ref 支持。动态 retrieval、cache、broker service 和 token budget optimizer 继续后移；下一步优先补最小 budget/source-selection policy。
 - 2026-05-13 07:20 UTC：Phase 4 ContextPackV1 Budget / Source Selection Gate 已实现；决定在 `context-pack-v1` 中自研最小 `budget` 字段，先用 `sourceSelection=evidence_items_only_v1`、`maxLogExcerptItems` 和 `maxLogExcerptLines` 约束 read-only regression context。token estimator、semantic ranking 和动态 broker service 继续后移；Phase 5 可从已受限的 ContextPack 输入继续推进 Evidence/Verifier Runtime。
+- 2026-05-13 07:45 UTC：Phase 5 VerifierRuntimeV1 Rule Catalog / Replay Gate 已实现；决定将当前规则验证自研为 `verifier-runtime-v1` / `verifier-rule-catalog-v1`、committed `artifacts/verifier/phase5_verifier_rule_catalog.json` 和 deterministic replay gate。外部 review agent、human verifier backend、policy engine 和完整 Evidence Graph 继续后移。
 
 ## 20. Open Questions
 
@@ -1907,8 +1927,8 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - `lineRange` 在 Phase 1a 仍是可选字段；只有当 `sourcePath + excerpt` 无法稳定复查时，才新增 content hash 或更复杂定位机制。
 - Fixture runner v1 入口固定为 `fixture-runner --fixture-dir <fixtures/regression> --out-dir <artifacts/runs>`；不提供 watch mode、HTTP API、后台 daemon、workspace registry 或额外配置参数。
 - `events.jsonl` v1 只记录 `run.created`、`task_spec.generated`、`read_log` / `extract_regression_result` 完成事件、artifact 写入、verifier 完成和 run 完成/失败；它服务复查，不承担 replay backend。
-- 规则 marker v1 使用代码常量；外置 YAML/JSON 规则表延后。
-- `verifier_report.json` v1 只需要 run/fixture/status/generatedAt、ruleResults、artifactChecks 和 summary；golden validation 不做完整 artifact snapshot，只检查 verdict、evidence 引用、email grounding 和负向 fixture 不得生成普通 all-passed 邮件。
+- 规则 marker v1 仍使用代码常量；verifier rule catalog 已提升为 `artifacts/verifier/phase5_verifier_rule_catalog.json`，用于重放 `verifier_report.json`，但不等于可配置 parser marker registry。
+- `verifier_report.json` v1 需要 run/fixture/status/generatedAt、`verifierRuntime`、ruleResults、artifactChecks、blockingFailures 和 summary；golden validation 会 replay VerifierRuntimeV1，检查 verdict、evidence 引用、email grounding、artifact check ids 和负向 fixture 不得生成普通 all-passed 邮件。
 - `verifier_report.json` 是 Phase 1a 唯一验收事实源；`regression_result.json` 不能覆盖 verifier 失败，`run.json` 不重新判定业务 verdict，`events.jsonl` 不承担 replay backend。
 - `read_log`、`extract_regression_result`、`write_artifact` 在 Phase 1a 只是 fixture runner 内部 deterministic functions；正式 capability registry 和 adapter 化实现延后到 Phase 1b。
 - 没有完整 fixture artifact packet、verifier failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据时，后续优化不再修改正式设计章节。
@@ -1918,6 +1938,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - Phase 3 的最小 capability metadata envelope 已收敛为 `capability-envelope-v1` / `capability-metadata-v1`，覆盖 `schemaVersion`、`name`、`ref`、`permission`、`sideEffect`、`timeoutMs`、`inputContract` 和 `outputContract`；当前 regression demo 的 `read_log`、`extract_regression_result`、`write_artifact`、`rule_verifier` 都必须有 `capabilityRef`，正式 registry、daemon、adapter plugin 和外部 provider 继续后移。
 - `capability-envelope-v1` 先作为 `artifacts/capabilities/phase3_capability_catalog.json` 独立 artifact 提交和验证；Phase 4 Context Broker 可引用该静态 catalogue，动态 registry / provider discovery 后移。
 - Phase 4 的 Context Broker artifact 固定为 `ContextPackV1` / `context-pack-v1`：先用静态 builder 收敛 TaskSpec、log excerpts、capability catalogue 和 artifact refs，并用 contentHash 验证来源可复查；local runner 可选消费 committed ContextPack，且最小 `budget` 会限制 evidence-backed log excerpt 的数量和总行数。动态 retrieval 与 broker service 后移。
+- Phase 5 的 Verifier Runtime artifact 固定为 `verifier-runtime-v1` / `verifier-rule-catalog-v1`：先用 same-process read-only rule catalog 和 replay gate 验证 `verifier_report.json`，review agent、human verifier backend、policy engine 和数据库 Evidence Graph 后移。
 
 ### 20.2 仍开放的问题
 
@@ -3503,6 +3524,78 @@ git diff --check
 ```text
 进入 Phase 5 Evidence List / MVP Verifier Runtime：
 把当前内嵌在 `fixture_runner.verify_artifacts(...)` 的规则验证提升为更明确的 Verifier Runtime v1 contract，例如独立 verifier rule catalogue / CLI，并由 validation 证明 schema、evidence refs、classification precedence、email grounding 和 human-approval-before-side-effect checks 都由该 runtime 统一执行。
+```
+
+### 2026-05-13 07:45 UTC Automation Implementation Log - Phase 5 VerifierRuntimeV1 Rule Catalog / Replay Gate
+
+Active phase：
+
+```text
+Phase 5: Evidence List and MVP Verifier Runtime
+```
+
+Selected slice：
+
+```text
+Add a standalone VerifierRuntimeV1 rule catalog and replay CLI so that scripts/validate_repo.py proves verifier reports are regenerated deterministically by one runtime contract.
+```
+
+为什么这是下一步：Phase 4 已经把 ContextPack 的静态 provenance、runtime consumption 和 budget/source-selection policy 固化为机器验证输入边界。Phase 5 的最小前置不是完整 Evidence Graph 或外部 review/human verifier，而是让当前 `verifier_report.json` 能引用明确 runtime/catalog，并由统一规则目录 deterministic replay，避免 verifier 逻辑继续隐藏在 fixture runner 内部。
+
+实现摘要：
+
+- 新增 `scripts/verifier_runtime.py`，提供 `verifier-runtime-v1`、`verifier-rule-catalog-v1`、same-process read-only runtime、catalog builder/validator 和 CLI replay。
+- 新增 committed `artifacts/verifier/phase5_verifier_rule_catalog.json`，覆盖 schema validation、evidence refs、classification precedence、warning/incomplete/failure guard、passed sufficiency、email grounding 和 artifact checks。
+- `scripts/fixture_runner.py` 改为复用 VerifierRuntimeV1，5 个 committed `verifier_report.json` 增加 `verifierRuntime` 引用和稳定 `artifactChecks[].checkId`。
+- `scripts/validate_repo.py` 校验 rule catalog deterministic 输出、缺失 email grounding rule 的 forced-failure、每个 fixture 的 verifier report runtime ref，以及 committed report 与 VerifierRuntimeV1 replay 完全一致。
+- 已重新生成 `artifacts/runs/*/verifier_report.json` 和 `artifacts/context/*/context_pack.json`，保持 ContextPack artifact hash 与 committed verifier reports 一致。
+
+验收标准：
+
+- `phase5_verifier_rule_catalog.json` 可由 CLI deterministic 生成并通过 schema/规则覆盖验证：通过。
+- 5 个 fixture 的 `verifier_report.json` 均引用 `verifier-runtime-v1` 且可由 runtime replay 完全复现：通过。
+- 缺失 verifier rule、缺失 report rule、坏 evidence refs、pass-style negative email 等 forced-failure 仍被 repository validation 捕获：通过。
+- 不引入外部 side effects、真实邮件发送、数据库、review agent、human verifier backend、CUA、IDE 或 browser automation：通过。
+
+验证命令：
+
+```text
+python3 scripts/validate_repo.py
+python3 -m py_compile scripts/*.py
+python3 scripts/verifier_runtime.py --catalog-out /tmp/phase5-verifier-catalog.json
+python3 scripts/verifier_runtime.py --task-spec artifacts/runs/all_passed/run.json --evidence artifacts/runs/all_passed/evidence.json --result artifacts/runs/all_passed/regression_result.json --email artifacts/runs/all_passed/email_draft.md --fixture-id all_passed --run-id run-all_passed-988940c2 --fixture-hash 988940c2ac2945e2e0ae9bd4522f5fadc42f69cb0763eb6121ff1ced240d05c2 --allow-all-passed-email --out /tmp/phase5-all-passed-verifier-report.json
+python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase5-fixture-smoke
+python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase5-task-spec.json
+python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --task-spec-path /tmp/phase5-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json --out-dir /tmp/phase5-local-smoke
+git diff --check
+```
+
+验证结果：
+
+```text
+- Python executable resolved for this run: python3.
+- `python3 scripts/validate_repo.py`：通过，覆盖 Phase 1a/1b/2/3/4 gates，以及 Phase 5 verifier rule catalog、runtime ref、deterministic replay 和 forced-failure validation。
+- `python3 -m py_compile scripts/*.py`：通过。
+- `python3 scripts/verifier_runtime.py --catalog-out /tmp/phase5-verifier-catalog.json`：通过，生成 deterministic rule catalog。
+- `python3 scripts/verifier_runtime.py ... --out /tmp/phase5-all-passed-verifier-report.json`：通过，重放 all_passed verifier report。
+- `python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase5-fixture-smoke`：通过，处理 5 个 fixtures。
+- `python3 scripts/task_spec.py ... --out /tmp/phase5-task-spec.json`：通过。
+- `python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json ...`：通过。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- Verifier Runtime 仍是 same-process read-only MVP，不是可插拔 verifier provider。
+- Rule catalog 固化 verifier rules，但 parser marker 仍在代码常量中；真实脱敏日志可能暴露 marker 规则需要独立配置。
+- Evidence List 仍主要由 `evidence.json` schema 和 report replay 间接验证，尚未有独立 EvidenceListV1 module/CLI。
+- 开放 PR #53 是 Phase 4 budget/source-selection 的 draft/stale 候选；当前 main 已包含等价 Phase 4 gate，但本环境没有写权限 GitHub 工具可关闭或标记 ready。
+
+下一轮建议：
+
+```text
+继续 Phase 5：
+新增独立 EvidenceListV1 module/CLI，验证 evidence item 的 sourcePath、lineRange、excerpt hash、ContextPack provenance 和 artifact backlinks，使 Evidence List contract 不再只依赖 fixture runner 与 verifier replay 间接校验。
 ```
 
 ## 22. Parking Lot
