@@ -17,61 +17,64 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Find pull request for validated branch
+      - name: Resolve pull request from workflow_run
         id: pr
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
-          echo "Validated branch: ${HEAD_BRANCH}"
+          PR_NUMBER=$(jq -r '.workflow_run.pull_requests[0].number // empty' "$GITHUB_EVENT_PATH")
 
-          PR_JSON=$(gh pr list \
-            --repo "${REPO}" \
-            --state open \
-            --head "${HEAD_BRANCH}" \
-            --json number,isDraft,author,headRefName,url \
-            --limit 20)
+          if [ -z "$PR_NUMBER" ]; then
+            HEAD_BRANCH=$(jq -r '.workflow_run.head_branch' "$GITHUB_EVENT_PATH")
+            HEAD_OWNER=$(jq -r '.workflow_run.head_repository.owner.login // .repository.owner.login' "$GITHUB_EVENT_PATH")
+            echo "workflow_run payload had no PR number; falling back to head lookup: ${HEAD_OWNER}:${HEAD_BRANCH}"
 
-          echo "${PR_JSON}"
-
-          PR_NUMBER=$(echo "${PR_JSON}" | jq -r '
-            .[]
-            | select(.author.login == "cursor[bot]" or .author.login == "nanyang12138")
-            | .number
-          ' | head -n 1)
-
-          if [ -z "${PR_NUMBER}" ] || [ "${PR_NUMBER}" = "null" ]; then
-            echo "No open Cursor/user PR found for branch ${HEAD_BRANCH}."
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            PR_NUMBER=$(gh api "repos/${REPO}/pulls" \
+              -f state=open \
+              -f head="${HEAD_OWNER}:${HEAD_BRANCH}" \
+              --jq '.[0].number // empty')
           fi
 
-          IS_DRAFT=$(echo "${PR_JSON}" | jq -r ".[] | select(.number == ${PR_NUMBER}) | .isDraft")
-          PR_URL=$(echo "${PR_JSON}" | jq -r ".[] | select(.number == ${PR_NUMBER}) | .url")
+          if [ -z "$PR_NUMBER" ]; then
+            echo "Could not resolve PR for workflow_run."
+            echo "workflow_run event:"
+            jq '.workflow_run | {id, event, conclusion, head_branch, head_sha, pull_requests}' "$GITHUB_EVENT_PATH"
+            exit 1
+          fi
 
-          echo "found=true" >> "$GITHUB_OUTPUT"
-          echo "number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
-          echo "is_draft=${IS_DRAFT}" >> "$GITHUB_OUTPUT"
-          echo "url=${PR_URL}" >> "$GITHUB_OUTPUT"
+          PR_JSON=$(gh pr view "$PR_NUMBER" \
+            --repo "$REPO" \
+            --json number,isDraft,author,url,headRefName,mergeStateStatus)
+
+          echo "$PR_JSON"
+
+          AUTHOR=$(echo "$PR_JSON" | jq -r '.author.login')
+          if [ "$AUTHOR" != "cursor[bot]" ] && [ "$AUTHOR" != "nanyang12138" ]; then
+            echo "Refusing to auto-merge PR authored by ${AUTHOR}"
+            exit 1
+          fi
+
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "is_draft=$(echo "$PR_JSON" | jq -r '.isDraft')" >> "$GITHUB_OUTPUT"
+          echo "url=$(echo "$PR_JSON" | jq -r '.url')" >> "$GITHUB_OUTPUT"
 
       - name: Mark draft PR ready
-        if: steps.pr.outputs.found == 'true' && steps.pr.outputs.is_draft == 'true'
+        if: steps.pr.outputs.is_draft == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
         run: |
-          gh pr ready "${PR_NUMBER}" --repo "${REPO}"
+          gh pr ready "$PR_NUMBER" --repo "$REPO"
 
       - name: Enable squash auto-merge
-        if: steps.pr.outputs.found == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
         run: |
-          gh pr merge "${PR_NUMBER}" \
-            --repo "${REPO}" \
+          gh pr merge "$PR_NUMBER" \
+            --repo "$REPO" \
             --auto \
             --squash
