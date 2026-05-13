@@ -4571,7 +4571,15 @@ git diff --check
 ```text
 - Python executable resolved for this run: /usr/bin/python3.
 - Baseline `/usr/bin/python3 scripts/validate_repo.py` before edits：通过。
-- 待本次实现验证完成后更新为最终结果；PR body 也必须记录实际命令和结果。
+- `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 EvaluationReportV1 committed artifact、deterministic builder output，以及 missing phase coverage / full product complete claim / external side effects ready / delivery report hash mismatch / missing real provider blocker / missing CUA out-of-scope forced-failure cases。
+- `/usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json`：通过。
+- `/usr/bin/python3 scripts/evaluation_report.py --report-out /tmp/phase9_mvp_evaluation_report.json`：通过，可 deterministic 生成 EvaluationReportV1 artifact。
+- `/usr/bin/python3 scripts/multi_agent_delivery.py --validate-manifest artifacts/delivery/phase9_multi_agent_delivery_manifest.json --validate-delivery-report artifacts/delivery/phase9_delivery_report.json`：通过。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase9-evaluation-fixture-smoke`：通过。
+- `/usr/bin/python3 scripts/task_spec.py ... --out /tmp/phase9-evaluation-task-spec.json`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json`：通过。
+- `git diff --check`：通过。
 ```
 
 剩余风险：
