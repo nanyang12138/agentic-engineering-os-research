@@ -11,12 +11,15 @@ from typing import Any
 IDE_ADAPTER_CONTRACT_SCHEMA_VERSION = "ide-adapter-contract-v1"
 IDE_ADAPTER_CAPABILITY_SCHEMA_VERSION = "ide-adapter-capability-v1"
 WORKSPACE_OBSERVATION_SCHEMA_VERSION = "workspace-observation-v1"
+IDE_APPROVAL_HANDOFF_MANIFEST_SCHEMA_VERSION = "ide-approval-handoff-manifest-v1"
 GENERATED_AT = "2026-05-12T14:39:00Z"
 
 CONTRACT_ID = "phase8-static-ide-adapter-contract"
 OBSERVATION_ID = "phase8-static-workspace-observation-all_passed"
+APPROVAL_HANDOFF_MANIFEST_ID = "phase8-static-ide-approval-handoff-all_passed"
 CONTRACT_ARTIFACT_PATH = "artifacts/ide_adapter/phase8_ide_adapter_contract.json"
 OBSERVATION_ARTIFACT_PATH = "artifacts/ide_adapter/phase8_workspace_observation.json"
+APPROVAL_HANDOFF_ARTIFACT_PATH = "artifacts/ide_adapter/phase8_ide_approval_handoff_manifest.json"
 ADAPTER_REF = "ide-adapter://phase8/cursor-placeholder"
 CAPABILITY_URI_PREFIX = "ide-adapter://phase8/"
 
@@ -213,6 +216,14 @@ def _artifact_source(role: str, path: Path, root: Path) -> dict[str, Any]:
         "role": role,
         "path": relative_path,
         "contentHash": _stable_file_hash(path),
+    }
+
+
+def _capabilities_by_name(contract: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        capability["name"]: capability
+        for capability in contract.get("capabilities", [])
+        if isinstance(capability, dict) and "name" in capability
     }
 
 
@@ -499,6 +510,143 @@ def build_workspace_observation(
     }
 
 
+def build_approval_handoff_manifest(
+    contract_path: Path,
+    observation_path: Path,
+    run_path: Path,
+    root: Path,
+) -> dict[str, Any]:
+    contract = _load_json(contract_path)
+    validate_ide_adapter_contract(contract)
+    observation = _load_json(observation_path)
+    validate_workspace_observation(observation, contract, root)
+    run = _load_json(run_path)
+    permission_policy = run["runControl"]["permissionPolicy"]
+    task_spec = run["taskSpec"]
+    capabilities = _capabilities_by_name(contract)
+    workspace_ref = observation["workspace"]["workspaceRef"]
+    current_file = observation["workspace"]["currentFile"]
+    run_relative_path = run_path.resolve().relative_to(root.resolve()).as_posix()
+
+    side_effect_requests = [
+        {
+            "capability": "ide.open_file",
+            "approvalPoint": "ide_open_file_requires_human_approval",
+            "policyBindings": ["external_side_effect"],
+            "inputPreview": {
+                "workspaceRef": workspace_ref,
+                "path": current_file,
+            },
+            "reason": "Opening a file changes IDE UI state and requires an explicit TaskSpec approval point before scheduling.",
+        },
+        {
+            "capability": "ide.diff_view.open",
+            "approvalPoint": "ide_diff_view_requires_human_approval",
+            "policyBindings": ["external_side_effect"],
+            "inputPreview": {
+                "workspaceRef": workspace_ref,
+                "artifactRef": "artifacts/runs/all_passed/regression_result.json",
+            },
+            "reason": "Opening a diff view changes IDE UI state and remains blocked until the TaskSpec names the approval point.",
+        },
+        {
+            "capability": "ide.terminal.request",
+            "approvalPoint": "ide_terminal_execution_requires_human_approval",
+            "policyBindings": ["dangerous", "external_side_effect"],
+            "inputPreview": {
+                "workspaceRef": workspace_ref,
+                "commandDigest": _stable_text_hash("echo contract-only-terminal-request"),
+                "commandRedacted": True,
+            },
+            "reason": "Terminal execution is dangerous and cannot be scheduled without both policy and TaskSpec approval.",
+        },
+    ]
+
+    requests = []
+    task_spec_approval_points = task_spec["approvalPoints"]
+    for request in side_effect_requests:
+        capability = capabilities[request["capability"]]
+        requests.append(
+            {
+                "id": f"approval-handoff-{request['capability'].replace('.', '-')}",
+                "capability": request["capability"],
+                "capabilityRef": capability["ref"],
+                "permission": capability["permission"],
+                "approvalPoint": request["approvalPoint"],
+                "requiresHumanApproval": True,
+                "permissionPolicyBound": True,
+                "policyBindings": request["policyBindings"],
+                "taskSpecApprovalBound": request["approvalPoint"] in task_spec_approval_points,
+                "schedulerDecision": "blocked_missing_task_spec_approval",
+                "executionAllowed": False,
+                "approvalDecisionSynthesized": False,
+                "inputPreview": request["inputPreview"],
+                "reason": request["reason"],
+            }
+        )
+
+    approval_capability = capabilities["ide.approval.request"]
+    requests.append(
+        {
+            "id": "approval-handoff-task-spec-send-email",
+            "capability": "ide.approval.request",
+            "capabilityRef": approval_capability["ref"],
+            "permission": approval_capability["permission"],
+            "approvalPoint": "send_email_requires_human_approval",
+            "requiresHumanApproval": True,
+            "permissionPolicyBound": True,
+            "policyBindings": ["send_email"],
+            "taskSpecApprovalBound": "send_email_requires_human_approval" in task_spec_approval_points,
+            "schedulerDecision": "contract_only_handoff_ready",
+            "executionAllowed": False,
+            "approvalDecisionSynthesized": False,
+            "inputPreview": {
+                "runRef": f"{run_relative_path}#taskSpec",
+                "approvalPoint": "send_email_requires_human_approval",
+            },
+            "reason": "The IDE may surface a human approval prompt for TaskSpec approval points, but Phase 8 does not synthesize decisions or send email.",
+        }
+    )
+
+    return {
+        "schemaVersion": IDE_APPROVAL_HANDOFF_MANIFEST_SCHEMA_VERSION,
+        "id": APPROVAL_HANDOFF_MANIFEST_ID,
+        "contractRef": CONTRACT_ARTIFACT_PATH,
+        "workspaceObservationRef": OBSERVATION_ARTIFACT_PATH,
+        "runRef": run_relative_path,
+        "adapterRef": ADAPTER_REF,
+        "provider": "static_fixture",
+        "mode": "static_fixture_only",
+        "externalSideEffect": False,
+        "generatedAt": GENERATED_AT,
+        "taskSpecBinding": {
+            "taskSpecId": task_spec["id"],
+            "approvalPoints": task_spec_approval_points,
+            "requiredApprovalPoints": ["send_email_requires_human_approval"],
+        },
+        "permissionPolicyBinding": {
+            "schemaVersion": permission_policy["schemaVersion"],
+            "id": permission_policy["id"],
+            "externalSideEffectsAllowed": permission_policy["externalSideEffectsAllowed"],
+            "approvalRequiredFor": permission_policy["approvalRequiredFor"],
+            "localWriteBoundary": permission_policy["localWriteBoundary"],
+        },
+        "sourceArtifacts": [
+            _artifact_source("ide_adapter_contract", contract_path, root),
+            _artifact_source("workspace_observation", observation_path, root),
+            _artifact_source("run", run_path, root),
+        ],
+        "handoffRequests": requests,
+        "policy": {
+            "noRealIdeExecution": True,
+            "noTerminalExecution": True,
+            "noWorkspaceMutation": True,
+            "autoApprovalAllowed": False,
+            "approvalDecisionSynthesisAllowed": False,
+        },
+    }
+
+
 def validate_workspace_observation(observation: dict[str, Any], contract: dict[str, Any], root: Path) -> None:
     validate_ide_adapter_contract(contract)
     _require_fields(
@@ -652,15 +800,217 @@ def validate_workspace_observation(observation: dict[str, Any], contract: dict[s
             raise ValueError("WorkspaceObservationV1 observation sourceRef must bind to ContextPack log_excerpt")
 
 
+def validate_approval_handoff_manifest(manifest: dict[str, Any], contract: dict[str, Any], root: Path) -> None:
+    validate_ide_adapter_contract(contract)
+    _require_fields(
+        "IDEApprovalHandoffManifestV1",
+        manifest,
+        [
+            "schemaVersion",
+            "id",
+            "contractRef",
+            "workspaceObservationRef",
+            "runRef",
+            "adapterRef",
+            "provider",
+            "mode",
+            "externalSideEffect",
+            "taskSpecBinding",
+            "permissionPolicyBinding",
+            "sourceArtifacts",
+            "handoffRequests",
+            "policy",
+        ],
+    )
+    if manifest["schemaVersion"] != IDE_APPROVAL_HANDOFF_MANIFEST_SCHEMA_VERSION:
+        raise ValueError(f"IDEApprovalHandoffManifestV1 schemaVersion must be {IDE_APPROVAL_HANDOFF_MANIFEST_SCHEMA_VERSION}")
+    if manifest["id"] != APPROVAL_HANDOFF_MANIFEST_ID:
+        raise ValueError(f"IDEApprovalHandoffManifestV1 id must be {APPROVAL_HANDOFF_MANIFEST_ID}")
+    if manifest["contractRef"] != CONTRACT_ARTIFACT_PATH:
+        raise ValueError(f"IDEApprovalHandoffManifestV1 contractRef must be {CONTRACT_ARTIFACT_PATH}")
+    if manifest["workspaceObservationRef"] != OBSERVATION_ARTIFACT_PATH:
+        raise ValueError(f"IDEApprovalHandoffManifestV1 workspaceObservationRef must be {OBSERVATION_ARTIFACT_PATH}")
+    _validate_relative_posix_path(manifest["runRef"])
+    if manifest["adapterRef"] != contract["adapterRef"]:
+        raise ValueError("IDEApprovalHandoffManifestV1 adapterRef must match IDEAdapterContractV1")
+    if manifest["mode"] != "static_fixture_only":
+        raise ValueError("IDEApprovalHandoffManifestV1 mode must be static_fixture_only")
+    if manifest["externalSideEffect"] is not False:
+        raise ValueError("IDEApprovalHandoffManifestV1 must not declare external side effects")
+
+    policy = manifest["policy"]
+    _require_fields(
+        "IDEApprovalHandoffManifestV1 policy",
+        policy,
+        [
+            "noRealIdeExecution",
+            "noTerminalExecution",
+            "noWorkspaceMutation",
+            "autoApprovalAllowed",
+            "approvalDecisionSynthesisAllowed",
+        ],
+    )
+    if policy["noRealIdeExecution"] is not True:
+        raise ValueError("IDEApprovalHandoffManifestV1 must record that no real IDE execution occurred")
+    if policy["noTerminalExecution"] is not True:
+        raise ValueError("IDEApprovalHandoffManifestV1 must record that no terminal execution occurred")
+    if policy["noWorkspaceMutation"] is not True:
+        raise ValueError("IDEApprovalHandoffManifestV1 must disallow workspace mutation")
+    if policy["autoApprovalAllowed"] is not False:
+        raise ValueError("IDEApprovalHandoffManifestV1 must disallow auto approval")
+    if policy["approvalDecisionSynthesisAllowed"] is not False:
+        raise ValueError("IDEApprovalHandoffManifestV1 must not synthesize approval decisions")
+
+    source_artifacts = manifest["sourceArtifacts"]
+    if not isinstance(source_artifacts, list) or not source_artifacts:
+        raise ValueError("IDEApprovalHandoffManifestV1 sourceArtifacts must be a non-empty list")
+    sources_by_role: dict[str, dict[str, Any]] = {}
+    for source in source_artifacts:
+        if not isinstance(source, dict):
+            raise ValueError("IDEApprovalHandoffManifestV1 sourceArtifacts must be objects")
+        _require_fields("IDEApprovalHandoffManifestV1 source artifact", source, ["role", "path", "contentHash"])
+        _validate_relative_posix_path(source["path"])
+        source_path = root / source["path"]
+        if not source_path.is_file():
+            raise ValueError(f"IDEApprovalHandoffManifestV1 source artifact does not exist: {source['path']}")
+        if _stable_file_hash(source_path) != source["contentHash"]:
+            raise ValueError(f"IDEApprovalHandoffManifestV1 source hash mismatch for {source['path']}")
+        sources_by_role[source["role"]] = source
+    expected_roles = {"ide_adapter_contract", "workspace_observation", "run"}
+    if set(sources_by_role) != expected_roles:
+        raise ValueError(f"IDEApprovalHandoffManifestV1 source roles must equal {sorted(expected_roles)}")
+    if sources_by_role["ide_adapter_contract"]["path"] != CONTRACT_ARTIFACT_PATH:
+        raise ValueError(f"IDEApprovalHandoffManifestV1 contract source must be {CONTRACT_ARTIFACT_PATH}")
+    if sources_by_role["workspace_observation"]["path"] != OBSERVATION_ARTIFACT_PATH:
+        raise ValueError(f"IDEApprovalHandoffManifestV1 observation source must be {OBSERVATION_ARTIFACT_PATH}")
+    if sources_by_role["run"]["path"] != manifest["runRef"]:
+        raise ValueError("IDEApprovalHandoffManifestV1 run source must match runRef")
+
+    observation = _load_json(root / sources_by_role["workspace_observation"]["path"])
+    validate_workspace_observation(observation, contract, root)
+    run = _load_json(root / sources_by_role["run"]["path"])
+    task_spec = run["taskSpec"]
+    permission_policy = run["runControl"]["permissionPolicy"]
+
+    task_spec_binding = manifest["taskSpecBinding"]
+    _require_fields("IDEApprovalHandoffManifestV1 taskSpecBinding", task_spec_binding, ["taskSpecId", "approvalPoints", "requiredApprovalPoints"])
+    if task_spec_binding["taskSpecId"] != task_spec["id"]:
+        raise ValueError("IDEApprovalHandoffManifestV1 taskSpecBinding must match run TaskSpec id")
+    if task_spec_binding["approvalPoints"] != task_spec["approvalPoints"]:
+        raise ValueError("IDEApprovalHandoffManifestV1 taskSpecBinding approvalPoints must match run TaskSpec")
+    required_task_points = task_spec_binding["requiredApprovalPoints"]
+    if not isinstance(required_task_points, list) or "send_email_requires_human_approval" not in required_task_points:
+        raise ValueError("IDEApprovalHandoffManifestV1 must require TaskSpec send_email approval point")
+    for point in required_task_points:
+        if point not in task_spec_binding["approvalPoints"]:
+            raise ValueError(f"IDEApprovalHandoffManifestV1 required approval point is missing from TaskSpec: {point}")
+
+    policy_binding = manifest["permissionPolicyBinding"]
+    _require_fields(
+        "IDEApprovalHandoffManifestV1 permissionPolicyBinding",
+        policy_binding,
+        ["schemaVersion", "id", "externalSideEffectsAllowed", "approvalRequiredFor", "localWriteBoundary"],
+    )
+    if policy_binding["schemaVersion"] != permission_policy["schemaVersion"]:
+        raise ValueError("IDEApprovalHandoffManifestV1 permission policy schemaVersion must match RunControlV1")
+    if policy_binding["id"] != permission_policy["id"]:
+        raise ValueError("IDEApprovalHandoffManifestV1 permission policy id must match RunControlV1")
+    if policy_binding["externalSideEffectsAllowed"] is not False:
+        raise ValueError("IDEApprovalHandoffManifestV1 permission policy must disallow external side effects")
+    if policy_binding["approvalRequiredFor"] != permission_policy["approvalRequiredFor"]:
+        raise ValueError("IDEApprovalHandoffManifestV1 approvalRequiredFor must match RunControlV1 permission policy")
+    if policy_binding["localWriteBoundary"] != permission_policy["localWriteBoundary"]:
+        raise ValueError("IDEApprovalHandoffManifestV1 localWriteBoundary must match RunControlV1 permission policy")
+
+    capabilities = _capabilities_by_name(contract)
+    required_requests = {
+        "ide.open_file",
+        "ide.diff_view.open",
+        "ide.terminal.request",
+        "ide.approval.request",
+    }
+    requests = manifest["handoffRequests"]
+    if not isinstance(requests, list) or not requests:
+        raise ValueError("IDEApprovalHandoffManifestV1 handoffRequests must be a non-empty list")
+    request_names = {request.get("capability") for request in requests if isinstance(request, dict)}
+    if request_names != required_requests:
+        raise ValueError(f"IDEApprovalHandoffManifestV1 handoffRequests must cover {sorted(required_requests)}")
+
+    approval_required_for = set(policy_binding["approvalRequiredFor"])
+    task_approval_points = set(task_spec_binding["approvalPoints"])
+    for request in requests:
+        if not isinstance(request, dict):
+            raise ValueError("IDEApprovalHandoffManifestV1 handoffRequests must be objects")
+        _require_fields(
+            "IDEApprovalHandoffManifestV1 handoff request",
+            request,
+            [
+                "id",
+                "capability",
+                "capabilityRef",
+                "permission",
+                "approvalPoint",
+                "requiresHumanApproval",
+                "permissionPolicyBound",
+                "policyBindings",
+                "taskSpecApprovalBound",
+                "schedulerDecision",
+                "executionAllowed",
+                "approvalDecisionSynthesized",
+                "inputPreview",
+                "reason",
+            ],
+        )
+        capability = capabilities[request["capability"]]
+        if request["capabilityRef"] != capability["ref"]:
+            raise ValueError(f"IDEApprovalHandoffManifestV1 {request['capability']} capabilityRef mismatch")
+        if request["permission"] != capability["permission"]:
+            raise ValueError(f"IDEApprovalHandoffManifestV1 {request['capability']} permission mismatch")
+        if request["requiresHumanApproval"] is not True:
+            raise ValueError(f"IDEApprovalHandoffManifestV1 {request['capability']} must require human approval")
+        if request["permissionPolicyBound"] is not True:
+            raise ValueError(f"IDEApprovalHandoffManifestV1 {request['capability']} must bind to permission policy")
+        if request["executionAllowed"] is not False:
+            raise ValueError(f"IDEApprovalHandoffManifestV1 {request['capability']} must not allow execution")
+        if request["approvalDecisionSynthesized"] is not False:
+            raise ValueError(f"IDEApprovalHandoffManifestV1 {request['capability']} must not synthesize approval decisions")
+        policy_bindings = request["policyBindings"]
+        if not isinstance(policy_bindings, list) or not policy_bindings:
+            raise ValueError(f"IDEApprovalHandoffManifestV1 {request['capability']} policyBindings must be non-empty")
+        missing_policy_bindings = [binding for binding in policy_bindings if binding not in approval_required_for]
+        if missing_policy_bindings:
+            raise ValueError(f"IDEApprovalHandoffManifestV1 {request['capability']} has policy bindings missing from RunControlV1: {missing_policy_bindings}")
+        expected_task_bound = request["approvalPoint"] in task_approval_points
+        if request["taskSpecApprovalBound"] is not expected_task_bound:
+            raise ValueError(f"IDEApprovalHandoffManifestV1 {request['capability']} taskSpecApprovalBound must reflect TaskSpec approval points")
+
+        if request["capability"] in {"ide.open_file", "ide.diff_view.open", "ide.terminal.request"}:
+            if capability["approvalRequired"] is not True:
+                raise ValueError(f"IDEApprovalHandoffManifestV1 {request['capability']} contract capability must require approval")
+            if request["taskSpecApprovalBound"] is not False:
+                raise ValueError(f"IDEApprovalHandoffManifestV1 {request['capability']} must remain blocked until TaskSpec grants an IDE approval point")
+            if request["schedulerDecision"] != "blocked_missing_task_spec_approval":
+                raise ValueError(f"IDEApprovalHandoffManifestV1 {request['capability']} must be blocked by missing TaskSpec approval")
+        else:
+            if request["approvalPoint"] != "send_email_requires_human_approval":
+                raise ValueError("IDEApprovalHandoffManifestV1 ide.approval.request must bind to TaskSpec send_email approval point")
+            if request["taskSpecApprovalBound"] is not True:
+                raise ValueError("IDEApprovalHandoffManifestV1 ide.approval.request must be bound to a TaskSpec approval point")
+            if request["schedulerDecision"] != "contract_only_handoff_ready":
+                raise ValueError("IDEApprovalHandoffManifestV1 ide.approval.request must remain contract-only handoff ready")
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="ide-adapter-contract")
     parser.add_argument("--contract-out", type=Path)
     parser.add_argument("--observation-out", type=Path)
+    parser.add_argument("--approval-handoff-out", type=Path)
     parser.add_argument("--context-pack", type=Path)
     parser.add_argument("--run", type=Path)
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--validate-contract", type=Path)
     parser.add_argument("--validate-observation", type=Path)
+    parser.add_argument("--validate-approval-handoff", type=Path)
     return parser.parse_args(argv)
 
 
@@ -684,6 +1034,21 @@ def main(argv: list[str] | None = None) -> int:
         _write_json(args.observation_out, observation)
         print(f"Wrote WorkspaceObservationV1 artifact to {args.observation_out}.")
 
+    if args.approval_handoff_out:
+        if not args.run:
+            raise ValueError("--approval-handoff-out requires --run")
+        if contract is None:
+            contract = build_ide_adapter_contract()
+        manifest = build_approval_handoff_manifest(
+            root / CONTRACT_ARTIFACT_PATH,
+            root / OBSERVATION_ARTIFACT_PATH,
+            args.run,
+            root,
+        )
+        validate_approval_handoff_manifest(manifest, contract, root)
+        _write_json(args.approval_handoff_out, manifest)
+        print(f"Wrote IDEApprovalHandoffManifestV1 artifact to {args.approval_handoff_out}.")
+
     if args.validate_contract:
         contract = _load_json(args.validate_contract)
         validate_ide_adapter_contract(contract)
@@ -696,12 +1061,21 @@ def main(argv: list[str] | None = None) -> int:
         validate_workspace_observation(observation, contract, root)
         print(f"Validated WorkspaceObservationV1 artifact {args.validate_observation}.")
 
+    if args.validate_approval_handoff:
+        contract_path = args.validate_contract or (root / CONTRACT_ARTIFACT_PATH)
+        contract = _load_json(contract_path)
+        manifest = _load_json(args.validate_approval_handoff)
+        validate_approval_handoff_manifest(manifest, contract, root)
+        print(f"Validated IDEApprovalHandoffManifestV1 artifact {args.validate_approval_handoff}.")
+
     if not any(
         [
             args.contract_out,
             args.observation_out,
+            args.approval_handoff_out,
             args.validate_contract,
             args.validate_observation,
+            args.validate_approval_handoff,
         ]
     ):
         raise ValueError("No action requested")

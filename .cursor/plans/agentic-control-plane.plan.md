@@ -1116,6 +1116,25 @@ Build vs Integrate：
 
 当前 Phase 8 已启动但未完成：本 gate 只证明 IDE adapter 的 contract-only workspace observation 边界。下一步应补 IDE approval handoff manifest，让 IDE approval request 与 Phase 6 permission policy / human gate 对齐，仍不执行真实 IDE UI 或 terminal side effect。
 
+#### Phase 8 IDEApprovalHandoffManifestV1 Approval / Permission Gate
+
+2026-05-13 17:01 UTC 自动化实现结论：Phase 8 的第二步不是接入真实 Cursor/VS Code extension、terminal runner、diff UI 或 approval backend，而是新增一个可机器校验的 `IDEApprovalHandoffManifestV1`。该 artifact 证明 IDE adapter 只能把 open file、diff view、terminal 和 approval prompt 表达为 policy-bound handoff request；真正的 TaskSpec、permission policy、approval point、Evidence、Verifier 和 Delivery 仍由 Agentic Engineering OS 控制。
+
+最小 IDE approval handoff contract：
+
+- `artifacts/ide_adapter/phase8_ide_approval_handoff_manifest.json` 采用 `ide-approval-handoff-manifest-v1`，引用 `phase8_ide_adapter_contract.json`、`phase8_workspace_observation.json` 和 `artifacts/runs/all_passed/run.json` 的 POSIX 相对路径与 content hash。
+- manifest 绑定 `run.json#runControl.permissionPolicy`，要求 `permission-policy-v1` 的 `externalSideEffectsAllowed=false`，并把 `dangerous`、`external_side_effect`、`send_email` 三类 approval requirement 显式带入 handoff request。
+- manifest 绑定 `run.json#taskSpec.approvalPoints`；当前 regression MVP 只允许 `send_email_requires_human_approval` 作为 contract-only `ide.approval.request` handoff，`ide.open_file`、`ide.diff_view.open` 和 `ide.terminal.request` 因缺少 TaskSpec IDE approval point 均必须 `blocked_missing_task_spec_approval`。
+- 所有 request 都固定 `executionAllowed=false`、`approvalDecisionSynthesized=false`；Phase 8 MVP 不自动批准、不打开 IDE UI、不运行 terminal、不修改 workspace。
+- validator 拒绝关键错误：缺失 TaskSpec approval point 绑定、terminal request 被允许执行、manifest 声明真实 IDE execution、approval decision 被合成、policy binding 与 RunControlV1 不一致。
+
+Build vs Integrate：
+
+- Build：Phase 8 最小 `IDEApprovalHandoffManifestV1` schema、builder/validator/CLI、committed artifact、deterministic validation gate 和 approval/policy forced-failure cases。
+- Integrate later：真实 IDE approval UI、Cursor/VS Code extension bridge、terminal runner、diff view renderer、human decision store、approval audit log 和 IDE/Web/CLI handoff synchronization。
+
+当前 Phase 8 contract-only MVP gate 已满足 workspace observation 与 approval handoff 两个最小边界：IDE adapter 可以贡献 observation 和 approval request，但不能绕过 TaskSpec、RunControl permission policy、Evidence、Verifier 或 Human Gate 执行 side effect。下一步可进入 Phase 9 的多 agent / delivery loop contract，先定义 planner/context/executor/reviewer/reporter 的 handoff artifact，不引入完整多 agent runtime。
+
 ### Phase 9：多 agent 和交付闭环
 
 最后做多个 agent 的协作：
@@ -4237,6 +4256,66 @@ git diff --check
 ```text
 继续 Phase 8：
 新增 IDEApprovalHandoffManifestV1，把 ide.approval.request / ide.terminal.request / ide.open_file / ide.diff_view.open 与 Phase 6 permission-policy-v1 和 approvalPoints 对齐，证明 IDE 只能提交 approval request，不能直接执行 workspace/terminal side effect。
+```
+
+### 2026-05-13 17:01 UTC: Phase 8 IDEApprovalHandoffManifestV1 Approval / Permission Gate
+
+Active phase：Phase 8 IDE Adapter。
+
+Selected slice：
+
+```text
+Add IDEApprovalHandoffManifestV1 so that /usr/bin/python3 scripts/validate_repo.py proves IDE approval/open-file/diff/terminal handoff requests are bound to Phase 6 permission policy and TaskSpec approval points without real IDE side effects.
+```
+
+为什么这是下一步：`validate.yml` 和 `auto-merge-cursor-pr.yml` 均存在；Phase 8 已完成 `IDEAdapterContractV1` 与 `WorkspaceObservationV1` static workspace observation gate。主计划明确下一步是补 IDE approval handoff manifest，把 IDE approval request 与 Phase 6 `permission-policy-v1` / TaskSpec `approvalPoints` 对齐，仍不执行真实 IDE UI、terminal 或 workspace side effect。
+
+实现摘要：
+
+- `scripts/ide_adapter.py` 新增 `ide-approval-handoff-manifest-v1` / `IDEApprovalHandoffManifestV1` builder、validator 和 CLI 参数。
+- 新增 committed `artifacts/ide_adapter/phase8_ide_approval_handoff_manifest.json`，引用 IDE contract、workspace observation 和 `all_passed` run source hash。
+- manifest 绑定 `runControl.permissionPolicy` 的 `dangerous`、`external_side_effect`、`send_email` approval requirements，以及 TaskSpec 的 `send_email_requires_human_approval` approval point。
+- `ide.open_file`、`ide.diff_view.open`、`ide.terminal.request` 均被标记为 `blocked_missing_task_spec_approval` 且 `executionAllowed=false`；`ide.approval.request` 只允许 contract-only handoff，不合成 approval decision。
+- `scripts/validate_repo.py` 纳入 required file/markers、committed artifact validation、deterministic CLI output comparison，以及 forced-failure：缺失 TaskSpec approval binding、terminal execution allowed、real IDE execution declared。
+
+验收标准：
+
+- `phase8_ide_approval_handoff_manifest.json` 可 deterministic 生成并通过 validation。
+- handoff manifest 绑定 IDE contract、workspace observation、RunControl permission policy 和 TaskSpec approval points。
+- validator 拒绝 terminal/IDE side effect、approval bypass 和 TaskSpec approval point 缺失。
+- 不执行真实 IDE UI、terminal、workspace mutation、邮件发送或外部 side effect。
+
+验证命令：
+
+```text
+/usr/bin/python3 scripts/validate_repo.py
+/usr/bin/python3 -m py_compile scripts/*.py
+/usr/bin/python3 scripts/ide_adapter.py --validate-contract artifacts/ide_adapter/phase8_ide_adapter_contract.json --validate-observation artifacts/ide_adapter/phase8_workspace_observation.json --validate-approval-handoff artifacts/ide_adapter/phase8_ide_approval_handoff_manifest.json
+/usr/bin/python3 scripts/ide_adapter.py --contract-out /tmp/phase8_ide_adapter_contract.json --observation-out /tmp/phase8_workspace_observation.json --approval-handoff-out /tmp/phase8_ide_approval_handoff_manifest.json --context-pack artifacts/context/all_passed/context_pack.json --run artifacts/runs/all_passed/run.json
+/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase8-handoff-fixture-smoke
+/usr/bin/python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase8-handoff-task-spec.json
+/usr/bin/python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --out-dir /tmp/phase8-handoff-local-smoke --task-spec-path /tmp/phase8-handoff-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json
+git diff --check
+```
+
+验证结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- 待本轮本地验证后填写最终结果；本条日志随实现提交，若验证失败将在 repair commit 中更新。
+```
+
+剩余风险：
+
+- IDEApprovalHandoffManifestV1 仍是 contract-only artifact，不是实际 IDE extension、approval UI、terminal runner 或 human decision store。
+- 当前 TaskSpec 只有 send-email approval point；IDE open/diff/terminal side effect 被正确 block，后续若要允许它们必须先扩展 TaskSpec approval point 和 policy runtime。
+- Phase 8 不处理真实 IDE/Web/CLI 历史同步。
+
+下一轮建议：
+
+```text
+进入 Phase 9：
+新增 MultiAgentDeliveryManifestV1，定义 planner/context/executor/reviewer/reporter 的最小 handoff artifact、Evidence/Verifier/Delivery ownership 和 forced-failure cases，先不引入完整多 agent runtime。
 ```
 
 ## 22. Parking Lot

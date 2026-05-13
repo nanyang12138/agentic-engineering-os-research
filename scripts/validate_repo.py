@@ -38,10 +38,13 @@ from evidence_list import (
 )
 from fixture_runner import load_fixture
 from ide_adapter import (
+    APPROVAL_HANDOFF_ARTIFACT_PATH as IDE_APPROVAL_HANDOFF_ARTIFACT_PATH,
     CONTRACT_ARTIFACT_PATH as IDE_CONTRACT_ARTIFACT_PATH,
     OBSERVATION_ARTIFACT_PATH as IDE_OBSERVATION_ARTIFACT_PATH,
+    build_approval_handoff_manifest,
     build_ide_adapter_contract,
     build_workspace_observation,
+    validate_approval_handoff_manifest,
     validate_ide_adapter_contract,
     validate_workspace_observation,
 )
@@ -70,6 +73,7 @@ ADAPTER_POLICY_MANIFEST_PATH = ROOT / POLICY_MANIFEST_ARTIFACT_PATH
 OBSERVATION_REDACTION_POLICY_PATH = ROOT / REDACTION_POLICY_ARTIFACT_PATH
 IDE_ADAPTER_CONTRACT_PATH = ROOT / IDE_CONTRACT_ARTIFACT_PATH
 IDE_WORKSPACE_OBSERVATION_PATH = ROOT / IDE_OBSERVATION_ARTIFACT_PATH
+IDE_APPROVAL_HANDOFF_MANIFEST_PATH = ROOT / IDE_APPROVAL_HANDOFF_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -134,6 +138,7 @@ REQUIRED_FILES = [
     "artifacts/computer_runtime/phase7_observation_redaction_policy.json",
     "artifacts/ide_adapter/phase8_ide_adapter_contract.json",
     "artifacts/ide_adapter/phase8_workspace_observation.json",
+    "artifacts/ide_adapter/phase8_ide_approval_handoff_manifest.json",
 ]
 
 PLAN_REQUIRED_MARKERS = [
@@ -173,6 +178,9 @@ PLAN_REQUIRED_MARKERS = [
     "workspace-observation-v1",
     "phase8_ide_adapter_contract.json",
     "phase8_workspace_observation.json",
+    "IDEApprovalHandoffManifestV1",
+    "ide-approval-handoff-manifest-v1",
+    "phase8_ide_approval_handoff_manifest.json",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -1259,9 +1267,30 @@ def expect_workspace_observation_validation_failure(
     raise AssertionError(f"WorkspaceObservation forced-failure case {label} unexpectedly passed validation")
 
 
+def expect_approval_handoff_validation_failure(
+    label: str,
+    manifest: dict,
+    contract: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_approval_handoff_manifest(manifest, contract, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"IDEApprovalHandoffManifest forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"IDEApprovalHandoffManifest forced-failure case {label} unexpectedly passed validation")
+
+
 def validate_committed_ide_adapter_artifacts() -> None:
     contract = load_json(IDE_ADAPTER_CONTRACT_PATH)
     observation = load_json(IDE_WORKSPACE_OBSERVATION_PATH)
+    approval_handoff_manifest = load_json(IDE_APPROVAL_HANDOFF_MANIFEST_PATH)
     try:
         validate_ide_adapter_contract(contract)
     except ValueError as exc:
@@ -1270,6 +1299,10 @@ def validate_committed_ide_adapter_artifacts() -> None:
         validate_workspace_observation(observation, contract, ROOT)
     except ValueError as exc:
         raise AssertionError(f"Committed WorkspaceObservationV1 artifact failed validation: {exc}") from exc
+    try:
+        validate_approval_handoff_manifest(approval_handoff_manifest, contract, ROOT)
+    except ValueError as exc:
+        raise AssertionError(f"Committed IDEApprovalHandoffManifestV1 artifact failed validation: {exc}") from exc
 
     expected_contract = build_ide_adapter_contract()
     if contract != expected_contract:
@@ -1283,6 +1316,15 @@ def validate_committed_ide_adapter_artifacts() -> None:
     )
     if observation != expected_observation:
         raise AssertionError("Committed WorkspaceObservationV1 artifact differs from deterministic builder output")
+
+    expected_manifest = build_approval_handoff_manifest(
+        IDE_ADAPTER_CONTRACT_PATH,
+        IDE_WORKSPACE_OBSERVATION_PATH,
+        ARTIFACT_DIR / "all_passed/run.json",
+        ROOT,
+    )
+    if approval_handoff_manifest != expected_manifest:
+        raise AssertionError("Committed IDEApprovalHandoffManifestV1 artifact differs from deterministic builder output")
 
     tampered_contract = json.loads(json.dumps(contract))
     tampered_contract["policy"]["externalSideEffectsAllowed"] = True
@@ -1353,8 +1395,38 @@ def validate_committed_ide_adapter_artifacts() -> None:
         "currentFile source hash mismatch",
     )
 
+    tampered_manifest = json.loads(json.dumps(approval_handoff_manifest))
+    tampered_manifest["taskSpecBinding"]["requiredApprovalPoints"] = []
+    expect_approval_handoff_validation_failure(
+        "handoff_missing_task_spec_approval_point",
+        tampered_manifest,
+        contract,
+        "must require TaskSpec send_email approval point",
+    )
 
-def run_ide_adapter_builder(contract_out: Path, observation_out: Path) -> None:
+    tampered_manifest = json.loads(json.dumps(approval_handoff_manifest))
+    for request in tampered_manifest["handoffRequests"]:
+        if request["capability"] == "ide.terminal.request":
+            request["executionAllowed"] = True
+            break
+    expect_approval_handoff_validation_failure(
+        "handoff_terminal_execution_allowed",
+        tampered_manifest,
+        contract,
+        "must not allow execution",
+    )
+
+    tampered_manifest = json.loads(json.dumps(approval_handoff_manifest))
+    tampered_manifest["policy"]["noRealIdeExecution"] = False
+    expect_approval_handoff_validation_failure(
+        "handoff_real_ide_execution",
+        tampered_manifest,
+        contract,
+        "no real IDE execution occurred",
+    )
+
+
+def run_ide_adapter_builder(contract_out: Path, observation_out: Path, approval_handoff_out: Path) -> None:
     command = [
         sys.executable,
         str(ROOT / "scripts/ide_adapter.py"),
@@ -1362,6 +1434,8 @@ def run_ide_adapter_builder(contract_out: Path, observation_out: Path) -> None:
         str(contract_out),
         "--observation-out",
         str(observation_out),
+        "--approval-handoff-out",
+        str(approval_handoff_out),
         "--context-pack",
         str(CONTEXT_PACK_DIR / "all_passed/context_pack.json"),
         "--run",
@@ -1702,11 +1776,14 @@ def main() -> None:
             raise AssertionError("Committed ObservationRedactionPolicyV1 artifact differs from deterministic CLI output")
         generated_ide_contract = temp_root / "phase8_ide_adapter_contract.json"
         generated_workspace_observation = temp_root / "phase8_workspace_observation.json"
-        run_ide_adapter_builder(generated_ide_contract, generated_workspace_observation)
+        generated_approval_handoff_manifest = temp_root / "phase8_ide_approval_handoff_manifest.json"
+        run_ide_adapter_builder(generated_ide_contract, generated_workspace_observation, generated_approval_handoff_manifest)
         if load_json(generated_ide_contract) != load_json(IDE_ADAPTER_CONTRACT_PATH):
             raise AssertionError("Committed IDEAdapterContractV1 contract differs from deterministic CLI output")
         if load_json(generated_workspace_observation) != load_json(IDE_WORKSPACE_OBSERVATION_PATH):
             raise AssertionError("Committed WorkspaceObservationV1 artifact differs from deterministic CLI output")
+        if load_json(generated_approval_handoff_manifest) != load_json(IDE_APPROVAL_HANDOFF_MANIFEST_PATH):
+            raise AssertionError("Committed IDEApprovalHandoffManifestV1 artifact differs from deterministic CLI output")
 
     print("Repository validation passed.")
 
