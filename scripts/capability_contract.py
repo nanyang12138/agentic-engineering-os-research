@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import argparse
+import json
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 
 CAPABILITY_METADATA_SCHEMA_VERSION = "capability-metadata-v1"
 CAPABILITY_ENVELOPE_SCHEMA_VERSION = "capability-envelope-v1"
+CAPABILITY_CATALOG_SCHEMA_VERSION = "capability-catalog-v1"
+CAPABILITY_CATALOG_ID = "phase3-readonly-regression-mvp"
 CAPABILITY_URI_PREFIX = "capability://phase3/"
 
 PERMISSIONS = {"read", "write", "dangerous"}
@@ -119,6 +124,15 @@ def build_capability_envelope(names: list[str] | tuple[str, ...]) -> dict[str, A
     }
 
 
+def build_capability_catalog(names: list[str] | tuple[str, ...] = PHASE3_CAPABILITY_NAMES) -> dict[str, Any]:
+    return {
+        "schemaVersion": CAPABILITY_CATALOG_SCHEMA_VERSION,
+        "id": CAPABILITY_CATALOG_ID,
+        "description": "Static Phase 3 capability catalogue for the read-only regression evidence MVP.",
+        "capabilities": [capability_metadata(name) for name in names],
+    }
+
+
 def validate_capability_metadata(metadata: dict[str, Any]) -> None:
     required_fields = [
         "schemaVersion",
@@ -175,3 +189,48 @@ def validate_capability_envelope(envelope: dict[str, Any], expected_names: list[
         if not isinstance(item, dict):
             raise ValueError("Capability envelope items must be objects")
         validate_capability_metadata(item)
+
+
+def validate_capability_catalog(catalog: dict[str, Any], expected_names: list[str] | tuple[str, ...] = PHASE3_CAPABILITY_NAMES) -> None:
+    if catalog.get("schemaVersion") != CAPABILITY_CATALOG_SCHEMA_VERSION:
+        raise ValueError(f"Capability catalog schemaVersion must be {CAPABILITY_CATALOG_SCHEMA_VERSION}")
+    if catalog.get("id") != CAPABILITY_CATALOG_ID:
+        raise ValueError(f"Capability catalog id must be {CAPABILITY_CATALOG_ID}")
+    capabilities = catalog.get("capabilities")
+    if not isinstance(capabilities, list) or not capabilities:
+        raise ValueError("Capability catalog capabilities must be a non-empty list")
+
+    names = [item.get("name") for item in capabilities if isinstance(item, dict)]
+    if names != list(expected_names):
+        raise ValueError(f"Capability catalog names must equal {list(expected_names)}")
+    for item in capabilities:
+        if not isinstance(item, dict):
+            raise ValueError("Capability catalog capabilities must be objects")
+        validate_capability_metadata(item)
+
+
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="capability-catalog")
+    parser.add_argument("--out", type=Path)
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    catalog = build_capability_catalog()
+    validate_capability_catalog(catalog)
+    if args.out:
+        write_json(args.out, catalog)
+        print(f"Wrote capability catalog {catalog['id']} to {args.out}.")
+    else:
+        print(json.dumps(catalog, indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

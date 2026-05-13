@@ -11,7 +11,9 @@ from typing import Any
 
 from capability_contract import (
     PHASE3_CAPABILITY_NAMES,
+    build_capability_catalog,
     capability_ref,
+    validate_capability_catalog,
     validate_capability_envelope,
 )
 from fixture_runner import load_fixture, stable_hash, verify_artifacts
@@ -21,6 +23,7 @@ from task_spec import TASK_SPEC_SCHEMA_VERSION, build_regression_task_spec, vali
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_DIR = ROOT / "fixtures/regression"
 ARTIFACT_DIR = ROOT / "artifacts/runs"
+CAPABILITY_CATALOG_FILE = ROOT / "artifacts/capabilities/phase3_capability_catalog.json"
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -81,6 +84,7 @@ REQUIRED_FILES = [
     "scripts/local_readonly_runner.py",
     "scripts/task_spec.py",
     "scripts/capability_contract.py",
+    "artifacts/capabilities/phase3_capability_catalog.json",
 ]
 
 PLAN_REQUIRED_MARKERS = [
@@ -90,6 +94,7 @@ PLAN_REQUIRED_MARKERS = [
     "regression-task-spec-v1",
     "capability-metadata-v1",
     "capability-envelope-v1",
+    "capability-catalog-v1",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -692,6 +697,57 @@ def validate_local_readonly_runner(out_dir: Path, task_spec_path: Path) -> None:
     expect_local_readonly_task_spec_failure(task_spec_path, out_dir / "forced-failures")
 
 
+def run_capability_catalog_builder(out_file: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/capability_contract.py"),
+        "--out",
+        str(out_file),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "Capability catalog builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
+def expect_capability_catalog_failure(label: str, catalog: dict, expected_message_fragment: str) -> None:
+    try:
+        validate_capability_catalog(catalog, PHASE3_CAPABILITY_NAMES)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"Capability catalog forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"Capability catalog forced-failure case {label} unexpectedly passed validation")
+
+
+def validate_capability_catalog_gate(out_file: Path) -> None:
+    committed_catalog = load_json(CAPABILITY_CATALOG_FILE)
+    expected_catalog = build_capability_catalog(PHASE3_CAPABILITY_NAMES)
+    validate_capability_catalog(committed_catalog, PHASE3_CAPABILITY_NAMES)
+    if committed_catalog != expected_catalog:
+        raise AssertionError("Committed Phase 3 capability catalog differs from deterministic builder output")
+
+    run_capability_catalog_builder(out_file)
+    generated_catalog = load_json(out_file)
+    if generated_catalog != expected_catalog:
+        raise AssertionError("Capability catalog CLI output differs from deterministic builder output")
+
+    missing_rule_verifier = json.loads(json.dumps(committed_catalog))
+    missing_rule_verifier["capabilities"] = [
+        item for item in missing_rule_verifier["capabilities"] if item.get("name") != "rule_verifier"
+    ]
+    expect_capability_catalog_failure("missing_rule_verifier", missing_rule_verifier, "Capability catalog names must equal")
+
+
 def main() -> None:
     for path in REQUIRED_FILES:
         require_file(path)
@@ -717,6 +773,7 @@ def main() -> None:
         task_spec_path = Path(temp_dir) / "task-spec.json"
         validate_task_spec_gate(task_spec_path)
         validate_local_readonly_runner(Path(temp_dir) / "local-readonly", task_spec_path)
+        validate_capability_catalog_gate(Path(temp_dir) / "phase3-capability-catalog.json")
 
     print("Repository validation passed.")
 
