@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+from capability_contract import build_capability_envelope, capability_ref
 from task_spec import EXPECTED_ARTIFACTS, build_regression_task_spec, validate_regression_task_spec
 
 
@@ -398,6 +399,10 @@ def build_events(fixture: Fixture, run_id: str, evidence_ids: list[str], verifie
             event["outputRef"] = output_ref
         if ids:
             event["evidenceIds"] = ids
+        if event_type.startswith("capability."):
+            capability_name = event_type.removeprefix("capability.").removesuffix(".completed")
+            event["capability"] = capability_name
+            event["capabilityRef"] = capability_ref(capability_name)
         events.append(event)
     return events
 
@@ -434,10 +439,26 @@ def run_fixture(fixture: Fixture, out_dir: Path) -> dict:
         "fixtureId": fixture.id,
         "task": fixture.goal,
         "taskSpec": task_spec,
+        "capabilityEnvelope": build_capability_envelope(),
         "steps": [
-            {"id": "step-read-log", "capability": "read_log", "status": "completed"},
-            {"id": "step-extract-regression-result", "capability": "extract_regression_result", "status": "completed"},
-            {"id": "step-write-artifact", "capability": "write_artifact", "status": "completed"},
+            {
+                "id": "step-read-log",
+                "capability": "read_log",
+                "capabilityRef": capability_ref("read_log"),
+                "status": "completed",
+            },
+            {
+                "id": "step-extract-regression-result",
+                "capability": "extract_regression_result",
+                "capabilityRef": capability_ref("extract_regression_result"),
+                "status": "completed",
+            },
+            {
+                "id": "step-write-artifact",
+                "capability": "write_artifact",
+                "capabilityRef": capability_ref("write_artifact"),
+                "status": "completed",
+            },
             {"id": "step-verify", "capability": "rule_verifier", "status": report_status},
         ],
         "events": [event["id"] for event in events],
