@@ -19,6 +19,7 @@ from fixture_runner import (
     verify_artifacts,
     write_json,
 )
+from task_spec import load_regression_task_spec, validate_task_spec_for_request
 
 
 def derive_run_case_id(log_path: Path) -> str:
@@ -27,7 +28,7 @@ def derive_run_case_id(log_path: Path) -> str:
     return normalized or "local_regression"
 
 
-def write_local_run(log_path: Path, goal: str, out_dir: Path) -> dict:
+def write_local_run(log_path: Path, goal: str, out_dir: Path, task_spec_path: Path | None = None) -> dict:
     if not log_path.is_file():
         raise FileNotFoundError(f"Log path does not exist or is not a file: {log_path}")
     if not goal.strip():
@@ -42,8 +43,12 @@ def write_local_run(log_path: Path, goal: str, out_dir: Path) -> dict:
         allow_all_passed_email=True,
         directory=log_path.parent,
     )
-    # Phase 2 gate: build and validate the executable spec before reading or classifying the log.
-    task_spec = task_spec_for(initial_fixture)
+    # Phase 2 gate: use a reviewed TaskSpec when provided, before reading or classifying the log.
+    if task_spec_path:
+        task_spec = load_regression_task_spec(task_spec_path)
+        validate_task_spec_for_request(task_spec, goal, log_path)
+    else:
+        task_spec = task_spec_for(initial_fixture)
     evidence = extract_evidence(initial_fixture)
     verdict, summary, verdict_evidence_ids = classify(evidence)
     fixture = Fixture(
@@ -108,12 +113,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--log-path", required=True, type=Path)
     parser.add_argument("--goal", required=True)
     parser.add_argument("--out-dir", required=True, type=Path)
+    parser.add_argument("--task-spec-path", type=Path)
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    report = write_local_run(args.log_path, args.goal, args.out_dir)
+    report = write_local_run(args.log_path, args.goal, args.out_dir, args.task_spec_path)
     print(f"Wrote local read-only run for {report['fixtureId']} into {args.out_dir / report['fixtureId']}.")
     if report["status"] != "passed":
         print(report["summary"])
