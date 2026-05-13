@@ -1,10 +1,34 @@
 {
+  "artifactBacklinks": [
+    {
+      "artifact": "regression_result.json",
+      "jsonPointer": "/evidenceIds",
+      "relation": "supports_regression_result"
+    },
+    {
+      "artifact": "verifier_report.json",
+      "jsonPointer": "/ruleResults/*/evidenceIds",
+      "relation": "checked_by_verifier"
+    },
+    {
+      "artifact": "events.jsonl",
+      "jsonPointer": "/*.evidenceIds",
+      "relation": "audited_by_events"
+    },
+    {
+      "artifact": "email_draft.md",
+      "jsonPointer": "/text",
+      "relation": "cited_by_delivery_draft"
+    }
+  ],
   "fixtureId": "passed_with_warning_or_waiver",
+  "id": "evidence-list-passed_with_warning_or_waiver",
   "items": [
     {
       "classification": "warning_marker",
       "confidence": "medium",
       "excerpt": "RUN_ID: synth-warning-waiver-001",
+      "excerptHash": "fddc586bb2bce8ac4de1fab0576feeda792432c128b0da192add7649b4622913",
       "id": "ev-passed_with_warning_or_waiver-001",
       "lineRange": [
         2,
@@ -12,12 +36,14 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/passed_with_warning_or_waiver/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     },
     {
       "classification": "waiver_marker",
       "confidence": "medium",
       "excerpt": "RUN_ID: synth-warning-waiver-001",
+      "excerptHash": "fddc586bb2bce8ac4de1fab0576feeda792432c128b0da192add7649b4622913",
       "id": "ev-passed_with_warning_or_waiver-002",
       "lineRange": [
         2,
@@ -25,12 +51,14 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/passed_with_warning_or_waiver/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     },
     {
       "classification": "all_passed_marker",
       "confidence": "high",
       "excerpt": "STATUS: PASSED",
+      "excerptHash": "d04d89e743f59cd96444043e266f66896c18a18356b2f75f909bcb74deaa48b8",
       "id": "ev-passed_with_warning_or_waiver-003",
       "lineRange": [
         4,
@@ -38,12 +66,14 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/passed_with_warning_or_waiver/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     },
     {
       "classification": "all_passed_marker",
       "confidence": "high",
       "excerpt": "failed_tests: 0",
+      "excerptHash": "bad49455f8f0795ab00cd096f0896a493347730bb17ce8994fe9da292fa98214",
       "id": "ev-passed_with_warning_or_waiver-004",
       "lineRange": [
         6,
@@ -51,12 +81,14 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/passed_with_warning_or_waiver/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     },
     {
       "classification": "all_passed_marker",
       "confidence": "high",
       "excerpt": "incomplete_jobs: 0",
+      "excerptHash": "452f2ef5604d8a91494c7d79e324fe35cc6204daa13c171170fcd1d47cd93cc7",
       "id": "ev-passed_with_warning_or_waiver-005",
       "lineRange": [
         7,
@@ -64,12 +96,14 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/passed_with_warning_or_waiver/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     },
     {
       "classification": "warning_marker",
       "confidence": "medium",
       "excerpt": "WARNING: compare job m2b_lec_case_077 used a timing waiver",
+      "excerptHash": "181e1fd148dd66f09b073a90f1ba51d0d7a484fb33b0b854b9d0ae045578a998",
       "id": "ev-passed_with_warning_or_waiver-006",
       "lineRange": [
         8,
@@ -77,12 +111,14 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/passed_with_warning_or_waiver/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     },
     {
       "classification": "waiver_marker",
       "confidence": "medium",
       "excerpt": "WARNING: compare job m2b_lec_case_077 used a timing waiver",
+      "excerptHash": "181e1fd148dd66f09b073a90f1ba51d0d7a484fb33b0b854b9d0ae045578a998",
       "id": "ev-passed_with_warning_or_waiver-007",
       "lineRange": [
         8,
@@ -90,12 +126,14 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/passed_with_warning_or_waiver/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     },
     {
       "classification": "waiver_marker",
       "confidence": "medium",
       "excerpt": "waived_errors: 1",
+      "excerptHash": "a6caeb57ee6f262bc417a4f27c0b768a00d4e3f8f47ab5923c6e0b76f83a7413",
       "id": "ev-passed_with_warning_or_waiver-008",
       "lineRange": [
         9,
@@ -103,6 +141,7 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/passed_with_warning_or_waiver/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     }
   ],

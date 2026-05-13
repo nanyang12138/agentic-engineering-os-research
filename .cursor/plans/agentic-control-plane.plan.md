@@ -25,7 +25,7 @@ todos:
     status: pending
   - id: design-verifier-evidence
     content: 设计 Evidence Graph 和 Verifier Runtime，让每个结论都有可追溯证据和验证流程
-    status: in_progress
+    status: completed
   - id: build-phase-1a-fixture-runner
     content: 实现 Phase 1a static fixture runner、5 个 synthetic fixture、artifact packet 和 deterministic validation gate
     status: completed
@@ -946,6 +946,26 @@ Build vs Integrate：
 
 当前 Phase 5 已启动但未完成：本 gate 固化了 verifier runtime contract 和 replay 验证；下一步应把 Evidence List 从当前 `evidence.json` schema 校验提升为独立 EvidenceListV1 module/CLI，验证 evidence source refs、line ranges、ContextPack provenance 和 artifact backlinks 的完整闭环。
 
+#### Phase 5 EvidenceListV1 Provenance / Backlink Gate
+
+2026-05-13 08:00 UTC 自动化实现结论：Phase 5 的第二步把 `evidence.json` 从 runner 副产物提升为独立 `EvidenceListV1` contract。当前 evidence item 不再只保存 `sourcePath`、`lineRange` 和 excerpt，还显式声明 `sourceRef`、`excerptHash` 和 artifact backlink contract，并由独立 CLI 校验其与 ContextPack 和下游 artifacts 的闭环。
+
+最小 EvidenceListV1 contract：
+
+- `scripts/evidence_list.py` 提供 same-process read-only EvidenceListV1 builder / validator / CLI，不调用外部服务、不写仓库外副作用。
+- `evidence.json#items[]` 必须包含 `sourceRef="source-regression-log"`、POSIX `sourcePath`、`lineRange`、`excerpt` 和 `excerptHash=sha256(normalized excerpt)`。
+- validator 会从 `sourcePath + lineRange` 重新读取日志片段，证明 excerpt/hash 没有漂移。
+- validator 会消费 `ContextPackV1`，要求每个 evidence id 都有 matching `log_excerpt` provenance，且 sourceId、lineRange、text、classification、confidence 与 EvidenceListV1 一致。
+- validator 会检查 `regression_result.json`、`verifier_report.json`、`events.jsonl` 和 `email_draft.md` 的 evidence backlinks，拒绝未知 evidence id 或未引用 result evidence ids 的 delivery draft。
+- `scripts/validate_repo.py` 现在运行 EvidenceListV1 CLI，并包含 excerpt hash、ContextPack provenance 和 artifact backlink forced-failure cases。
+
+Build vs Integrate：
+
+- Build：最小 EvidenceListV1 module/CLI、excerpt hash、ContextPack provenance enforcement、artifact backlink validation 和 deterministic repository gate。
+- Integrate later：JSON Schema 库、数据库 Evidence Graph、跨 artifact graph query、外部 CI/issue/docs evidence adapters、review agent verifier 和 human verifier backend。
+
+当前 Phase 5 regression MVP gate 已满足：Evidence List 和 Verifier Runtime 都有独立 module/CLI、committed artifacts、deterministic replay/provenance validation 和 forced-failure tests。下一步应进入 Phase 6 state, permission, and recovery，先为当前 read-only run artifacts 增加最小 run state machine / permission policy / recovery snapshot，而不是提前实现 CUA、IDE、多 agent 或数据库 Evidence Graph。
+
 ### Phase 6：状态、权限和恢复
 
 加入真正的控制平面能力：
@@ -1616,7 +1636,7 @@ Add forced-failure verifier checks so that python3 scripts/validate_repo.py prov
 3. Feasibility Critic Review：已完成，把 Phase 1a 冻结为静态 fixture runner；SQLite、daemon、adapter 和 durable workflow 全部延后。
 4. Fixture Runner MVP：已实现 Phase 1a one-shot runner、5 个 synthetic fixture、committed artifact packet 和 deterministic validation gate；入口为 `python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir artifacts/runs`，输出并验证 `run.json`、`events.jsonl`、`evidence.json`、`regression_result.json`、`email_draft.md`、`verifier_report.json`，其中 `verifier_report.json` 是唯一验收真相；`scripts/validate_repo.py` 已加入 pass-style negative email、坏 evidence id、缺失 verifier rule、错误 schemaVersion、非法 evidence classification 和缺失 verifier status 的 forced-failure self-test。
 5. Intent-to-Spec MVP：已实现 Phase 2 deterministic `RegressionTaskSpecV1` builder / validator / CLI gate，入口为 `python3 scripts/task_spec.py --goal <goal> --input-log-path <log> --out <task_spec.json>`；schema version 为 `regression-task-spec-v1`，fixture runner 和 local read-only runner 均复用该 spec gate。local read-only runner 现在也支持 `--task-spec-path <task_spec.json>`，并在读取日志前拒绝与请求 goal/log 不匹配的 spec。LLM 仍只能作为后续草稿生成器，必须通过同一 schema/rule verifier。
-6. Evidence List + Verifier Runtime：已固化 `LogEvidenceV1`、`RegressionResultArtifactV1`、email grounding 规则和 fixture gate；下一步以 fixture runner 验证规则是否过多或不足。
+6. Evidence List + Verifier Runtime：已实现 Phase 5 regression MVP gate：`scripts/evidence_list.py` 提供 `EvidenceListV1` builder / validator / CLI，校验 sourcePath、lineRange、excerptHash、ContextPack provenance 和 artifact backlinks；`scripts/verifier_runtime.py` 提供 `verifier-runtime-v1` / `verifier-rule-catalog-v1` deterministic replay。数据库 Evidence Graph、review agent 和 human verifier backend 后移。
 7. Local Read-only Runner：已实现 Phase 1b one-shot CLI `python3 scripts/local_readonly_runner.py --log-path <log> --goal <goal> --out-dir <out>`；该 runner 复用 Phase 1a schema、evidence list、email grounding 和 verifier report，`scripts/validate_repo.py` 已加入本地 read-only smoke gate。SQLite event store、daemon、正式 capability registry、真实外部 adapter 和更完整 run state 仍后移。
 8. Capability Metadata Gate：已实现 Phase 3 最小 `capability-envelope-v1` / `capability-metadata-v1`，覆盖 `read_log`、`extract_regression_result`、`write_artifact` 和 `rule_verifier` 的 permission、sideEffect、timeout、input/output contract；`run.json` 和 `events.jsonl` 引用 capability ref，`artifacts/capabilities/phase3_capability_catalog.json` 作为独立 catalogue artifact，`scripts/validate_repo.py` 会拒绝缺失 permission、声明外部 side effect、缺失 `step-verify.capabilityRef` 或 catalogue 缺失当前 capability 的契约。
 9. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
@@ -1912,6 +1932,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-13 07:01 UTC：Phase 4 ContextPackV1 Runtime Consumption Gate 已实现；决定让 local read-only runner 可选消费 committed ContextPack，并强制每条 log evidence 必须由 ContextPack 声明的 `log_excerpt` source ref 支持。动态 retrieval、cache、broker service 和 token budget optimizer 继续后移；下一步优先补最小 budget/source-selection policy。
 - 2026-05-13 07:20 UTC：Phase 4 ContextPackV1 Budget / Source Selection Gate 已实现；决定在 `context-pack-v1` 中自研最小 `budget` 字段，先用 `sourceSelection=evidence_items_only_v1`、`maxLogExcerptItems` 和 `maxLogExcerptLines` 约束 read-only regression context。token estimator、semantic ranking 和动态 broker service 继续后移；Phase 5 可从已受限的 ContextPack 输入继续推进 Evidence/Verifier Runtime。
 - 2026-05-13 07:45 UTC：Phase 5 VerifierRuntimeV1 Rule Catalog / Replay Gate 已实现；决定将当前规则验证自研为 `verifier-runtime-v1` / `verifier-rule-catalog-v1`、committed `artifacts/verifier/phase5_verifier_rule_catalog.json` 和 deterministic replay gate。外部 review agent、human verifier backend、policy engine 和完整 Evidence Graph 继续后移。
+- 2026-05-13 08:00 UTC：Phase 5 EvidenceListV1 Provenance / Backlink Gate 已实现；决定将 `evidence.json` 固化为独立 `EvidenceListV1` contract，由 `scripts/evidence_list.py` 校验 sourcePath、lineRange、excerptHash、ContextPack provenance 和 artifact backlinks。数据库 Evidence Graph、跨任务 evidence store、review agent 和 human verifier backend 继续后移；下一轮进入 Phase 6 state, permission, and recovery。
 
 ## 20. Open Questions
 
@@ -1938,7 +1959,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - Phase 3 的最小 capability metadata envelope 已收敛为 `capability-envelope-v1` / `capability-metadata-v1`，覆盖 `schemaVersion`、`name`、`ref`、`permission`、`sideEffect`、`timeoutMs`、`inputContract` 和 `outputContract`；当前 regression demo 的 `read_log`、`extract_regression_result`、`write_artifact`、`rule_verifier` 都必须有 `capabilityRef`，正式 registry、daemon、adapter plugin 和外部 provider 继续后移。
 - `capability-envelope-v1` 先作为 `artifacts/capabilities/phase3_capability_catalog.json` 独立 artifact 提交和验证；Phase 4 Context Broker 可引用该静态 catalogue，动态 registry / provider discovery 后移。
 - Phase 4 的 Context Broker artifact 固定为 `ContextPackV1` / `context-pack-v1`：先用静态 builder 收敛 TaskSpec、log excerpts、capability catalogue 和 artifact refs，并用 contentHash 验证来源可复查；local runner 可选消费 committed ContextPack，且最小 `budget` 会限制 evidence-backed log excerpt 的数量和总行数。动态 retrieval 与 broker service 后移。
-- Phase 5 的 Verifier Runtime artifact 固定为 `verifier-runtime-v1` / `verifier-rule-catalog-v1`：先用 same-process read-only rule catalog 和 replay gate 验证 `verifier_report.json`，review agent、human verifier backend、policy engine 和数据库 Evidence Graph 后移。
+- Phase 5 的 Evidence / Verifier artifacts 固定为 `EvidenceListV1`、`verifier-runtime-v1` 和 `verifier-rule-catalog-v1`：先用 same-process read-only evidence validator、rule catalog 和 replay gate 验证 sourcePath/lineRange/excerptHash、ContextPack provenance、artifact backlinks 与 `verifier_report.json`，review agent、human verifier backend、policy engine 和数据库 Evidence Graph 后移。
 
 ### 20.2 仍开放的问题
 
@@ -3596,6 +3617,81 @@ git diff --check
 ```text
 继续 Phase 5：
 新增独立 EvidenceListV1 module/CLI，验证 evidence item 的 sourcePath、lineRange、excerpt hash、ContextPack provenance 和 artifact backlinks，使 Evidence List contract 不再只依赖 fixture runner 与 verifier replay 间接校验。
+```
+
+### 2026-05-13 08:00 UTC Automation Implementation Log - Phase 5 EvidenceListV1 Provenance / Backlink Gate
+
+Active phase：
+
+```text
+Phase 5: Evidence List and MVP Verifier Runtime
+```
+
+Selected slice：
+
+```text
+Add a standalone EvidenceListV1 module/CLI so that python3 scripts/validate_repo.py proves evidence sourcePath, lineRange, excerpt hash, ContextPack provenance, and artifact backlinks.
+```
+
+为什么这是下一步：Phase 5 已经有 VerifierRuntimeV1 rule catalog 和 replay gate，但 `evidence.json` 仍主要通过 runner schema 和 verifier replay 间接验证。进入 Phase 6 state/permission/recovery 之前，Evidence List 本身必须成为可独立校验的 contract，能回答每条 evidence 来自哪里、hash 是否稳定、是否被 ContextPack 声明、是否被 artifacts 正确引用。
+
+实现摘要：
+
+- 新增 `scripts/evidence_list.py`，提供 `EvidenceListV1` builder / validator / CLI。
+- `fixture_runner.py` 和 `local_readonly_runner.py` 现在通过 EvidenceListV1 builder 写入 `evidence.json`，每条 evidence 包含 `sourceRef` 和 `excerptHash`。
+- `scripts/validate_repo.py` 运行 EvidenceListV1 CLI，并校验 committed evidence artifacts、ContextPack provenance、artifact backlinks，以及 excerpt hash / provenance / backlink forced-failure cases。
+- `scripts/verifier_runtime.py` 的 schema validation 现在要求 evidence item 包含 `sourceRef`、`lineRange` 和 `excerptHash`。
+- 已重新生成 `artifacts/runs/*/evidence.json` 和 `artifacts/context/*/context_pack.json`，保持 committed artifact hashes deterministic。
+
+验收标准：
+
+- 5 个 fixture 的 `evidence.json` 均满足 `EvidenceListV1` schema、sourcePath、lineRange 和 excerptHash 校验：通过。
+- EvidenceListV1 CLI 可使用 committed ContextPack 和 run artifacts 完成 provenance/backlink 校验：通过。
+- 篡改 excerptHash、ContextPack evidence provenance 或 regression_result evidence ref 会被 `scripts/validate_repo.py` 拒绝：通过。
+- 不引入外部 side effects、真实邮件发送、数据库、review agent、human verifier backend、CUA、IDE 或 browser automation：通过。
+
+验证命令：
+
+```text
+python3 -m py_compile scripts/*.py
+python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir artifacts/runs
+python3 scripts/context_pack.py --run-root artifacts/runs --fixture-root fixtures/regression --capability-catalog artifacts/capabilities/phase3_capability_catalog.json --out-dir artifacts/context
+python3 scripts/validate_repo.py
+python3 scripts/evidence_list.py --evidence artifacts/runs/all_passed/evidence.json --run-dir artifacts/runs/all_passed --context-pack artifacts/context/all_passed/context_pack.json
+python3 scripts/verifier_runtime.py --catalog-out /tmp/phase5-verifier-catalog.json
+python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase5-evidence-fixture-smoke
+python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase5-evidence-task-spec.json
+python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --task-spec-path /tmp/phase5-evidence-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json --out-dir /tmp/phase5-evidence-local-smoke
+git diff --check
+```
+
+验证结果：
+
+```text
+- Python executable resolved for this run: python3.
+- `python3 -m py_compile scripts/*.py`：通过。
+- `python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir artifacts/runs`：通过，重新生成 5 个 committed run artifacts。
+- `python3 scripts/context_pack.py --run-root artifacts/runs --fixture-root fixtures/regression --capability-catalog artifacts/capabilities/phase3_capability_catalog.json --out-dir artifacts/context`：通过，重新生成 5 个 ContextPack artifacts。
+- `python3 scripts/validate_repo.py`：通过，覆盖 Phase 1a/1b/2/3/4 gates、VerifierRuntimeV1 replay，以及 EvidenceListV1 schema/provenance/backlink forced-failure validation。
+- `python3 scripts/evidence_list.py --evidence artifacts/runs/all_passed/evidence.json --run-dir artifacts/runs/all_passed --context-pack artifacts/context/all_passed/context_pack.json`：通过。
+- `python3 scripts/verifier_runtime.py --catalog-out /tmp/phase5-verifier-catalog.json`：通过。
+- `python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase5-evidence-fixture-smoke`：通过。
+- `python3 scripts/task_spec.py ... --out /tmp/phase5-evidence-task-spec.json`：通过。
+- `python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json ...`：通过。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- EvidenceListV1 仍是 file-based read-only MVP，不是数据库 Evidence Graph。
+- Artifact backlink validation 当前覆盖 regression_result、verifier_report、events 和 email draft；跨任务 artifact graph query 后移。
+- 真实脱敏日志仍可能要求更稳定的 locator 或 source hashing policy。
+
+下一轮建议：
+
+```text
+进入 Phase 6：
+新增最小 RunStateV1 / PermissionPolicyV1 / RecoverySnapshotV1 contract，让当前 read-only runner 的 run.json/events.jsonl 能证明状态流转、允许/禁止动作、失败位置和可恢复输入快照，而不引入 daemon、SQLite、外部 side effects、CUA 或 IDE adapter。
 ```
 
 ## 22. Parking Lot

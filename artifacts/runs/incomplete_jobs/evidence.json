@@ -1,10 +1,34 @@
 {
+  "artifactBacklinks": [
+    {
+      "artifact": "regression_result.json",
+      "jsonPointer": "/evidenceIds",
+      "relation": "supports_regression_result"
+    },
+    {
+      "artifact": "verifier_report.json",
+      "jsonPointer": "/ruleResults/*/evidenceIds",
+      "relation": "checked_by_verifier"
+    },
+    {
+      "artifact": "events.jsonl",
+      "jsonPointer": "/*.evidenceIds",
+      "relation": "audited_by_events"
+    },
+    {
+      "artifact": "email_draft.md",
+      "jsonPointer": "/text",
+      "relation": "cited_by_delivery_draft"
+    }
+  ],
   "fixtureId": "incomplete_jobs",
+  "id": "evidence-list-incomplete_jobs",
   "items": [
     {
       "classification": "incomplete_marker",
       "confidence": "high",
       "excerpt": "STATUS: INCOMPLETE",
+      "excerptHash": "b24a672270c22cb243b41ad4a7ea9c45f4147232c0af94f5147613b5c7c06d43",
       "id": "ev-incomplete_jobs-001",
       "lineRange": [
         4,
@@ -12,12 +36,14 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/incomplete_jobs/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     },
     {
       "classification": "incomplete_marker",
       "confidence": "high",
       "excerpt": "still_running: 9",
+      "excerptHash": "85617f403fc252f12dff267e52809247a9df8a1e69518a754e0114b159d4d83a",
       "id": "ev-incomplete_jobs-002",
       "lineRange": [
         7,
@@ -25,12 +51,14 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/incomplete_jobs/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     },
     {
       "classification": "incomplete_marker",
       "confidence": "high",
       "excerpt": "incomplete_jobs: 9",
+      "excerptHash": "00858d3bf4e8a180824c647908cf4fe3ccdb1df180552c50160bb2aad334cf4b",
       "id": "ev-incomplete_jobs-003",
       "lineRange": [
         8,
@@ -38,12 +66,14 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/incomplete_jobs/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     },
     {
       "classification": "incomplete_marker",
       "confidence": "high",
       "excerpt": "missing final summary",
+      "excerptHash": "53c22d9a245e703b8c4a5c7600a582a15e2365708e732a92c557d048ed194cca",
       "id": "ev-incomplete_jobs-004",
       "lineRange": [
         9,
@@ -51,6 +81,7 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/incomplete_jobs/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     }
   ],

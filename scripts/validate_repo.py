@@ -17,6 +17,11 @@ from capability_contract import (
     validate_capability_envelope,
 )
 from context_pack import build_context_pack, validate_context_pack
+from evidence_list import (
+    EVIDENCE_CLASSES,
+    EVIDENCE_CONFIDENCE,
+    validate_evidence_list,
+)
 from fixture_runner import load_fixture
 from task_spec import TASK_SPEC_SCHEMA_VERSION, build_regression_task_spec, validate_regression_task_spec
 from verifier_runtime import (
@@ -55,16 +60,6 @@ REQUIRED_REPORT_RULES = {
 }
 PASS_STYLE_PHRASES = ["all passed", "clean pass", "passed successfully", "no failures"]
 VERDICTS = {"passed", "failed", "incomplete", "warning_or_waiver", "unknown", "needs_human_check"}
-EVIDENCE_CLASSES = {
-    "all_passed_marker",
-    "failure_marker",
-    "incomplete_marker",
-    "warning_marker",
-    "waiver_marker",
-    "metadata",
-    "ambiguous",
-}
-EVIDENCE_CONFIDENCE = {"high", "medium", "low"}
 RUN_STATUSES = {"completed", "failed"}
 STEP_STATUSES = {"completed", "failed", "passed"}
 EVENT_TYPES = {
@@ -93,6 +88,7 @@ REQUIRED_FILES = [
     "scripts/task_spec.py",
     "scripts/capability_contract.py",
     "scripts/context_pack.py",
+    "scripts/evidence_list.py",
     "scripts/verifier_runtime.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
@@ -112,6 +108,7 @@ PLAN_REQUIRED_MARKERS = [
     "verifier-runtime-v1",
     "verifier-rule-catalog-v1",
     "phase5_verifier_rule_catalog.json",
+    "EvidenceListV1",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -447,16 +444,18 @@ def validate_schema_structure(
             if step["capabilityRef"] != capability_ref(step["capability"]):
                 raise AssertionError(f"Fixture {fixture_id} step {step['id']} capabilityRef mismatch")
 
-    require_fields(f"{fixture_id} evidence.json", evidence, ["schemaVersion", "fixtureId", "items"])
+    require_fields(f"{fixture_id} evidence.json", evidence, ["schemaVersion", "id", "fixtureId", "artifactBacklinks", "items"])
     if evidence["schemaVersion"] != "evidence-list-v1":
         raise AssertionError(f"Fixture {fixture_id} evidence.json schemaVersion must be evidence-list-v1")
+    if evidence["id"] != f"evidence-list-{fixture_id}":
+        raise AssertionError(f"Fixture {fixture_id} evidence.json id mismatch")
     if evidence["fixtureId"] != fixture_id:
         raise AssertionError(f"Fixture {fixture_id} evidence.json fixtureId mismatch")
     if not isinstance(evidence["items"], list) or not evidence["items"]:
         raise AssertionError(f"Fixture {fixture_id} evidence.items must be a non-empty list")
     for index, item in enumerate(evidence["items"]):
         item_label = f"{fixture_id} evidence.items[{index}]"
-        require_fields(item_label, item, ["id", "type", "sourcePath", "excerpt", "observedAt", "classification", "confidence"])
+        require_fields(item_label, item, ["id", "type", "sourcePath", "sourceRef", "lineRange", "excerpt", "excerptHash", "observedAt", "classification", "confidence"])
         if item["type"] != "log":
             raise AssertionError(f"{item_label}.type must be log")
         require_enum(f"{item_label}.classification", item["classification"], EVIDENCE_CLASSES)
@@ -574,6 +573,10 @@ def validate_artifact_packet(base_dir: Path) -> None:
             if line.strip()
         ]
 
+        try:
+            validate_evidence_list(evidence, ROOT, run_dir)
+        except ValueError as exc:
+            raise AssertionError(f"Fixture {fixture_id} EvidenceListV1 failed validation: {exc}") from exc
         validate_schema_structure(fixture_id, run, evidence, result, report, events)
         validate_artifact_consistency(fixture_id, fixture, evidence, result, report, email)
         validate_verifier_runtime_replay(fixture_id, fixture, run, evidence, result, report, email)
@@ -657,6 +660,11 @@ def validate_committed_context_packs() -> None:
         expected = build_context_pack(ARTIFACT_DIR / fixture_id, FIXTURE_DIR / fixture_id, CAPABILITY_CATALOG_PATH)
         if committed != expected:
             raise AssertionError(f"Committed ContextPack {fixture_id} differs from deterministic builder output")
+        evidence = load_json(ARTIFACT_DIR / fixture_id / "evidence.json")
+        try:
+            validate_evidence_list(evidence, ROOT, ARTIFACT_DIR / fixture_id, committed)
+        except ValueError as exc:
+            raise AssertionError(f"Committed EvidenceListV1 {fixture_id} failed ContextPack provenance validation: {exc}") from exc
 
     tampered = load_json(CONTEXT_PACK_DIR / "all_passed/context_pack.json")
     tampered["sources"] = [
@@ -695,6 +703,20 @@ def validate_committed_context_packs() -> None:
     else:
         raise AssertionError("ContextPack budget forced-failure unexpectedly passed validation")
 
+    tampered = load_json(CONTEXT_PACK_DIR / "all_passed/context_pack.json")
+    for item in tampered["contextItems"]:
+        if item.get("kind") == "log_excerpt":
+            item["evidenceId"] = "ev-all_passed-missing"
+            break
+    evidence = load_json(ARTIFACT_DIR / "all_passed/evidence.json")
+    try:
+        validate_evidence_list(evidence, ROOT, ARTIFACT_DIR / "all_passed", tampered)
+    except ValueError as exc:
+        if "missing log_excerpt provenance" not in str(exc):
+            raise AssertionError(f"EvidenceListV1 provenance forced-failure rejected for the wrong reason: {exc}") from exc
+    else:
+        raise AssertionError("EvidenceListV1 provenance forced-failure unexpectedly passed validation")
+
 
 def run_context_pack_builder(out_dir: Path) -> None:
     command = [
@@ -730,6 +752,27 @@ def run_verifier_rule_catalog_builder(out_file: Path) -> None:
     if result.returncode != 0:
         raise AssertionError(
             "Verifier rule catalog builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
+def run_evidence_list_validator(fixture_id: str) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/evidence_list.py"),
+        "--evidence",
+        str(ARTIFACT_DIR / fixture_id / "evidence.json"),
+        "--run-dir",
+        str(ARTIFACT_DIR / fixture_id),
+        "--context-pack",
+        str(CONTEXT_PACK_DIR / fixture_id / "context_pack.json"),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "EvidenceListV1 validator failed.\n"
             f"Command: {' '.join(command)}\n"
             f"stdout:\n{result.stdout}\n"
             f"stderr:\n{result.stderr}"
@@ -804,6 +847,13 @@ def break_result_evidence_ref(tampered_dir: Path) -> None:
     write_json(result_path, result)
 
 
+def break_evidence_excerpt_hash(tampered_dir: Path) -> None:
+    evidence_path = tampered_dir / "all_passed/evidence.json"
+    evidence = load_json(evidence_path)
+    evidence["items"][0]["excerptHash"] = "0" * 64
+    write_json(evidence_path, evidence)
+
+
 def remove_required_report_rule(tampered_dir: Path) -> None:
     report_path = tampered_dir / "all_passed/verifier_report.json"
     report = load_json(report_path)
@@ -856,7 +906,14 @@ def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
         source_dir,
         scratch_root,
         break_result_evidence_ref,
-        "references unknown evidence ids",
+        "references unknown EvidenceListV1 ids",
+    )
+    expect_artifact_validation_failure(
+        "broken_evidence_excerpt_hash",
+        source_dir,
+        scratch_root,
+        break_evidence_excerpt_hash,
+        "excerptHash must equal sha256",
     )
     expect_artifact_validation_failure(
         "missing_verifier_rule",
@@ -973,6 +1030,8 @@ def main() -> None:
         run_verifier_rule_catalog_builder(generated_verifier_catalog)
         if load_json(generated_verifier_catalog) != load_json(VERIFIER_RULE_CATALOG_PATH):
             raise AssertionError("Committed verifier rule catalog differs from deterministic CLI output")
+        for fixture_id in FIXTURE_IDS:
+            run_evidence_list_validator(fixture_id)
         generated_artifacts = temp_root / "runs"
         run_fixture_runner(generated_artifacts)
         validate_artifact_packet(generated_artifacts)
