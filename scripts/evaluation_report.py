@@ -11,6 +11,7 @@ from multi_agent_delivery import (
     MANIFEST_ARTIFACT_PATH as MULTI_AGENT_DELIVERY_MANIFEST_ARTIFACT_PATH,
     validate_delivery_report,
 )
+from human_approval import DECISION_ARTIFACT_PATH as HUMAN_APPROVAL_DECISION_ARTIFACT_PATH, validate_human_approval_decision
 
 
 EVALUATION_REPORT_SCHEMA_VERSION = "mvp-evaluation-report-v1"
@@ -116,6 +117,7 @@ def _source_specs() -> list[tuple[str, str]]:
         ("phase8_ide_approval_handoff", "artifacts/ide_adapter/phase8_ide_approval_handoff_manifest.json"),
         ("phase9_multi_agent_delivery_manifest", MULTI_AGENT_DELIVERY_MANIFEST_ARTIFACT_PATH),
         ("phase9_delivery_report", DELIVERY_REPORT_ARTIFACT_PATH),
+        ("post_mvp_human_approval_decision", HUMAN_APPROVAL_DECISION_ARTIFACT_PATH),
     ]
     for fixture_id in FIXTURE_IDS:
         specs.append((f"phase1a_{fixture_id}_run", f"artifacts/runs/{fixture_id}/run.json"))
@@ -226,6 +228,8 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
     source_artifacts = [_artifact_source(role, path, root) for role, path in _source_specs()]
     delivery_report = _load_json(root / DELIVERY_REPORT_ARTIFACT_PATH)
     validate_delivery_report(delivery_report, root)
+    human_approval_decision = _load_json(root / HUMAN_APPROVAL_DECISION_ARTIFACT_PATH)
+    validate_human_approval_decision(human_approval_decision, root)
     delivery_readiness = delivery_report["readiness"]
     delivery_blocker_ids = [blocker["id"] for blocker in delivery_report["blockers"]]
     phase_coverage = _phase_coverage()
@@ -308,7 +312,7 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
         ],
         "nextRecommendedSlice": {
             "phase": "post_mvp",
-            "slice": "Add a human approval decision fixture or durable run store only after preserving the current no-side-effect MVP contract.",
+            "slice": "Add a durable run store fixture only after preserving the current no-side-effect MVP contract and HumanApprovalDecisionV1 source binding.",
             "mustRemainMachineVerifiable": True,
         },
         "invariants": [

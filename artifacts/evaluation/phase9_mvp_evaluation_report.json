@@ -56,7 +56,7 @@
   "nextRecommendedSlice": {
     "mustRemainMachineVerifiable": true,
     "phase": "post_mvp",
-    "slice": "Add a human approval decision fixture or durable run store only after preserving the current no-side-effect MVP contract."
+    "slice": "Add a durable run store fixture only after preserving the current no-side-effect MVP contract and HumanApprovalDecisionV1 source binding."
   },
   "outOfScope": [
     {
@@ -263,7 +263,7 @@
   "scope": "read_only_regression_evidence_demo_mvp_completion",
   "sourceArtifacts": [
     {
-      "contentHash": "0eed59ef72015defe944aa2300a791323a2173c91a72a0c52849b59a863505c0",
+      "contentHash": "d467911092938f7e1a3cf65d285d749f277a9bfcda5cd8030c98b22d2157eff0",
       "path": "scripts/validate_repo.py",
       "role": "validation_script"
     },
@@ -346,6 +346,11 @@
       "contentHash": "2a340e1323b927385a2844f59110439d3ff12078c37f63a874287b006bdf8e5e",
       "path": "artifacts/delivery/phase9_delivery_report.json",
       "role": "phase9_delivery_report"
+    },
+    {
+      "contentHash": "99b6e4391d1fd0111b375c3393f20374f3c37419f3c4d6a043c1dc2eebdcb017",
+      "path": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+      "role": "post_mvp_human_approval_decision"
     },
     {
       "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
