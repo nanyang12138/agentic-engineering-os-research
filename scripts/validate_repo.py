@@ -412,127 +412,84 @@ def compare_artifact_packets(expected_dir: Path, actual_dir: Path) -> None:
                 )
 
 
-def clone_json(payload: dict | list) -> dict | list:
-    return json.loads(json.dumps(payload))
-
-
-def expect_assertion(label: str, callback) -> None:
-    try:
-        callback()
-    except AssertionError:
-        return
-    raise AssertionError(f"{label} should have failed validation")
-
-
 def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def assert_schema_negative_cases(base_dir: Path, scratch_dir: Path) -> None:
-    cases = [
-        ("missing run id", "all_passed", "run.json", lambda payload: payload.pop("id")),
-        (
-            "invalid evidence classification",
-            "all_passed",
-            "evidence.json",
-            lambda payload: payload["items"][0].__setitem__("classification", "mystery_marker"),
-        ),
-        (
-            "invalid verifier status",
-            "all_passed",
-            "verifier_report.json",
-            lambda payload: payload.__setitem__("status", "ok"),
-        ),
-    ]
-    for index, (label, fixture_id, filename, mutate) in enumerate(cases, start=1):
-        tampered_dir = scratch_dir / f"schema-negative-{index}"
-        shutil.copytree(base_dir, tampered_dir)
-        target = tampered_dir / fixture_id / filename
-        payload = load_json(target)
-        mutate(payload)
-        write_json(target, payload)
-        expect_assertion(label, lambda tampered_dir=tampered_dir: validate_artifact_packet(tampered_dir))
-
-
-def assert_failed_reverification(
-    base_dir: Path,
-    fixture_id: str,
+def expect_artifact_validation_failure(
     label: str,
+    source_dir: Path,
+    scratch_root: Path,
     mutate,
-    expected_failed_rules: set[str],
+    expected_message_fragment: str,
 ) -> None:
-    fixture_dir = FIXTURE_DIR / fixture_id
-    fixture = load_fixture(fixture_dir)
-    run_dir = base_dir / fixture_id
-    run = load_json(run_dir / "run.json")
-    evidence_payload = load_json(run_dir / "evidence.json")
-    result = load_json(run_dir / "regression_result.json")
-    email = (run_dir / "email_draft.md").read_text(encoding="utf-8")
+    tampered_dir = scratch_root / label
+    if tampered_dir.exists():
+        shutil.rmtree(tampered_dir)
+    shutil.copytree(source_dir, tampered_dir)
+    mutate(tampered_dir)
+    try:
+        validate_artifact_packet(tampered_dir)
+    except AssertionError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"Forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"Forced-failure case {label} unexpectedly passed validation")
 
-    evidence_items = clone_json(evidence_payload["items"])
-    tampered_result = clone_json(result)
-    tampered_email = mutate(tampered_result, evidence_items, email)
-    fixture_hash = stable_hash([fixture_dir / "fixture.json", fixture.log_path])
-    report = verify_artifacts(
-        fixture,
-        run["id"],
-        fixture_hash,
-        run["taskSpec"],
-        evidence_items,
-        tampered_result,
-        tampered_email,
+
+def append_pass_style_email(tampered_dir: Path) -> None:
+    email_path = tampered_dir / "failed_tests/email_draft.md"
+    email_path.write_text(
+        email_path.read_text(encoding="utf-8") + "\nAll passed with no failures.\n",
+        encoding="utf-8",
     )
-    if report["status"] != "failed":
-        raise AssertionError(f"{label} should produce failed verifier_report status")
-    failed_rules = {item["ruleId"] for item in report["ruleResults"] if item["status"] == "failed"}
-    missing_rules = expected_failed_rules - failed_rules
-    if missing_rules:
-        raise AssertionError(f"{label} missing expected failed rules: {sorted(missing_rules)}")
-    if not report["blockingFailures"]:
-        raise AssertionError(f"{label} should produce blockingFailures")
 
 
-def assert_verifier_negative_cases(base_dir: Path) -> None:
-    def missing_evidence_ref(result: dict, evidence_items: list[dict], email: str) -> str:
-        del evidence_items
-        result["evidenceIds"] = ["ev-missing-999"]
-        return email + "\nTamper note referencing ev-missing-999.\n"
+def break_result_evidence_ref(tampered_dir: Path) -> None:
+    result_path = tampered_dir / "all_passed/regression_result.json"
+    result = load_json(result_path)
+    result["evidenceIds"] = ["ev-all_passed-missing"]
+    write_json(result_path, result)
 
-    def failed_marker_as_passed(result: dict, evidence_items: list[dict], email: str) -> str:
-        del evidence_items, email
-        result["verdict"] = "passed"
-        result["summary"] = "Tampered result incorrectly claims a pass despite failure evidence."
-        evidence_refs = ", ".join(result["evidenceIds"])
-        return (
-            f"Subject: Regression status for {result['fixtureId']}\n\n"
-            f"The structured regression result artifact `{result['id']}` reports verdict `passed`.\n"
-            f"Referenced evidence ids: {evidence_refs}.\n"
-        )
 
-    def pass_style_email_injection(result: dict, evidence_items: list[dict], email: str) -> str:
-        del result, evidence_items
-        return email + "\nTampered unsupported claim: all passed with no failures.\n"
+def remove_required_report_rule(tampered_dir: Path) -> None:
+    report_path = tampered_dir / "all_passed/verifier_report.json"
+    report = load_json(report_path)
+    report["ruleResults"] = [
+        rule
+        for rule in report["ruleResults"]
+        if rule["ruleId"] != "schema_validation"
+    ]
+    write_json(report_path, report)
 
-    assert_failed_reverification(
-        base_dir,
-        "all_passed",
-        "missing evidence ref tamper",
-        missing_evidence_ref,
-        {"evidence_refs"},
+
+def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
+    scratch_root.mkdir(parents=True, exist_ok=True)
+    expect_artifact_validation_failure(
+        "pass_style_negative_email",
+        source_dir,
+        scratch_root,
+        append_pass_style_email,
+        "must not generate a pass-style email",
     )
-    assert_failed_reverification(
-        base_dir,
-        "failed_tests",
-        "failure marker converted to passed tamper",
-        failed_marker_as_passed,
-        {"classification_consistency", "verdict.failed_precedence"},
+    expect_artifact_validation_failure(
+        "broken_evidence_reference",
+        source_dir,
+        scratch_root,
+        break_result_evidence_ref,
+        "references unknown evidence ids",
     )
-    assert_failed_reverification(
-        base_dir,
-        "failed_tests",
-        "pass-style email injection tamper",
-        pass_style_email_injection,
-        {"email_draft_uses_structured_facts"},
+    expect_artifact_validation_failure(
+        "missing_verifier_rule",
+        source_dir,
+        scratch_root,
+        remove_required_report_rule,
+        "missing rules",
     )
 
 
@@ -556,8 +513,7 @@ def main() -> None:
             raise AssertionError("Missing committed Phase 1a artifact packet directory: artifacts/runs")
         validate_artifact_packet(ARTIFACT_DIR)
         compare_artifact_packets(ARTIFACT_DIR, generated_artifacts)
-        assert_schema_negative_cases(generated_artifacts, Path(temp_dir))
-        assert_verifier_negative_cases(generated_artifacts)
+        validate_forced_failure_cases(generated_artifacts, Path(temp_dir) / "forced-failures")
 
     print("Repository validation passed.")
 
