@@ -3365,13 +3365,13 @@ git diff --check
 
 ```text
 - Python executable resolved for this run: python3.
-- `python3 scripts/validate_repo.py`：待本轮验证。
-- `python3 -m py_compile ...`：待本轮验证。
-- `python3 scripts/task_spec.py ... --out /tmp/phase4-context-task-spec.json`：待本轮验证。
-- `python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json ...`：待本轮验证。
-- `python3 scripts/context_pack.py ... --out-dir /tmp/phase4-context-pack-smoke`：待本轮验证。
-- `python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase4-fixture-smoke`：待本轮验证。
-- `git diff --check`：待本轮验证。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 Phase 1a/1b/2/3 gates、Phase 4 ContextPack static provenance，以及 local runner ContextPack consumption/forced-failure gate。
+- `/usr/bin/python3 -m py_compile ...`：通过。
+- `/usr/bin/python3 scripts/task_spec.py ... --out /tmp/phase4-context-task-spec.json`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json ...`：通过。
+- `/usr/bin/python3 scripts/context_pack.py ... --out-dir /tmp/phase4-context-pack-smoke`：通过，写出 5 个 ContextPack artifacts。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase4-fixture-smoke`：通过。
+- `git diff --check`：通过。
 ```
 
 剩余风险：
