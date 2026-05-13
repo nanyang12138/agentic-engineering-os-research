@@ -192,7 +192,7 @@
       "fixtureId": "interrupted_after_extract",
       "id": "recovery-snapshot-interrupted_after_extract",
       "lastEventId": "event-interrupted_after_extract-004",
-      "nextAction": "resume_write_artifacts",
+      "nextAction": "resume_step",
       "replayArtifactRefs": [
         {
           "path": "artifacts/recovery/interrupted_after_extract/run.json",
@@ -205,6 +205,13 @@
       ],
       "resumeFromEventId": "event-interrupted_after_extract-004",
       "resumeMode": "from_last_event",
+      "resumeTarget": {
+        "capability": "write_artifact",
+        "capabilityRef": "capability://phase3/write_artifact",
+        "inputRef": "regression_result_candidate",
+        "reason": "resume_after_last_completed_event",
+        "stepId": "step-write-artifact"
+      },
       "runId": "run-interrupted_after_extract-988940c2",
       "schemaVersion": "recovery-snapshot-v1"
     },
@@ -334,7 +341,7 @@
     ]
   },
   "schemaVersion": "run-v1",
-  "status": "running",
+  "status": "interrupted",
   "steps": [
     {
       "capability": "read_log",
@@ -361,7 +368,7 @@
       "status": "pending"
     }
   ],
-  "task": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",
+  "task": "Resume an interrupted read-only regression run after result extraction.",
   "taskSpec": {
     "allowedActions": [
       "read_log",
@@ -383,7 +390,7 @@
       "call_gui_desktop_cua_or_browser_capability",
       "claim_all_passed_without_sufficient_evidence"
     ],
-    "goal": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",
+    "goal": "Resume an interrupted read-only regression run after result extraction.",
     "id": "task-spec-interrupted_after_extract",
     "inputLogPath": "fixtures/regression/all_passed/input.log",
     "requiredEvidence": [
