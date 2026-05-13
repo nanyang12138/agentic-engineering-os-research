@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import filecmp
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -213,6 +214,87 @@ def compare_artifact_packets(expected_dir: Path, actual_dir: Path) -> None:
                 )
 
 
+def write_json(path: Path, payload: dict) -> None:
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def expect_artifact_validation_failure(
+    label: str,
+    source_dir: Path,
+    scratch_root: Path,
+    mutate,
+    expected_message_fragment: str,
+) -> None:
+    tampered_dir = scratch_root / label
+    if tampered_dir.exists():
+        shutil.rmtree(tampered_dir)
+    shutil.copytree(source_dir, tampered_dir)
+    mutate(tampered_dir)
+    try:
+        validate_artifact_packet(tampered_dir)
+    except AssertionError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"Forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"Forced-failure case {label} unexpectedly passed validation")
+
+
+def append_pass_style_email(tampered_dir: Path) -> None:
+    email_path = tampered_dir / "failed_tests/email_draft.md"
+    email_path.write_text(
+        email_path.read_text(encoding="utf-8") + "\nAll passed with no failures.\n",
+        encoding="utf-8",
+    )
+
+
+def break_result_evidence_ref(tampered_dir: Path) -> None:
+    result_path = tampered_dir / "all_passed/regression_result.json"
+    result = load_json(result_path)
+    result["evidenceIds"] = ["ev-all_passed-missing"]
+    write_json(result_path, result)
+
+
+def remove_required_report_rule(tampered_dir: Path) -> None:
+    report_path = tampered_dir / "all_passed/verifier_report.json"
+    report = load_json(report_path)
+    report["ruleResults"] = [
+        rule
+        for rule in report["ruleResults"]
+        if rule["ruleId"] != "schema_validation"
+    ]
+    write_json(report_path, report)
+
+
+def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
+    scratch_root.mkdir(parents=True, exist_ok=True)
+    expect_artifact_validation_failure(
+        "pass_style_negative_email",
+        source_dir,
+        scratch_root,
+        append_pass_style_email,
+        "must not generate a pass-style email",
+    )
+    expect_artifact_validation_failure(
+        "broken_evidence_reference",
+        source_dir,
+        scratch_root,
+        break_result_evidence_ref,
+        "references unknown evidence ids",
+    )
+    expect_artifact_validation_failure(
+        "missing_verifier_rule",
+        source_dir,
+        scratch_root,
+        remove_required_report_rule,
+        "missing rules",
+    )
+
+
 def main() -> None:
     for path in REQUIRED_FILES:
         require_file(path)
@@ -233,6 +315,7 @@ def main() -> None:
             raise AssertionError("Missing committed Phase 1a artifact packet directory: artifacts/runs")
         validate_artifact_packet(ARTIFACT_DIR)
         compare_artifact_packets(ARTIFACT_DIR, generated_artifacts)
+        validate_forced_failure_cases(generated_artifacts, Path(temp_dir) / "forced-failures")
 
     print("Repository validation passed.")
 
