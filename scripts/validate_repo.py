@@ -41,6 +41,11 @@ from evaluation_report import (
     build_evaluation_report,
     validate_evaluation_report,
 )
+from human_approval import (
+    DECISION_ARTIFACT_PATH as HUMAN_APPROVAL_DECISION_ARTIFACT_PATH,
+    build_human_approval_decision,
+    validate_human_approval_decision,
+)
 from fixture_runner import load_fixture
 from ide_adapter import (
     APPROVAL_HANDOFF_ARTIFACT_PATH as IDE_APPROVAL_HANDOFF_ARTIFACT_PATH,
@@ -89,6 +94,7 @@ IDE_WORKSPACE_OBSERVATION_PATH = ROOT / IDE_OBSERVATION_ARTIFACT_PATH
 IDE_APPROVAL_HANDOFF_MANIFEST_PATH = ROOT / IDE_APPROVAL_HANDOFF_ARTIFACT_PATH
 MULTI_AGENT_DELIVERY_MANIFEST_PATH = ROOT / MULTI_AGENT_DELIVERY_MANIFEST_ARTIFACT_PATH
 DELIVERY_REPORT_PATH = ROOT / DELIVERY_REPORT_ARTIFACT_PATH
+HUMAN_APPROVAL_DECISION_PATH = ROOT / HUMAN_APPROVAL_DECISION_ARTIFACT_PATH
 EVALUATION_REPORT_PATH = ROOT / EVALUATION_REPORT_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
@@ -145,6 +151,7 @@ REQUIRED_FILES = [
     "scripts/computer_runtime.py",
     "scripts/ide_adapter.py",
     "scripts/multi_agent_delivery.py",
+    "scripts/human_approval.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
     "artifacts/recovery/interrupted_after_extract/run.json",
@@ -158,6 +165,7 @@ REQUIRED_FILES = [
     "artifacts/ide_adapter/phase8_ide_approval_handoff_manifest.json",
     "artifacts/delivery/phase9_multi_agent_delivery_manifest.json",
     "artifacts/delivery/phase9_delivery_report.json",
+    "artifacts/approval/phase9_human_approval_decision_fixture.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -211,6 +219,9 @@ PLAN_REQUIRED_MARKERS = [
     "EvaluationReportV1",
     "mvp-evaluation-report-v1",
     "phase9_mvp_evaluation_report.json",
+    "HumanApprovalDecisionV1",
+    "human-approval-decision-v1",
+    "phase9_human_approval_decision_fixture.json",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -1692,6 +1703,109 @@ def run_delivery_report_builder(report_out: Path) -> None:
         )
 
 
+def expect_human_approval_decision_validation_failure(
+    label: str,
+    decision: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_human_approval_decision(decision, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"HumanApprovalDecisionV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"HumanApprovalDecisionV1 forced-failure case {label} unexpectedly passed validation")
+
+
+def validate_committed_human_approval_decision_artifact() -> None:
+    decision = load_json(HUMAN_APPROVAL_DECISION_PATH)
+    try:
+        validate_human_approval_decision(decision, ROOT)
+    except ValueError as exc:
+        raise AssertionError(f"Committed HumanApprovalDecisionV1 artifact failed validation: {exc}") from exc
+
+    expected_decision = build_human_approval_decision(ROOT)
+    if decision != expected_decision:
+        raise AssertionError("Committed HumanApprovalDecisionV1 artifact differs from deterministic builder output")
+
+    tampered_decision = json.loads(json.dumps(decision))
+    tampered_decision["decision"]["approvalDecisionSynthesized"] = True
+    expect_human_approval_decision_validation_failure(
+        "approval_synthesized",
+        tampered_decision,
+        "must not synthesize approval decisions",
+    )
+
+    tampered_decision = json.loads(json.dumps(decision))
+    tampered_decision["policyEffects"]["sendEmailAllowed"] = True
+    expect_human_approval_decision_validation_failure(
+        "send_email_allowed",
+        tampered_decision,
+        "must not allow sending email",
+    )
+
+    tampered_decision = json.loads(json.dumps(decision))
+    tampered_decision["policyEffects"]["externalDeliveryAllowed"] = True
+    expect_human_approval_decision_validation_failure(
+        "external_delivery_allowed",
+        tampered_decision,
+        "must not allow external delivery",
+    )
+
+    tampered_decision = json.loads(json.dumps(decision))
+    tampered_decision["deliveryReportBlockers"] = [
+        blocker_id
+        for blocker_id in tampered_decision["deliveryReportBlockers"]
+        if blocker_id != "human_approval_missing"
+    ]
+    expect_human_approval_decision_validation_failure(
+        "missing_delivery_report_blocker",
+        tampered_decision,
+        "must preserve DeliveryReportV1 blockers",
+    )
+
+    tampered_decision = json.loads(json.dumps(decision))
+    for source in tampered_decision["sourceArtifacts"]:
+        if source.get("role") == "delivery_report":
+            source["contentHash"] = "0" * 64
+            break
+    expect_human_approval_decision_validation_failure(
+        "delivery_report_hash_mismatch",
+        tampered_decision,
+        "source hash mismatch",
+    )
+
+    tampered_decision = json.loads(json.dumps(decision))
+    tampered_decision["verifierBinding"]["taskVerdictOverrideAllowed"] = True
+    expect_human_approval_decision_validation_failure(
+        "task_verdict_override",
+        tampered_decision,
+        "must not override verifier verdicts",
+    )
+
+
+def run_human_approval_decision_builder(decision_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/human_approval.py"),
+        "--decision-out",
+        str(decision_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "HumanApprovalDecisionV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -2082,6 +2196,7 @@ def main() -> None:
     validate_committed_ide_adapter_artifacts()
     validate_committed_multi_agent_delivery_artifact()
     validate_committed_delivery_report_artifact()
+    validate_committed_human_approval_decision_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -2147,6 +2262,10 @@ def main() -> None:
         run_delivery_report_builder(generated_delivery_report)
         if load_json(generated_delivery_report) != load_json(DELIVERY_REPORT_PATH):
             raise AssertionError("Committed DeliveryReportV1 artifact differs from deterministic CLI output")
+        generated_human_approval_decision = temp_root / "phase9_human_approval_decision_fixture.json"
+        run_human_approval_decision_builder(generated_human_approval_decision)
+        if load_json(generated_human_approval_decision) != load_json(HUMAN_APPROVAL_DECISION_PATH):
+            raise AssertionError("Committed HumanApprovalDecisionV1 artifact differs from deterministic CLI output")
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)
         if load_json(generated_evaluation_report) != load_json(EVALUATION_REPORT_PATH):

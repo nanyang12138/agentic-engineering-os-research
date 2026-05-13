@@ -1,0 +1,85 @@
+{
+  "approvalBinding": {
+    "approvalPoint": "send_email_requires_human_approval",
+    "deliveryReportRef": "artifacts/delivery/phase9_delivery_report.json",
+    "handoffCapabilityRef": "ide-adapter://phase8/ide.approval.request",
+    "handoffRequestId": "approval-handoff-task-spec-send-email",
+    "permissionPolicyRef": "permission-policy-all_passed",
+    "permissionPolicySchemaVersion": "permission-policy-v1",
+    "taskSpecRef": "artifacts/runs/all_passed/run.json#taskSpec"
+  },
+  "decision": {
+    "approvalDecisionSynthesized": false,
+    "approvalGranted": false,
+    "decidedAt": "2026-05-12T14:39:00Z",
+    "decidedBy": "static-human-approval-fixture",
+    "decision": "rejected",
+    "decisionId": "human-decision-all_passed-send-email-rejected",
+    "humanDecisionRecorded": true,
+    "rationale": "The verified draft can be reviewed, but this fixture withholds approval for external email delivery.",
+    "reasonCode": "mvp_external_delivery_not_allowed"
+  },
+  "deliveryReportBlockers": [
+    "human_approval_missing",
+    "external_delivery_disabled_by_mvp_policy"
+  ],
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "phase9-human-approval-decision-fixture-all_passed",
+  "invariants": [
+    "HumanApprovalDecisionV1 records a decision artifact; it does not send email, create PRs, or mutate a workspace.",
+    "A human decision cannot override VerifierRuntimeV1 task verdicts or source evidence.",
+    "This static fixture withholds external delivery approval, so MVP no-side-effect policy remains intact."
+  ],
+  "mode": "static_fixture_only",
+  "phase": "post_mvp",
+  "policyEffects": {
+    "deliveryStateAfterDecision": "blocked_by_human_rejection_and_mvp_policy",
+    "externalDeliveryAllowed": false,
+    "externalSideEffectsAllowed": false,
+    "humanApprovalSatisfiedAfterDecision": false,
+    "prCreationAllowed": false,
+    "readyForExternalDeliveryAfterDecision": false,
+    "sendEmailAllowed": false,
+    "taskVerdictOverrideAllowed": false,
+    "workspaceMutationAllowed": false
+  },
+  "postDecisionBlockers": [
+    "human_approval_not_granted",
+    "external_delivery_disabled_by_mvp_policy"
+  ],
+  "schemaVersion": "human-approval-decision-v1",
+  "scope": "human_approval_decision_fixture",
+  "sourceArtifacts": [
+    {
+      "contentHash": "81f2b253be3fe0ef40b80ec6d70a9ec14421e38b67e3cfc05264616e28d69505",
+      "path": "artifacts/ide_adapter/phase8_ide_adapter_contract.json",
+      "role": "ide_adapter_contract"
+    },
+    {
+      "contentHash": "2a340e1323b927385a2844f59110439d3ff12078c37f63a874287b006bdf8e5e",
+      "path": "artifacts/delivery/phase9_delivery_report.json",
+      "role": "delivery_report"
+    },
+    {
+      "contentHash": "94c54703ba84302b8e1146150d0f2d768b4d19ae1b16605ea8a4b52839d9ef39",
+      "path": "artifacts/ide_adapter/phase8_ide_approval_handoff_manifest.json",
+      "role": "ide_approval_handoff"
+    },
+    {
+      "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
+      "path": "artifacts/runs/all_passed/run.json",
+      "role": "run"
+    },
+    {
+      "contentHash": "f6ec06f8bcc35f325451778d8b3d4985b5e75242b2d7ac9cad20bde244676f66",
+      "path": "artifacts/runs/all_passed/verifier_report.json",
+      "role": "verifier_report"
+    }
+  ],
+  "verifierBinding": {
+    "taskVerdictOverrideAllowed": false,
+    "taskVerdictOwner": "verifier-runtime-v1",
+    "verifierReportRef": "artifacts/runs/all_passed/verifier_report.json",
+    "verifierStatus": "passed"
+  }
+}
