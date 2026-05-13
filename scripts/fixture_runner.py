@@ -82,7 +82,7 @@ def stable_hash(paths: Iterable[Path]) -> str:
     for path in paths:
         digest.update(path.name.encode("utf-8"))
         digest.update(b"\0")
-        digest.update(path.read_bytes())
+        digest.update(path.read_text(encoding="utf-8").replace("\r\n", "\n").encode("utf-8"))
         digest.update(b"\0")
     return digest.hexdigest()
 
@@ -90,9 +90,9 @@ def stable_hash(paths: Iterable[Path]) -> str:
 def display_path(path: Path) -> str:
     resolved = path.resolve()
     try:
-        return str(resolved.relative_to(Path.cwd().resolve()))
+        return resolved.relative_to(Path.cwd().resolve()).as_posix()
     except ValueError:
-        return str(resolved)
+        return resolved.as_posix()
 
 
 def load_fixture(directory: Path) -> Fixture:
