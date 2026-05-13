@@ -1166,6 +1166,25 @@ Build vs Integrate：
 
 当前 Phase 9 已启动但未完成完整多 agent runtime：本 gate 证明多 agent/交付闭环可以作为 OS contract 编排已有可验证 artifacts，而不会绕过 Evidence、Verifier、Policy 或 Human Gate。下一步应补 Phase 9 的 delivery readiness/report contract，例如把 `verifier_report.json`、approval handoff 和 delivery draft 聚合为最终可审计 `DeliveryReportV1`，仍不实际发送邮件或创建 PR。
 
+#### Phase 9 DeliveryReportV1 Readiness / Blocker Gate
+
+2026-05-13 19:01 UTC 自动化实现结论：Phase 9 的第二步不是引入真实多 agent scheduler、邮件发送器、PR 创建器或 delivery dashboard，而是在 `MultiAgentDeliveryManifestV1` 之后新增一个最终交付就绪汇总 artifact。`DeliveryReportV1` 把 verifier 状态、human approval 状态、delivery draft refs 和 remaining blockers 聚合成机器可审计报告，证明系统可以明确区分“verified draft ready for human review”和“external delivery allowed”。
+
+最小 DeliveryReportV1 contract：
+
+- `artifacts/delivery/phase9_delivery_report.json` 采用 `delivery-report-v1`，引用 `phase9_multi_agent_delivery_manifest.json`、`all_passed` run、`verifier_report.json`、`email_draft.md` 和 Phase 8 IDE approval handoff 的 POSIX 相对路径与 content hash。
+- `readiness` 聚合 `verifierStatus`、`verifierPassed`、`deliveryDraftReady`、`readyForHumanReview`、`readyForExternalDelivery`、`humanApprovalRequired`、`humanApprovalSatisfied`、`sendEmailAllowed`、`externalSideEffectsAllowed` 和 `prCreationAllowed`。
+- 当前 verified email draft 可进入 human review，但 `readyForExternalDelivery=false`，因为 `humanApprovalSatisfied=false` 且 Phase 9 MVP policy 禁止真实 email / PR / external side effect。
+- `blockers[]` 必须至少包含 `human_approval_missing` 和 `external_delivery_disabled_by_mvp_policy`，使交付状态不再只藏在 manifest policy 字段里。
+- validator 拒绝关键错误：外部交付被标记 ready、合成人类 approval、缺失 human approval blocker、允许发送 email、source hash 漂移。
+
+Build vs Integrate：
+
+- Build：Phase 9 最小 `DeliveryReportV1` schema、builder/validator/CLI、committed artifact、readiness/blocker forced-failure validation gate。
+- Integrate later：真实 delivery dashboard、邮件发送器、PR/ticket/Slack delivery adapter、人类 approval decision store、多 agent scheduler 和 delivery audit UI。
+
+当前 Phase 9 contract-only MVP gate 已满足：multi-agent handoff / ownership 与 delivery readiness / blocker report 均有 deterministic artifact 和 validation。完整多 agent runtime、真实 external delivery 和 human approval backend 仍后移；下一步应进行计划收敛/完成度评审，决定 whole-plan MVP 是否以 contract-only Read-only Regression Evidence Demo 结项，或追加 Evaluation/learning loop 的最小验证 artifact。
+
 ## 13. 第一版应该证明什么
 
 第一版只需要证明一个核心闭环：
@@ -4413,6 +4432,74 @@ git diff --check
 ```text
 继续 Phase 9：
 新增 DeliveryReportV1 / DeliveryReadinessSummary contract，把 verifier_report、human approval state、delivery artifact refs 和 remaining blockers 聚合为最终可审计交付报告；仍不发送邮件、不创建 PR、不运行真实多 agent scheduler。
+```
+
+### 2026-05-13 19:01 UTC: Phase 9 DeliveryReportV1 Readiness / Blocker Gate
+
+Active phase：Phase 9 multi-agent and delivery loop。
+
+Selected slice：
+
+```text
+Add DeliveryReportV1 so that /usr/bin/python3 scripts/validate_repo.py proves verifier status, approval state, delivery refs, and remaining blockers are aggregated into a final auditable delivery-readiness report without sending email or creating PRs.
+```
+
+为什么这是下一步：`validate.yml` 和 `auto-merge-cursor-pr.yml` 均存在；Phase 9 已完成 `MultiAgentDeliveryManifestV1` handoff / delivery ownership gate。主计划明确下一步是补 delivery readiness/report contract，把 verified draft 和 external delivery permission 分开，防止 reporter 或 delivery layer 绕过 verifier、permission policy 或 human approval gate。
+
+实现摘要：
+
+- `scripts/multi_agent_delivery.py` 新增 `delivery-report-v1` / `DeliveryReportV1` builder、validator 和 CLI 参数。
+- 新增 committed `artifacts/delivery/phase9_delivery_report.json`，引用 Phase 9 manifest、`all_passed` run、verifier report、email draft 和 Phase 8 IDE approval handoff 的 source hashes。
+- report 聚合 `verifierStatus`、`verifierPassed`、`deliveryDraftReady`、`readyForHumanReview`、`readyForExternalDelivery`、`humanApprovalRequired`、`humanApprovalSatisfied`、`sendEmailAllowed`、`externalSideEffectsAllowed` 和 `prCreationAllowed`。
+- `blockers[]` 明确记录 `human_approval_missing` 和 `external_delivery_disabled_by_mvp_policy`；当前 email draft 只 ready for human review，不 ready for external delivery。
+- `scripts/validate_repo.py` 纳入 Phase 9 required file/markers、committed artifact validation、deterministic CLI output comparison，以及 forced-failure：external delivery ready without approval、synthesized approval、missing human approval blocker、send email allowed、email draft source hash mismatch。
+
+验收标准：
+
+- `phase9_delivery_report.json` 可 deterministic 生成并通过 validation。
+- DeliveryReportV1 必须绑定 verifier report、email draft、IDE approval handoff 和 MultiAgentDeliveryManifestV1。
+- verified draft 可以标记为 `readyForHumanReview=true`，但 `readyForExternalDelivery=false`。
+- validator 必须拒绝 human approval synthesis、email sending、external delivery bypass、缺失 blocker 和 source hash 漂移。
+- 不执行真实多 agent runtime、workspace mutation、PR 创建、邮件发送或外部 side effect。
+
+验证命令：
+
+```text
+/usr/bin/python3 scripts/validate_repo.py
+/usr/bin/python3 -m py_compile scripts/*.py
+/usr/bin/python3 scripts/multi_agent_delivery.py --validate-manifest artifacts/delivery/phase9_multi_agent_delivery_manifest.json --validate-delivery-report artifacts/delivery/phase9_delivery_report.json
+/usr/bin/python3 scripts/multi_agent_delivery.py --manifest-out /tmp/phase9_multi_agent_delivery_manifest.json --delivery-report-out /tmp/phase9_delivery_report.json
+/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase9-report-fixture-smoke
+/usr/bin/python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase9-report-task-spec.json
+/usr/bin/python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --out-dir /tmp/phase9-report-local-smoke --task-spec-path /tmp/phase9-report-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json
+git diff --check
+```
+
+验证结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 DeliveryReportV1 committed artifact、deterministic builder output，以及 external delivery ready / synthesized approval / missing blocker / send email allowed / source hash mismatch forced-failure cases。
+- `/usr/bin/python3 scripts/multi_agent_delivery.py --validate-manifest ... --validate-delivery-report ...`：通过。
+- `/usr/bin/python3 scripts/multi_agent_delivery.py --manifest-out ... --delivery-report-out ...`：通过，可 deterministic 生成 Phase 9 manifest 和 delivery report artifacts。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase9-report-fixture-smoke`：通过。
+- `/usr/bin/python3 scripts/task_spec.py ... --out /tmp/phase9-report-task-spec.json`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json`：通过。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- DeliveryReportV1 仍是 contract-only readiness report，不是实际 delivery dashboard、邮件发送器、PR/ticket adapter 或 human decision store。
+- 当前 report 只覆盖 read-only regression email draft；真实代码修改、PR delivery、release note、Slack/Web/IDE 多渠道交付仍后移。
+- Full plan 的 implementation phases 已到 Phase 9 contract-only MVP，但完整 Agentic Engineering OS 产品仍缺真实 durable runtime、approval backend、adapter providers 和 multi-agent scheduler。
+
+下一轮建议：
+
+```text
+进行 whole-plan MVP completion / scope decision sprint：
+读取当前 Phase 1a-9 artifacts 和 validation gates，决定 Read-only Regression Evidence Demo 是否作为 contract-only MVP 结项；若继续实现，优先新增 EvaluationReportV1 / milestone report 来汇总全链路 artifact coverage、known blockers 和 out-of-scope adapters，而不是直接接入真实 side-effect providers。
 ```
 
 ## 22. Parking Lot
