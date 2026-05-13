@@ -99,6 +99,7 @@ PLAN_REQUIRED_MARKERS = [
     "capability-envelope-v1",
     "phase3_capability_catalog.json",
     "context-pack-v1",
+    "context-budget-v1",
     "ContextPackV1",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
@@ -613,6 +614,23 @@ def validate_committed_context_packs() -> None:
             raise AssertionError(f"ContextPack hash forced-failure rejected for the wrong reason: {exc}") from exc
     else:
         raise AssertionError("ContextPack hash forced-failure unexpectedly passed validation")
+
+    tampered = load_json(CONTEXT_PACK_DIR / "all_passed/context_pack.json")
+    first_excerpt = next(item for item in tampered["contextItems"] if item.get("kind") == "log_excerpt")
+    existing_excerpt_count = sum(1 for item in tampered["contextItems"] if item.get("kind") == "log_excerpt")
+    for index in range(existing_excerpt_count + 1, 10):
+        extra_excerpt = dict(first_excerpt)
+        extra_excerpt["id"] = f"ctx-log-evidence-over-budget-{index:03d}"
+        tampered["contextItems"].append(extra_excerpt)
+    tampered["budget"]["actualLogExcerptItems"] = 9
+    tampered["budget"]["actualLogExcerptLines"] = 9
+    try:
+        validate_context_pack(tampered, ROOT)
+    except ValueError as exc:
+        if "exceeds ContextPack budget" not in str(exc):
+            raise AssertionError(f"ContextPack budget forced-failure rejected for the wrong reason: {exc}") from exc
+    else:
+        raise AssertionError("ContextPack budget forced-failure unexpectedly passed validation")
 
 
 def run_context_pack_builder(out_dir: Path) -> None:
