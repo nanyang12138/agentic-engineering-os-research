@@ -3866,7 +3866,7 @@ git diff --check
 
 - InterruptedRecoveryFixtureV1 仍是 static fixture，不是 durable backend。
 - `resumeTarget` 证明下一步 action 可确定，但还没有真实 resume executor 执行后续 write/verify。
-- `.github/workflows/auto-merge-cursor-pr.yml` 存在；历史运行显示它可能拒绝 `app/cursor` 作者，这是基础设施 blocker，不在本产品实现切片中修复。
+- `.github/workflows/auto-merge-cursor-pr.yml` 存在；本 PR #63 的 validate 成功后，该 workflow 实际失败并输出 `Refusing to auto-merge PR authored by app/cursor`。这是基础设施 blocker，不在本产品实现切片中修复。
 
 下一轮建议：
 
