@@ -1,0 +1,256 @@
+{
+  "adapterBoundary": {
+    "adapterResponsibilities": [
+      "expose low-level computer and sandbox actions behind capability contracts",
+      "emit observations and trajectory events with stable refs",
+      "avoid judging whether an engineering task is complete"
+    ],
+    "layer": "Computer Runtime / Sandbox / GUI Automation / Trajectory Layer",
+    "mvpInvariant": "Phase 7 MVP declares adapter boundaries only; it does not execute GUI, browser, desktop, sandbox, shell, or CUA actions.",
+    "osResponsibilities": [
+      "own TaskSpec, Policy, RunControl, Evidence, Verifier, Artifact, and Delivery semantics",
+      "decide whether observations satisfy task success criteria",
+      "approve dangerous actions before any real provider executes them"
+    ]
+  },
+  "adapterRef": "computer-runtime://phase7/adapter/cua-placeholder",
+  "buildVsIntegrate": {
+    "build": [
+      "ComputerRuntimeAdapterV1 contract",
+      "TrajectoryObservationV1 artifact contract",
+      "machine validation for adapter-only/no-side-effect invariants"
+    ],
+    "integrateLater": [
+      "trycua/cua provider",
+      "desktop or browser automation",
+      "sandbox lifecycle execution",
+      "trajectory replay"
+    ]
+  },
+  "capabilities": [
+    {
+      "approvalRequired": false,
+      "category": "computer",
+      "executionMode": "contract_only",
+      "externalSideEffectAllowed": false,
+      "implemented": false,
+      "inputContract": {
+        "properties": {
+          "sessionRef": "string:adapter-session-ref"
+        },
+        "required": [
+          "sessionRef"
+        ],
+        "schema": "ComputerScreenshotInputV1"
+      },
+      "name": "computer.screenshot",
+      "observationContract": {
+        "produces": [
+          "screenObservationRef"
+        ],
+        "properties": {
+          "redactionPolicy": "string",
+          "screenObservationRef": "string:observation-ref"
+        },
+        "schema": "ComputerScreenshotObservationV1"
+      },
+      "permission": "read",
+      "ref": "computer-runtime://phase7/computer.screenshot",
+      "schemaVersion": "computer-runtime-capability-v1",
+      "sideEffectRisk": "screen_observation"
+    },
+    {
+      "approvalRequired": true,
+      "category": "computer",
+      "executionMode": "contract_only",
+      "externalSideEffectAllowed": false,
+      "implemented": false,
+      "inputContract": {
+        "properties": {
+          "sessionRef": "string:adapter-session-ref",
+          "target": "object:coordinate-or-accessibility-ref"
+        },
+        "required": [
+          "sessionRef",
+          "target"
+        ],
+        "schema": "ComputerClickInputV1"
+      },
+      "name": "computer.click",
+      "observationContract": {
+        "produces": [
+          "trajectoryEventRef"
+        ],
+        "properties": {
+          "trajectoryEventRef": "string:trajectory-event-ref"
+        },
+        "schema": "ComputerActionObservationV1"
+      },
+      "permission": "dangerous",
+      "ref": "computer-runtime://phase7/computer.click",
+      "schemaVersion": "computer-runtime-capability-v1",
+      "sideEffectRisk": "gui_state_mutation"
+    },
+    {
+      "approvalRequired": true,
+      "category": "computer",
+      "executionMode": "contract_only",
+      "externalSideEffectAllowed": false,
+      "implemented": false,
+      "inputContract": {
+        "properties": {
+          "sessionRef": "string:adapter-session-ref",
+          "text": "string:redacted-or-approved-input"
+        },
+        "required": [
+          "sessionRef",
+          "text"
+        ],
+        "schema": "ComputerTypeInputV1"
+      },
+      "name": "computer.type",
+      "observationContract": {
+        "produces": [
+          "trajectoryEventRef"
+        ],
+        "properties": {
+          "trajectoryEventRef": "string:trajectory-event-ref"
+        },
+        "schema": "ComputerActionObservationV1"
+      },
+      "permission": "dangerous",
+      "ref": "computer-runtime://phase7/computer.type",
+      "schemaVersion": "computer-runtime-capability-v1",
+      "sideEffectRisk": "gui_state_mutation"
+    },
+    {
+      "approvalRequired": true,
+      "category": "computer",
+      "executionMode": "contract_only",
+      "externalSideEffectAllowed": false,
+      "implemented": false,
+      "inputContract": {
+        "properties": {
+          "command": "string:approved-command",
+          "sessionRef": "string:adapter-session-ref",
+          "workingDirectory": "string:path"
+        },
+        "required": [
+          "sessionRef",
+          "command",
+          "workingDirectory"
+        ],
+        "schema": "ComputerRunShellInputV1"
+      },
+      "name": "computer.run_shell",
+      "observationContract": {
+        "produces": [
+          "stdoutRef",
+          "stderrRef",
+          "exitCode"
+        ],
+        "properties": {
+          "exitCode": "integer",
+          "stderrRef": "string:observation-ref",
+          "stdoutRef": "string:observation-ref"
+        },
+        "schema": "ComputerShellObservationV1"
+      },
+      "permission": "dangerous",
+      "ref": "computer-runtime://phase7/computer.run_shell",
+      "schemaVersion": "computer-runtime-capability-v1",
+      "sideEffectRisk": "process_or_filesystem_mutation"
+    },
+    {
+      "approvalRequired": true,
+      "category": "sandbox",
+      "executionMode": "contract_only",
+      "externalSideEffectAllowed": false,
+      "implemented": false,
+      "inputContract": {
+        "properties": {
+          "imageRef": "string:image-ref",
+          "mountPolicy": "enum:readonly|approved-write",
+          "networkPolicy": "enum:disabled|restricted|approved"
+        },
+        "required": [
+          "imageRef",
+          "networkPolicy",
+          "mountPolicy"
+        ],
+        "schema": "SandboxSessionInputV1"
+      },
+      "name": "sandbox.session",
+      "observationContract": {
+        "produces": [
+          "sessionRef",
+          "trajectoryRootRef"
+        ],
+        "properties": {
+          "sessionRef": "string:adapter-session-ref",
+          "trajectoryRootRef": "string:trajectory-ref"
+        },
+        "schema": "SandboxSessionObservationV1"
+      },
+      "permission": "dangerous",
+      "ref": "computer-runtime://phase7/sandbox.session",
+      "schemaVersion": "computer-runtime-capability-v1",
+      "sideEffectRisk": "isolated_environment_lifecycle"
+    },
+    {
+      "approvalRequired": false,
+      "category": "trajectory",
+      "executionMode": "contract_only",
+      "externalSideEffectAllowed": false,
+      "implemented": false,
+      "inputContract": {
+        "properties": {
+          "eventRef": "string:run-event-ref",
+          "observationRef": "string:observation-ref"
+        },
+        "required": [
+          "eventRef",
+          "observationRef"
+        ],
+        "schema": "TrajectoryRecordInputV1"
+      },
+      "name": "trajectory.record",
+      "observationContract": {
+        "produces": [
+          "trajectoryObservation"
+        ],
+        "properties": {
+          "trajectoryObservation": "trajectory-observation-v1"
+        },
+        "schema": "TrajectoryObservationV1"
+      },
+      "permission": "read",
+      "ref": "computer-runtime://phase7/trajectory.record",
+      "schemaVersion": "computer-runtime-capability-v1",
+      "sideEffectRisk": "observation_capture_only"
+    }
+  ],
+  "id": "phase7-static-computer-runtime-contract",
+  "mode": "static_contract_only",
+  "phase": "phase7",
+  "policy": {
+    "dangerousCapabilitiesRequireApproval": true,
+    "externalSideEffectsAllowed": false,
+    "realProviderExecutionAllowed": false
+  },
+  "schemaVersion": "computer-runtime-adapter-contract-v1",
+  "scope": "computer_runtime_adapter_boundary",
+  "trajectoryContract": {
+    "allowedObservationKinds": [
+      "trajectory_event"
+    ],
+    "requiredBindings": [
+      "runId",
+      "eventRef",
+      "evidenceId",
+      "capabilityRef"
+    ],
+    "schemaVersion": "trajectory-observation-v1",
+    "taskVerdictOwner": "verifier-runtime-v1"
+  }
+}

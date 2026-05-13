@@ -1,0 +1,52 @@
+{
+  "adapterRef": "computer-runtime://phase7/adapter/cua-placeholder",
+  "contractRef": "artifacts/computer_runtime/phase7_computer_runtime_contract.json",
+  "externalSideEffect": false,
+  "fixtureId": "all_passed",
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "phase7-static-trajectory-observation-all_passed",
+  "mode": "static_fixture_only",
+  "observations": [
+    {
+      "assertion": "Trajectory observations can cite evidence, but task verdicts remain owned by EvidenceListV1 and VerifierRuntimeV1.",
+      "capability": "trajectory.record",
+      "capabilityRef": "computer-runtime://phase7/trajectory.record",
+      "eventRef": "event-all_passed-004",
+      "evidenceId": "ev-all_passed-001",
+      "excerptHash": "d04d89e743f59cd96444043e266f66896c18a18356b2f75f909bcb74deaa48b8",
+      "id": "trajectory-observation-001",
+      "kind": "trajectory_event",
+      "lineRange": [
+        4,
+        4
+      ],
+      "sourceRef": "artifacts/runs/all_passed/evidence.json#items/ev-all_passed-001",
+      "timestamp": "2026-05-12T14:39:00Z"
+    }
+  ],
+  "policy": {
+    "noExternalSideEffects": true,
+    "noGuiAutomationExecuted": true,
+    "requiresVerifierForTaskVerdict": true
+  },
+  "provider": "static_fixture",
+  "runId": "run-all_passed-988940c2",
+  "schemaVersion": "trajectory-observation-v1",
+  "sourceArtifacts": [
+    {
+      "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
+      "path": "artifacts/runs/all_passed/run.json",
+      "role": "run"
+    },
+    {
+      "contentHash": "0c0e9342e6e4442566e94a3ca639cde78ef2ff3c6581f75f3fe99e082132690c",
+      "path": "artifacts/runs/all_passed/evidence.json",
+      "role": "evidence_list"
+    },
+    {
+      "contentHash": "02f5a82d1765a4443aae0d3c50502e7ee0ae6e3dcd1c2201b6e2a83daae4a6fc",
+      "path": "artifacts/runs/all_passed/events.jsonl",
+      "role": "events"
+    }
+  ]
+}
