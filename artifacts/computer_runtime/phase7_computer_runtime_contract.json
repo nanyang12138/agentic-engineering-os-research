@@ -1,0 +1,218 @@
+{
+  "adapterBoundary": {
+    "adapterRole": "computer_runtime_observation_and_trajectory_provider",
+    "evidenceAuthority": "verifier_runtime",
+    "executionEnabledInMvp": false,
+    "externalSideEffectsAllowed": false,
+    "integrateLater": [
+      "trycua/cua",
+      "browser-use",
+      "e2b",
+      "devbox"
+    ]
+  },
+  "capabilities": [
+    {
+      "executionAllowedInMvp": false,
+      "inputContract": {
+        "properties": {
+          "displayRef": "string"
+        },
+        "required": [
+          "displayRef"
+        ],
+        "schema": "ComputerScreenshotInputV1"
+      },
+      "name": "computer.screenshot",
+      "namespace": "computer",
+      "observationRole": "observation_source",
+      "outputContract": {
+        "produces": [
+          "screenObservation"
+        ],
+        "schema": "ComputerScreenshotObservationV1"
+      },
+      "permission": "read",
+      "ref": "capability://phase7/computer.screenshot",
+      "requiresApproval": false,
+      "requiresSandbox": false,
+      "sideEffectPotential": false,
+      "staticObservationAllowedInMvp": true
+    },
+    {
+      "executionAllowedInMvp": false,
+      "inputContract": {
+        "properties": {
+          "button": "string",
+          "x": "integer",
+          "y": "integer"
+        },
+        "required": [
+          "x",
+          "y",
+          "button"
+        ],
+        "schema": "ComputerClickInputV1"
+      },
+      "name": "computer.click",
+      "namespace": "computer",
+      "observationRole": "action_request_source",
+      "outputContract": {
+        "produces": [
+          "trajectoryEvent"
+        ],
+        "schema": "ComputerActionObservationV1"
+      },
+      "permission": "dangerous",
+      "ref": "capability://phase7/computer.click",
+      "requiresApproval": true,
+      "requiresSandbox": true,
+      "sideEffectPotential": true,
+      "staticObservationAllowedInMvp": false
+    },
+    {
+      "executionAllowedInMvp": false,
+      "inputContract": {
+        "properties": {
+          "text": "string:redacted-capable"
+        },
+        "required": [
+          "text"
+        ],
+        "schema": "ComputerTypeInputV1"
+      },
+      "name": "computer.type",
+      "namespace": "computer",
+      "observationRole": "action_request_source",
+      "outputContract": {
+        "produces": [
+          "trajectoryEvent"
+        ],
+        "schema": "ComputerActionObservationV1"
+      },
+      "permission": "dangerous",
+      "ref": "capability://phase7/computer.type",
+      "requiresApproval": true,
+      "requiresSandbox": true,
+      "sideEffectPotential": true,
+      "staticObservationAllowedInMvp": false
+    },
+    {
+      "executionAllowedInMvp": false,
+      "inputContract": {
+        "properties": {
+          "command": "string",
+          "workingDirectory": "string:path"
+        },
+        "required": [
+          "command"
+        ],
+        "schema": "ComputerRunShellInputV1"
+      },
+      "name": "computer.run_shell",
+      "namespace": "computer",
+      "observationRole": "action_request_source",
+      "outputContract": {
+        "produces": [
+          "stdoutRef",
+          "stderrRef",
+          "exitCode"
+        ],
+        "schema": "ComputerShellObservationV1"
+      },
+      "permission": "dangerous",
+      "ref": "capability://phase7/computer.run_shell",
+      "requiresApproval": true,
+      "requiresSandbox": true,
+      "sideEffectPotential": true,
+      "staticObservationAllowedInMvp": false
+    },
+    {
+      "executionAllowedInMvp": false,
+      "inputContract": {
+        "properties": {
+          "sessionRef": "string"
+        },
+        "required": [
+          "sessionRef"
+        ],
+        "schema": "TrajectoryRecordInputV1"
+      },
+      "name": "trajectory.record",
+      "namespace": "trajectory",
+      "observationRole": "observation_source",
+      "outputContract": {
+        "produces": [
+          "trajectoryObservation"
+        ],
+        "schema": "TrajectoryObservationV1"
+      },
+      "permission": "read",
+      "ref": "capability://phase7/trajectory.record",
+      "requiresApproval": false,
+      "requiresSandbox": false,
+      "sideEffectPotential": false,
+      "staticObservationAllowedInMvp": true
+    },
+    {
+      "executionAllowedInMvp": false,
+      "inputContract": {
+        "properties": {
+          "imageRef": "string",
+          "networkPolicy": "string"
+        },
+        "required": [
+          "imageRef",
+          "networkPolicy"
+        ],
+        "schema": "SandboxCreateInputV1"
+      },
+      "name": "sandbox.create",
+      "namespace": "sandbox",
+      "observationRole": "action_request_source",
+      "outputContract": {
+        "produces": [
+          "sandboxRef"
+        ],
+        "schema": "SandboxObservationV1"
+      },
+      "permission": "dangerous",
+      "ref": "capability://phase7/sandbox.create",
+      "requiresApproval": true,
+      "requiresSandbox": true,
+      "sideEffectPotential": true,
+      "staticObservationAllowedInMvp": false
+    },
+    {
+      "executionAllowedInMvp": false,
+      "inputContract": {
+        "properties": {
+          "sandboxRef": "string"
+        },
+        "required": [
+          "sandboxRef"
+        ],
+        "schema": "SandboxDestroyInputV1"
+      },
+      "name": "sandbox.destroy",
+      "namespace": "sandbox",
+      "observationRole": "action_request_source",
+      "outputContract": {
+        "produces": [
+          "sandboxClosedRef"
+        ],
+        "schema": "SandboxObservationV1"
+      },
+      "permission": "dangerous",
+      "ref": "capability://phase7/sandbox.destroy",
+      "requiresApproval": true,
+      "requiresSandbox": true,
+      "sideEffectPotential": true,
+      "staticObservationAllowedInMvp": false
+    }
+  ],
+  "id": "phase7-computer-runtime-contract",
+  "phase": "phase7",
+  "schemaVersion": "computer-runtime-contract-v1",
+  "scope": "static_computer_runtime_adapter_contract"
+}

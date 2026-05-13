@@ -1029,6 +1029,25 @@ Build vs Integrate：
 
 成功标准：先明确 CUA 输出的是 observation / trajectory；是否可信、是否满足工程任务目标，由 OS 的 Evidence/Verifier 层判断。实际 GUI 操作不进入第一版。
 
+#### Phase 7 ComputerRuntimeContractV1 Static Adapter Boundary Gate
+
+2026-05-13 13:44 UTC 自动化实现结论：Phase 7 的第一步不是接入 trycua/cua、启动 GUI 自动化或创建 sandbox provider，而是把 Computer Runtime 的边界固定为可验证静态契约。`ComputerRuntimeContractV1` 明确 `computer.*`、`trajectory.*` 和 `sandbox.*` 只属于底层 observation / trajectory adapter，不能替代 OS 的 TaskSpec、Policy、Evidence 或 Verifier。
+
+最小 Computer Runtime contract：
+
+- `scripts/computer_runtime_contract.py` 生成并校验 `computer-runtime-contract-v1` 和 `trajectory-observation-v1`。
+- `artifacts/computer_runtime/phase7_computer_runtime_contract.json` 声明 Phase 7 能力：`computer.screenshot`、`computer.click`、`computer.type`、`computer.run_shell`、`trajectory.record`、`sandbox.create`、`sandbox.destroy`。
+- 所有 capability 都设置 `executionAllowedInMvp=false`；只有 read-only observation capability 可以作为静态 observation source，`click/type/run_shell/sandbox.*` 仍是 dangerous / approval-required / sandbox-required。
+- `artifacts/computer_runtime/static_trajectory_observation.json` 是 synthetic trajectory observation fixture，声明未执行 GUI automation、未执行 runtime、未产生外部 side effect；观察结果必须经过 EvidenceList / Verifier 才能成为工程结论。
+- `scripts/validate_repo.py` 比对 committed contract 与 deterministic builder 输出，并包含 forced-failure：允许 `computer.click` 执行、声明 runtime execution、或把 side-effect-capable event 标记为 executed 都必须失败。
+
+Build vs Integrate：
+
+- Build：Phase 7 static adapter boundary schema、trajectory observation artifact、observation-to-evidence bridge 和 repository validation gate。
+- Integrate later：trycua/cua runtime adapter、真实 screenshot/click/type/shell execution、sandbox lifecycle、trajectory replay、browser/desktop providers 和 provider discovery。
+
+当前 Phase 7 已启动但未完成：本 gate 只证明 Computer Runtime / CUA 的系统边界和静态 trajectory observation contract；下一步应把 trajectory observation 纳入 EvidenceList/Verifier 的输入边界，或者扩展 policy gate 证明 dangerous computer actions 必须经过 approval/sandbox，仍不实际执行 GUI 或外部 side effect。
+
 ### Phase 8：IDE Adapter
 
 再把 IDE 接进来，而不是一开始绑定 IDE：
@@ -1678,7 +1697,7 @@ Add forced-failure verifier checks so that python3 scripts/validate_repo.py prov
 6. Evidence List + Verifier Runtime：已实现 Phase 5 regression MVP gate：`scripts/evidence_list.py` 提供 `EvidenceListV1` builder / validator / CLI，校验 sourcePath、lineRange、excerptHash、ContextPack provenance 和 artifact backlinks；`scripts/verifier_runtime.py` 提供 `verifier-runtime-v1` / `verifier-rule-catalog-v1` deterministic replay。数据库 Evidence Graph、review agent 和 human verifier backend 后移。
 7. Local Read-only Runner：已实现 Phase 1b one-shot CLI `python3 scripts/local_readonly_runner.py --log-path <log> --goal <goal> --out-dir <out>`；该 runner 复用 Phase 1a schema、evidence list、email grounding 和 verifier report，`scripts/validate_repo.py` 已加入本地 read-only smoke gate。SQLite event store、daemon、正式 capability registry、真实外部 adapter 和更完整 run state 仍后移。
 8. Capability Metadata Gate：已实现 Phase 3 最小 `capability-envelope-v1` / `capability-metadata-v1`，覆盖 `read_log`、`extract_regression_result`、`write_artifact` 和 `rule_verifier` 的 permission、sideEffect、timeout、input/output contract；`run.json` 和 `events.jsonl` 引用 capability ref，`artifacts/capabilities/phase3_capability_catalog.json` 作为独立 catalogue artifact，`scripts/validate_repo.py` 会拒绝缺失 permission、声明外部 side effect、缺失 `step-verify.capabilityRef` 或 catalogue 缺失当前 capability 的契约。
-9. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
+9. CUA Adapter Contract：已启动 Phase 7 static adapter boundary gate：`scripts/computer_runtime_contract.py` 生成 `computer-runtime-contract-v1` 和 `trajectory-observation-v1`；`artifacts/computer_runtime/phase7_computer_runtime_contract.json` 定义 `computer.*`、`trajectory.*`、`sandbox.*` 能力边界，`artifacts/computer_runtime/static_trajectory_observation.json` 证明 observation/trajectory 不能直接成为工程结论，且 MVP 不执行 GUI/CUA/browser/sandbox side effect。真实 trycua/cua 集成继续后移。
 10. Phase 1a Evidence Intake Review：在 fixture runner 输出完整 artifact packet 前，后续优化只允许维护评分、Decision Log、Open Questions 和 Research Sprint Log；只有 `verifier_report.json` 失败、grounded email 问题、真实脱敏日志差异或 Build vs Integrate 运行证据出现后，才修改正式设计章节。
 11. Evidence Packet Stop Rule：已由 2026-05-12 14:39 UTC artifact packet 解锁；后续修改必须基于 committed `artifacts/runs/*`、`verifier_report.json` failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据，不再无证据扩写 adapter mapping 或正式设计章节。
 12. Phase 1a Verifier Hardening：已实现 deterministic negative validation，`scripts/validate_repo.py` 会验证 malformed schema、missing evidence refs、failure-marker-to-passed tamper 和 pass-style email injection 均被拒绝或生成 failed verifier report。
@@ -1974,6 +1993,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-13 07:45 UTC：Phase 5 VerifierRuntimeV1 Rule Catalog / Replay Gate 已实现；决定将当前规则验证自研为 `verifier-runtime-v1` / `verifier-rule-catalog-v1`、committed `artifacts/verifier/phase5_verifier_rule_catalog.json` 和 deterministic replay gate。外部 review agent、human verifier backend、policy engine 和完整 Evidence Graph 继续后移。
 - 2026-05-13 08:00 UTC：Phase 5 EvidenceListV1 Provenance / Backlink Gate 已实现；决定将 `evidence.json` 固化为独立 `EvidenceListV1` contract，由 `scripts/evidence_list.py` 校验 sourcePath、lineRange、excerptHash、ContextPack provenance 和 artifact backlinks。数据库 Evidence Graph、跨任务 evidence store、review agent 和 human verifier backend 继续后移；下一轮进入 Phase 6 state, permission, and recovery。
 - 2026-05-13 09:27 UTC：Phase 6 InterruptedRecoveryFixtureV1 Non-terminal Resume Gate 已实现；决定先用 committed interrupted fixture 证明 `RunControlV1` 的 non-terminal recovery contract，`resumeTarget` 指向下一步 `write_artifact`，而不是提前引入 durable workflow backend、真实 resume executor、CUA 或 IDE adapter。Phase 6 regression MVP gate 视为基本满足；下一轮可以进入 Phase 7 adapter contract boundary。
+- 2026-05-13 13:44 UTC：Phase 7 ComputerRuntimeContractV1 Static Adapter Boundary Gate 已实现；决定先用 `computer-runtime-contract-v1` 和 `trajectory-observation-v1` 固定 CUA/Computer Runtime 只提供 observation/trajectory，工程结论仍由 EvidenceList/Verifier Runtime 判断。真实 trycua/cua、GUI automation、sandbox lifecycle、browser/desktop provider 和外部 side effect 继续后移。
 
 ## 20. Open Questions
 
@@ -2002,6 +2022,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - Phase 4 的 Context Broker artifact 固定为 `ContextPackV1` / `context-pack-v1`：先用静态 builder 收敛 TaskSpec、log excerpts、capability catalogue 和 artifact refs，并用 contentHash 验证来源可复查；local runner 可选消费 committed ContextPack，且最小 `budget` 会限制 evidence-backed log excerpt 的数量和总行数。动态 retrieval 与 broker service 后移。
 - Phase 5 的 Evidence / Verifier artifacts 固定为 `EvidenceListV1`、`verifier-runtime-v1` 和 `verifier-rule-catalog-v1`：先用 same-process read-only evidence validator、rule catalog 和 replay gate 验证 sourcePath/lineRange/excerptHash、ContextPack provenance、artifact backlinks 与 `verifier_report.json`，review agent、human verifier backend、policy engine 和数据库 Evidence Graph 后移。
 - Phase 6 的 state/permission/recovery gate 固定为 `RunControlV1` + `InterruptedRecoveryFixtureV1`：terminal run 使用 `terminal_replay_only`，non-terminal interrupted run 必须提供 `resumeTarget` 和 `resume_step`；durable checkpoint store、真实 resume executor、retry scheduler 和 approval backend 后移。
+- Phase 7 的 Computer Runtime / CUA Adapter gate 固定为 static adapter boundary：`computer.*`、`trajectory.*`、`sandbox.*` capability 可以被描述和验证，但 `executionAllowedInMvp=false`；synthetic trajectory observation 只能作为候选 observation，必须经过 EvidenceList/Verifier 才能支撑工程结论。
 
 ### 20.2 仍开放的问题
 
@@ -2022,7 +2043,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - Phase 1a verifier hardening 通过 PR / GitHub checks 后，是否足以直接进入 Phase 1b Local Read-only Runner，还是需要先用真实脱敏日志校准 marker 常量？
 - 当前 marker 常量是否对真实脱敏 regression log 足够，还是 Evidence Review 会证明需要新增 project-specific marker 配置？
 - `write_artifact.permission="write"` 且 `sideEffect=false` 是否足够表达“只写本地 artifact、无外部副作用”，还是需要在 Phase 6 policy gate 中引入更明确的 effect boundary 类型？
-- Phase 4 已把 ContextPack 作为 local runner 的可选执行输入，并已加入最小 budget/source-selection negative test；下一步应进入 Phase 5 Evidence List / MVP Verifier Runtime。
+- Phase 7 已建立 static Computer Runtime contract；下一步应把 `trajectory-observation-v1` 接入 EvidenceList/Verifier 的输入边界，或扩展 Policy gate 证明 dangerous computer actions 必须经过 approval/sandbox，仍不实际执行 GUI/CUA/browser。
 
 ## 21. Research Sprint Log
 
@@ -3874,6 +3895,71 @@ git diff --check
 ```text
 进入 Phase 7 Computer Runtime / CUA Adapter：
 先定义 `computer.*` / `trajectory.*` adapter contract 和 observation/evidence 边界，并用静态 schema/fixture 验证 CUA 只作为底层 runtime adapter；不要实际执行 GUI 自动化、发送外部 side effect 或引入 desktop/sandbox provider。
+```
+
+### 2026-05-13 13:44 UTC Automation Implementation Log - Phase 7 ComputerRuntimeContractV1 Static Adapter Boundary Gate
+
+Active phase：
+
+```text
+Phase 7: Computer Runtime and CUA Adapter
+```
+
+Selected slice：
+
+```text
+Add ComputerRuntimeContractV1 and a static trajectory observation artifact so that scripts/validate_repo.py proves CUA remains an observation/trajectory adapter with no runtime execution.
+```
+
+为什么这是下一步：Phase 6 regression MVP gate 已能证明 terminal run control 和 non-terminal recovery snapshot。最早未完成阶段是 Phase 7，但计划明确要求第一步只定义 `computer.*` / `sandbox.*` / `trajectory.*` adapter contract，不实际执行 GUI、desktop、browser 或 CUA。因此本切片用静态 schema 和 artifact 固化边界。
+
+实现摘要：
+
+- 新增 `scripts/computer_runtime_contract.py`，提供 `computer-runtime-contract-v1` / `trajectory-observation-v1` builder、validator 和 CLI。
+- 新增 `artifacts/computer_runtime/phase7_computer_runtime_contract.json`，声明 `computer.screenshot`、`computer.click`、`computer.type`、`computer.run_shell`、`trajectory.record`、`sandbox.create`、`sandbox.destroy` 的权限、sandbox/approval 要求和 MVP 执行边界。
+- 新增 `artifacts/computer_runtime/static_trajectory_observation.json`，作为 synthetic trajectory observation fixture，声明没有 runtime execution、GUI automation 或 external side effect。
+- `scripts/validate_repo.py` 校验 committed contract / trajectory artifact 与 deterministic builder 输出一致，并增加三类 forced-failure：允许 `computer.click` 执行、trajectory 声明 runtime execution、side-effect-capable event 标记为 executed。
+
+验收标准：
+
+- committed ComputerRuntimeContractV1 可由 CLI deterministic 生成并验证：通过。
+- contract 明确 trycua/cua 是 integrate-later runtime，且 adapter 只提供 observation/trajectory，不拥有 evidence authority：通过。
+- side-effect-capable `computer.*` / `sandbox.*` capability 必须 `dangerous`、approval-required、sandbox-required，并且 `executionAllowedInMvp=false`：通过。
+- static trajectory observation 不执行 GUI/runtime/external side effect，且不能直接满足工程任务目标：通过。
+- validation 能拒绝可执行 click、runtime execution 和 executed side-effect event：通过。
+
+验证命令：
+
+```text
+<python_executable> scripts/validate_repo.py
+<python_executable> -m py_compile scripts/*.py
+<python_executable> scripts/computer_runtime_contract.py --contract-out /tmp/phase7-computer-runtime/phase7_computer_runtime_contract.json --trajectory-out /tmp/phase7-computer-runtime/static_trajectory_observation.json
+<python_executable> scripts/computer_runtime_contract.py --validate-contract artifacts/computer_runtime/phase7_computer_runtime_contract.json --validate-trajectory artifacts/computer_runtime/static_trajectory_observation.json
+git diff --check
+```
+
+验证结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 committed ComputerRuntimeContractV1、TrajectoryObservationV1、deterministic builder comparison 和 forced-failure validation。
+- `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- `/usr/bin/python3 scripts/computer_runtime_contract.py --contract-out /tmp/phase7-computer-runtime/phase7_computer_runtime_contract.json --trajectory-out /tmp/phase7-computer-runtime/static_trajectory_observation.json`：通过。
+- `/usr/bin/python3 scripts/computer_runtime_contract.py --validate-contract artifacts/computer_runtime/phase7_computer_runtime_contract.json --validate-trajectory artifacts/computer_runtime/static_trajectory_observation.json`：通过。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- 本 gate 是 static contract，不是 trycua/cua adapter implementation。
+- trajectory observation 尚未接入 EvidenceListV1 artifact backlinks 或 VerifierRuntimeV1 replay。
+- 真实 screenshot/click/type/shell/sandbox lifecycle、trajectory replay、provider discovery 和 approval UI 继续后移。
+
+下一轮建议：
+
+```text
+继续 Phase 7：
+把 `trajectory-observation-v1` 接入 EvidenceList/Verifier 的输入边界，例如新增一个 static trajectory evidence fixture 和 validation，证明 CUA trajectory 只能作为 evidence candidate，必须经过 verifier 才能支持工程结论；仍不实际执行 GUI/CUA/browser。
 ```
 
 ## 22. Parking Lot

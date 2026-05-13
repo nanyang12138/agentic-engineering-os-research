@@ -1,0 +1,51 @@
+{
+  "contractRef": "artifacts/computer_runtime/phase7_computer_runtime_contract.json",
+  "evidenceBridge": {
+    "mayDirectlySatisfyTaskGoal": false,
+    "observationToEvidence": "requires_evidence_list_and_verifier",
+    "verifierRequired": true
+  },
+  "id": "phase7-static-trajectory-observation",
+  "observationEvents": [
+    {
+      "capabilityRef": "capability://phase7/computer.screenshot",
+      "eventId": "trajectory-event-001",
+      "executionState": "observed",
+      "observation": {
+        "artifactRef": "screen://synthetic/phase7/initial",
+        "kind": "screen_observation",
+        "redacted": false
+      },
+      "timestamp": "2026-05-13T13:44:00Z"
+    },
+    {
+      "capabilityRef": "capability://phase7/computer.click",
+      "eventId": "trajectory-event-002",
+      "executionState": "planned_not_executed",
+      "observation": {
+        "kind": "action_request",
+        "reason": "static contract fixture only; no GUI action executed"
+      },
+      "timestamp": "2026-05-13T13:44:00Z"
+    },
+    {
+      "capabilityRef": "capability://phase7/trajectory.record",
+      "eventId": "trajectory-event-003",
+      "executionState": "observed",
+      "observation": {
+        "eventCount": 2,
+        "kind": "trajectory_summary"
+      },
+      "timestamp": "2026-05-13T13:44:00Z"
+    }
+  ],
+  "policy": {
+    "externalSideEffectsPerformed": false,
+    "guiAutomationPerformed": false,
+    "runtimeExecutionPerformed": false,
+    "sandboxRequiredForFutureExecution": true
+  },
+  "provider": "trycua/cua-static-contract-fixture",
+  "schemaVersion": "trajectory-observation-v1",
+  "source": "synthetic_static_fixture"
+}

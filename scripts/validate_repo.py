@@ -16,6 +16,12 @@ from capability_contract import (
     validate_capability_catalog,
     validate_capability_envelope,
 )
+from computer_runtime_contract import (
+    build_computer_runtime_contract,
+    build_static_trajectory_observation,
+    validate_computer_runtime_contract,
+    validate_trajectory_observation,
+)
 from context_pack import build_context_pack, validate_context_pack
 from evidence_list import (
     EVIDENCE_CLASSES,
@@ -42,6 +48,8 @@ CAPABILITY_CATALOG_PATH = ROOT / "artifacts/capabilities/phase3_capability_catal
 CONTEXT_PACK_DIR = ROOT / "artifacts/context"
 VERIFIER_RULE_CATALOG_PATH = ROOT / "artifacts/verifier/phase5_verifier_rule_catalog.json"
 RECOVERY_FIXTURE_DIR = ROOT / "artifacts/recovery/interrupted_after_extract"
+COMPUTER_RUNTIME_CONTRACT_PATH = ROOT / "artifacts/computer_runtime/phase7_computer_runtime_contract.json"
+TRAJECTORY_OBSERVATION_PATH = ROOT / "artifacts/computer_runtime/static_trajectory_observation.json"
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -89,6 +97,7 @@ REQUIRED_FILES = [
     "scripts/local_readonly_runner.py",
     "scripts/task_spec.py",
     "scripts/capability_contract.py",
+    "scripts/computer_runtime_contract.py",
     "scripts/context_pack.py",
     "scripts/evidence_list.py",
     "scripts/run_control.py",
@@ -98,6 +107,8 @@ REQUIRED_FILES = [
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
     "artifacts/recovery/interrupted_after_extract/run.json",
     "artifacts/recovery/interrupted_after_extract/events.jsonl",
+    "artifacts/computer_runtime/phase7_computer_runtime_contract.json",
+    "artifacts/computer_runtime/static_trajectory_observation.json",
 ]
 
 PLAN_REQUIRED_MARKERS = [
@@ -120,6 +131,9 @@ PLAN_REQUIRED_MARKERS = [
     "permission-policy-v1",
     "recovery-snapshot-v1",
     "InterruptedRecoveryFixtureV1",
+    "computer-runtime-contract-v1",
+    "trajectory-observation-v1",
+    "phase7_computer_runtime_contract.json",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -833,6 +847,44 @@ def run_recovery_fixture_builder(out_dir: Path) -> None:
         )
 
 
+def run_computer_runtime_contract_builder(contract_out: Path, trajectory_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/computer_runtime_contract.py"),
+        "--contract-out",
+        str(contract_out),
+        "--trajectory-out",
+        str(trajectory_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "ComputerRuntimeContractV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
+def run_trajectory_observation_validator(contract_path: Path, trajectory_path: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/computer_runtime_contract.py"),
+        "--validate-contract",
+        str(contract_path),
+        "--validate-trajectory",
+        str(trajectory_path),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "TrajectoryObservationV1 validator failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def compare_context_packs(expected_dir: Path, actual_dir: Path) -> None:
     for fixture_id in FIXTURE_IDS:
         expected = expected_dir / fixture_id / "context_pack.json"
@@ -911,6 +963,56 @@ def validate_interrupted_recovery_fixture(run_dir: Path) -> None:
             raise AssertionError(f"InterruptedRecoveryFixtureV1 forced-failure rejected for the wrong reason: {exc}") from exc
     else:
         raise AssertionError("InterruptedRecoveryFixtureV1 forced-failure unexpectedly accepted missing resumeTarget")
+
+
+def validate_committed_computer_runtime_contract() -> None:
+    contract = load_json(COMPUTER_RUNTIME_CONTRACT_PATH)
+    trajectory = load_json(TRAJECTORY_OBSERVATION_PATH)
+    try:
+        validate_computer_runtime_contract(contract)
+        validate_trajectory_observation(trajectory, contract)
+    except ValueError as exc:
+        raise AssertionError(f"Committed Phase 7 computer runtime contract failed validation: {exc}") from exc
+
+    expected_contract = build_computer_runtime_contract()
+    expected_trajectory = build_static_trajectory_observation()
+    if contract != expected_contract:
+        raise AssertionError("Committed Phase 7 computer runtime contract differs from deterministic builder output")
+    if trajectory != expected_trajectory:
+        raise AssertionError("Committed Phase 7 trajectory observation differs from deterministic builder output")
+
+    tampered_contract = json.loads(json.dumps(contract))
+    for capability in tampered_contract["capabilities"]:
+        if capability["name"] == "computer.click":
+            capability["executionAllowedInMvp"] = True
+            break
+    try:
+        validate_computer_runtime_contract(tampered_contract)
+    except ValueError as exc:
+        if "must not be executable in the MVP" not in str(exc):
+            raise AssertionError(f"ComputerRuntimeContractV1 forced-failure rejected for the wrong reason: {exc}") from exc
+    else:
+        raise AssertionError("ComputerRuntimeContractV1 forced-failure unexpectedly accepted executable computer.click")
+
+    tampered_trajectory = json.loads(json.dumps(trajectory))
+    tampered_trajectory["policy"]["runtimeExecutionPerformed"] = True
+    try:
+        validate_trajectory_observation(tampered_trajectory, contract)
+    except ValueError as exc:
+        if "no runtime execution" not in str(exc):
+            raise AssertionError(f"TrajectoryObservationV1 runtime forced-failure rejected for the wrong reason: {exc}") from exc
+    else:
+        raise AssertionError("TrajectoryObservationV1 forced-failure unexpectedly accepted runtime execution")
+
+    tampered_trajectory = json.loads(json.dumps(trajectory))
+    tampered_trajectory["observationEvents"][1]["executionState"] = "executed"
+    try:
+        validate_trajectory_observation(tampered_trajectory, contract)
+    except ValueError as exc:
+        if "must not contain executed computer actions" not in str(exc):
+            raise AssertionError(f"TrajectoryObservationV1 executed-action forced-failure rejected for the wrong reason: {exc}") from exc
+    else:
+        raise AssertionError("TrajectoryObservationV1 forced-failure unexpectedly accepted an executed computer action")
 
 
 def compare_artifact_packets(expected_dir: Path, actual_dir: Path) -> None:
@@ -1188,6 +1290,7 @@ def main() -> None:
     validate_committed_verifier_rule_catalog()
     validate_committed_context_packs()
     validate_interrupted_recovery_fixture(RECOVERY_FIXTURE_DIR)
+    validate_committed_computer_runtime_contract()
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_root = Path(temp_dir)
@@ -1216,6 +1319,15 @@ def main() -> None:
         generated_recovery = temp_root / "recovery"
         run_recovery_fixture_builder(generated_recovery)
         compare_interrupted_recovery_fixture(RECOVERY_FIXTURE_DIR, generated_recovery / "interrupted_after_extract")
+        generated_computer_runtime = temp_root / "computer-runtime"
+        generated_contract = generated_computer_runtime / "phase7_computer_runtime_contract.json"
+        generated_trajectory = generated_computer_runtime / "static_trajectory_observation.json"
+        run_computer_runtime_contract_builder(generated_contract, generated_trajectory)
+        if load_json(generated_contract) != load_json(COMPUTER_RUNTIME_CONTRACT_PATH):
+            raise AssertionError("Committed Phase 7 computer runtime contract differs from deterministic CLI output")
+        if load_json(generated_trajectory) != load_json(TRAJECTORY_OBSERVATION_PATH):
+            raise AssertionError("Committed Phase 7 trajectory observation differs from deterministic CLI output")
+        run_trajectory_observation_validator(COMPUTER_RUNTIME_CONTRACT_PATH, TRAJECTORY_OBSERVATION_PATH)
 
     print("Repository validation passed.")
 
