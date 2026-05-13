@@ -29,6 +29,7 @@ from fixture_runner import (
     verify_artifacts,
     write_json,
 )
+from run_control import build_run_control
 from task_spec import load_regression_task_spec, validate_task_spec_for_request
 
 
@@ -118,6 +119,7 @@ def write_local_run(
         "status": "completed" if report_status == "passed" else "failed",
         "generatedAt": GENERATED_AT,
     }
+    run["runControl"] = build_run_control(run, events)
 
     write_json(run_dir / "run.json", run)
     (run_dir / "events.jsonl").write_text("\n".join(json.dumps(event, sort_keys=True) for event in events) + "\n", encoding="utf-8")

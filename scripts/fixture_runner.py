@@ -11,6 +11,7 @@ from typing import Iterable
 
 from capability_contract import build_capability_envelope, capability_ref
 from evidence_list import build_evidence_list
+from run_control import build_run_control, enrich_step
 from task_spec import EXPECTED_ARTIFACTS, build_regression_task_spec
 from verifier_runtime import verify_artifacts
 
@@ -218,12 +219,14 @@ def build_email(fixture: Fixture, result: dict) -> str:
 
 
 def capability_step(step_id: str, capability: str, status: str) -> dict:
-    return {
+    step = {
         "id": step_id,
         "capability": capability,
         "capabilityRef": capability_ref(capability),
         "status": status,
     }
+    step.update(enrich_step(step_id, capability, status, status))
+    return step
 
 
 def build_run_steps(report_status: str) -> list[dict]:
@@ -309,6 +312,7 @@ def run_fixture(fixture: Fixture, out_dir: Path) -> dict:
         "status": "completed" if report_status == "passed" else "failed",
         "generatedAt": GENERATED_AT,
     }
+    run["runControl"] = build_run_control(run, events)
 
     write_json(run_dir / "run.json", run)
     (run_dir / "events.jsonl").write_text("\n".join(json.dumps(event, sort_keys=True) for event in events) + "\n", encoding="utf-8")

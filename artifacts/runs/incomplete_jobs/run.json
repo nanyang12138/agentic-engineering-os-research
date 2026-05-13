@@ -145,32 +145,174 @@
   "fixtureId": "incomplete_jobs",
   "generatedAt": "2026-05-12T14:39:00Z",
   "id": "run-incomplete_jobs-65b9735d",
+  "runControl": {
+    "permissionPolicy": {
+      "approvalPoints": [
+        "send_email_requires_human_approval"
+      ],
+      "capabilityPermissions": {
+        "extract_regression_result": "read",
+        "read_log": "read",
+        "rule_verifier": "read",
+        "write_artifact": "write"
+      },
+      "externalSideEffectsAllowed": false,
+      "forbiddenActions": [
+        "modify_repo_or_log",
+        "execute_external_side_effect",
+        "send_email",
+        "call_gui_desktop_cua_or_browser_capability",
+        "claim_all_passed_without_sufficient_evidence"
+      ],
+      "schemaVersion": "permission-policy-v1",
+      "writeBoundary": "local_artifact_output_only"
+    },
+    "recoverySnapshot": {
+      "artifactRefs": [
+        "evidence.json",
+        "regression_result.json",
+        "email_draft.md",
+        "run.json",
+        "events.jsonl",
+        "verifier_report.json"
+      ],
+      "inputRefs": [
+        "fixture.json",
+        "input.log",
+        "taskSpec",
+        "context_pack.json"
+      ],
+      "lastEventId": "event-incomplete_jobs-007",
+      "mode": "deterministic_replay_from_inputs",
+      "resumeFromState": "completed",
+      "runId": "run-incomplete_jobs-65b9735d",
+      "schemaVersion": "recovery-snapshot-v1"
+    },
+    "runState": {
+      "currentState": "completed",
+      "schemaVersion": "run-state-v1",
+      "terminal": true,
+      "transitions": [
+        {
+          "eventId": "event-incomplete_jobs-001",
+          "from": null,
+          "to": "created"
+        },
+        {
+          "eventId": "event-incomplete_jobs-002",
+          "from": "created",
+          "to": "planning"
+        },
+        {
+          "eventId": "event-incomplete_jobs-003",
+          "from": "planning",
+          "to": "waiting_context"
+        },
+        {
+          "eventId": "event-incomplete_jobs-004",
+          "from": "waiting_context",
+          "to": "running"
+        },
+        {
+          "eventId": "event-incomplete_jobs-005",
+          "from": "running",
+          "to": "verifying"
+        },
+        {
+          "eventId": "event-incomplete_jobs-006",
+          "from": "verifying",
+          "to": "completed"
+        }
+      ]
+    },
+    "schemaVersion": "run-control-v1"
+  },
   "schemaVersion": "run-v1",
   "status": "completed",
   "steps": [
     {
       "capability": "read_log",
       "capabilityRef": "capability://phase3/read_log",
+      "error": null,
       "id": "step-read-log",
-      "status": "completed"
+      "inputRefs": [
+        "taskSpec.inputLogPath"
+      ],
+      "outputRefs": [
+        "log_text"
+      ],
+      "permission": "read",
+      "retryPolicy": {
+        "maxAttempts": 1,
+        "mode": "deterministic_no_retry"
+      },
+      "status": "completed",
+      "timeoutMs": 1000
     },
     {
       "capability": "extract_regression_result",
       "capabilityRef": "capability://phase3/extract_regression_result",
+      "error": null,
       "id": "step-extract-regression-result",
-      "status": "completed"
+      "inputRefs": [
+        "log_text",
+        "run.json#/taskSpec"
+      ],
+      "outputRefs": [
+        "evidence.json",
+        "regression_result.json"
+      ],
+      "permission": "read",
+      "retryPolicy": {
+        "maxAttempts": 1,
+        "mode": "deterministic_no_retry"
+      },
+      "status": "completed",
+      "timeoutMs": 1000
     },
     {
       "capability": "write_artifact",
       "capabilityRef": "capability://phase3/write_artifact",
+      "error": null,
       "id": "step-write-artifact",
-      "status": "completed"
+      "inputRefs": [
+        "evidence.json",
+        "regression_result.json"
+      ],
+      "outputRefs": [
+        "email_draft.md",
+        "run.json",
+        "events.jsonl"
+      ],
+      "permission": "write",
+      "retryPolicy": {
+        "maxAttempts": 1,
+        "mode": "deterministic_no_retry"
+      },
+      "status": "completed",
+      "timeoutMs": 1000
     },
     {
       "capability": "rule_verifier",
       "capabilityRef": "capability://phase3/rule_verifier",
+      "error": null,
       "id": "step-verify",
-      "status": "passed"
+      "inputRefs": [
+        "run.json#/taskSpec",
+        "evidence.json",
+        "regression_result.json",
+        "email_draft.md"
+      ],
+      "outputRefs": [
+        "verifier_report.json"
+      ],
+      "permission": "read",
+      "retryPolicy": {
+        "maxAttempts": 1,
+        "mode": "deterministic_no_retry"
+      },
+      "status": "passed",
+      "timeoutMs": 1000
     }
   ],
   "task": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",

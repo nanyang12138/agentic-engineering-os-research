@@ -23,6 +23,7 @@ from evidence_list import (
     validate_evidence_list,
 )
 from fixture_runner import load_fixture
+from run_control import validate_run_control
 from task_spec import TASK_SPEC_SCHEMA_VERSION, build_regression_task_spec, validate_regression_task_spec
 from verifier_runtime import (
     REQUIRED_ARTIFACT_CHECK_IDS,
@@ -89,6 +90,7 @@ REQUIRED_FILES = [
     "scripts/capability_contract.py",
     "scripts/context_pack.py",
     "scripts/evidence_list.py",
+    "scripts/run_control.py",
     "scripts/verifier_runtime.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
@@ -108,6 +110,10 @@ PLAN_REQUIRED_MARKERS = [
     "verifier-runtime-v1",
     "verifier-rule-catalog-v1",
     "phase5_verifier_rule_catalog.json",
+    "run-control-v1",
+    "run-state-v1",
+    "permission-policy-v1",
+    "recovery-snapshot-v1",
     "EvidenceListV1",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
@@ -401,6 +407,7 @@ def validate_schema_structure(
             "artifacts",
             "status",
             "generatedAt",
+            "runControl",
         ],
     )
     if run["schemaVersion"] != "run-v1":
@@ -438,11 +445,32 @@ def validate_schema_structure(
     if not isinstance(run["steps"], list) or not run["steps"]:
         raise AssertionError(f"Fixture {fixture_id} run.steps must be a non-empty list")
     for step in run["steps"]:
-        require_fields(f"{fixture_id} step", step, ["id", "capability", "capabilityRef", "status"])
+        require_fields(
+            f"{fixture_id} step",
+            step,
+            [
+                "id",
+                "capability",
+                "capabilityRef",
+                "status",
+                "inputRefs",
+                "outputRefs",
+                "error",
+                "timeoutMs",
+                "retryPolicy",
+                "permission",
+            ],
+        )
         require_enum(f"{fixture_id} step.status", step["status"], STEP_STATUSES)
         if step["capability"] in PHASE3_CAPABILITY_NAMES:
             if step["capabilityRef"] != capability_ref(step["capability"]):
                 raise AssertionError(f"Fixture {fixture_id} step {step['id']} capabilityRef mismatch")
+        if not isinstance(step["inputRefs"], list) or not isinstance(step["outputRefs"], list):
+            raise AssertionError(f"Fixture {fixture_id} step {step['id']} inputRefs/outputRefs must be lists")
+        if not isinstance(step["timeoutMs"], int) or step["timeoutMs"] <= 0:
+            raise AssertionError(f"Fixture {fixture_id} step {step['id']} timeoutMs must be a positive integer")
+        if not isinstance(step["retryPolicy"], dict):
+            raise AssertionError(f"Fixture {fixture_id} step {step['id']} retryPolicy must be an object")
 
     require_fields(f"{fixture_id} evidence.json", evidence, ["schemaVersion", "id", "fixtureId", "artifactBacklinks", "items"])
     if evidence["schemaVersion"] != "evidence-list-v1":
@@ -552,6 +580,10 @@ def validate_schema_structure(
                 raise AssertionError(f"{event_label}.capability must be {expected_capability}")
             if event["capabilityRef"] != capability_ref(expected_capability):
                 raise AssertionError(f"{event_label}.capabilityRef mismatch")
+    try:
+        validate_run_control(run["runControl"], run, events)
+    except ValueError as exc:
+        raise AssertionError(f"Fixture {fixture_id} RunControlV1 failed validation: {exc}") from exc
 
 
 def validate_artifact_packet(base_dir: Path) -> None:
@@ -779,6 +811,25 @@ def run_evidence_list_validator(fixture_id: str) -> None:
         )
 
 
+def run_run_control_validator(fixture_id: str) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/run_control.py"),
+        "--run",
+        str(ARTIFACT_DIR / fixture_id / "run.json"),
+        "--events",
+        str(ARTIFACT_DIR / fixture_id / "events.jsonl"),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "RunControlV1 validator failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def compare_context_packs(expected_dir: Path, actual_dir: Path) -> None:
     for fixture_id in FIXTURE_IDS:
         expected = expected_dir / fixture_id / "context_pack.json"
@@ -892,6 +943,27 @@ def remove_rule_verifier_step_ref(tampered_dir: Path) -> None:
     write_json(run_path, run)
 
 
+def break_run_control_transition(tampered_dir: Path) -> None:
+    run_path = tampered_dir / "all_passed/run.json"
+    run = load_json(run_path)
+    run["runControl"]["runState"]["transitions"][2]["from"] = "created"
+    write_json(run_path, run)
+
+
+def break_permission_policy(tampered_dir: Path) -> None:
+    run_path = tampered_dir / "all_passed/run.json"
+    run = load_json(run_path)
+    run["runControl"]["permissionPolicy"]["capabilityPermissions"]["write_artifact"] = "dangerous"
+    write_json(run_path, run)
+
+
+def break_recovery_snapshot_inputs(tampered_dir: Path) -> None:
+    run_path = tampered_dir / "all_passed/run.json"
+    run = load_json(run_path)
+    run["runControl"]["recoverySnapshot"]["inputRefs"] = ["input.log"]
+    write_json(run_path, run)
+
+
 def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
     scratch_root.mkdir(parents=True, exist_ok=True)
     expect_artifact_validation_failure(
@@ -943,6 +1015,28 @@ def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
         remove_rule_verifier_step_ref,
         "missing required fields",
     )
+    expect_artifact_validation_failure(
+        "broken_run_control_transition",
+        source_dir,
+        scratch_root,
+        break_run_control_transition,
+        "RunControlV1 failed validation",
+    )
+    expect_artifact_validation_failure(
+        "dangerous_write_permission",
+        source_dir,
+        scratch_root,
+        break_permission_policy,
+        "RunControlV1 failed validation",
+    )
+    expect_artifact_validation_failure(
+        "missing_recovery_inputs",
+        source_dir,
+        scratch_root,
+        break_recovery_snapshot_inputs,
+        "RunControlV1 failed validation",
+    )
+
 
 
 def expect_task_spec_validation_failure(label: str, task_spec: dict, expected_message_fragment: str) -> None:
@@ -1032,6 +1126,7 @@ def main() -> None:
             raise AssertionError("Committed verifier rule catalog differs from deterministic CLI output")
         for fixture_id in FIXTURE_IDS:
             run_evidence_list_validator(fixture_id)
+            run_run_control_validator(fixture_id)
         generated_artifacts = temp_root / "runs"
         run_fixture_runner(generated_artifacts)
         validate_artifact_packet(generated_artifacts)
