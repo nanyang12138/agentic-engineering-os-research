@@ -41,6 +41,7 @@ ARTIFACT_DIR = ROOT / "artifacts/runs"
 CAPABILITY_CATALOG_PATH = ROOT / "artifacts/capabilities/phase3_capability_catalog.json"
 CONTEXT_PACK_DIR = ROOT / "artifacts/context"
 VERIFIER_RULE_CATALOG_PATH = ROOT / "artifacts/verifier/phase5_verifier_rule_catalog.json"
+RECOVERY_FIXTURE_DIR = ROOT / "artifacts/recovery/interrupted_after_extract"
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -91,9 +92,12 @@ REQUIRED_FILES = [
     "scripts/context_pack.py",
     "scripts/evidence_list.py",
     "scripts/run_control.py",
+    "scripts/recovery_fixture.py",
     "scripts/verifier_runtime.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
+    "artifacts/recovery/interrupted_after_extract/run.json",
+    "artifacts/recovery/interrupted_after_extract/events.jsonl",
 ]
 
 PLAN_REQUIRED_MARKERS = [
@@ -115,6 +119,7 @@ PLAN_REQUIRED_MARKERS = [
     "run-control-v1",
     "permission-policy-v1",
     "recovery-snapshot-v1",
+    "InterruptedRecoveryFixtureV1",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -809,6 +814,25 @@ def run_run_control_validator(fixture_id: str) -> None:
         )
 
 
+def run_recovery_fixture_builder(out_dir: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/recovery_fixture.py"),
+        "--source-fixture-dir",
+        str(FIXTURE_DIR / "all_passed"),
+        "--out-dir",
+        str(out_dir),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "InterruptedRecoveryFixtureV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def compare_context_packs(expected_dir: Path, actual_dir: Path) -> None:
     for fixture_id in FIXTURE_IDS:
         expected = expected_dir / fixture_id / "context_pack.json"
@@ -819,6 +843,74 @@ def compare_context_packs(expected_dir: Path, actual_dir: Path) -> None:
             raise AssertionError(
                 f"Committed ContextPack {expected.relative_to(ROOT)} differs from deterministic CLI output"
             )
+
+
+def compare_interrupted_recovery_fixture(expected_dir: Path, actual_dir: Path) -> None:
+    for filename in ["run.json", "events.jsonl"]:
+        expected = expected_dir / filename
+        actual = actual_dir / filename
+        if not actual.is_file():
+            raise AssertionError(f"InterruptedRecoveryFixtureV1 builder did not emit {filename}")
+        if not filecmp.cmp(expected, actual, shallow=False):
+            raise AssertionError(
+                f"Committed InterruptedRecoveryFixtureV1 {expected.relative_to(ROOT)} differs from deterministic CLI output"
+            )
+
+
+def load_jsonl(path: Path) -> list[dict]:
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def validate_interrupted_recovery_fixture(run_dir: Path) -> None:
+    run_path = run_dir / "run.json"
+    events_path = run_dir / "events.jsonl"
+    if not run_path.is_file() or not events_path.is_file():
+        raise AssertionError("Missing InterruptedRecoveryFixtureV1 run.json/events.jsonl artifacts")
+
+    run = load_json(run_path)
+    events = load_jsonl(events_path)
+    try:
+        validate_run_control(run, events)
+    except ValueError as exc:
+        raise AssertionError(f"InterruptedRecoveryFixtureV1 failed RunControlV1 validation: {exc}") from exc
+
+    if run["status"] != "interrupted":
+        raise AssertionError("InterruptedRecoveryFixtureV1 run.status must be interrupted")
+    if run.get("artifactRoot") != "artifacts/recovery":
+        raise AssertionError("InterruptedRecoveryFixtureV1 artifactRoot must be artifacts/recovery")
+    control = run["runControl"]
+    snapshot = control["recoverySnapshot"]
+    if control["currentState"] != "running":
+        raise AssertionError("InterruptedRecoveryFixtureV1 currentState must be running")
+    if events[-1]["type"] != "capability.extract_regression_result.completed":
+        raise AssertionError("InterruptedRecoveryFixtureV1 must stop after result extraction")
+    if snapshot["resumeMode"] != "from_last_event":
+        raise AssertionError("InterruptedRecoveryFixtureV1 resumeMode must be from_last_event")
+    if snapshot["nextAction"] != "resume_step":
+        raise AssertionError("InterruptedRecoveryFixtureV1 nextAction must be resume_step")
+    resume_target = snapshot.get("resumeTarget")
+    if resume_target != {
+        "capability": "write_artifact",
+        "capabilityRef": capability_ref("write_artifact"),
+        "inputRef": "regression_result_candidate",
+        "reason": "resume_after_last_completed_event",
+        "stepId": "step-write-artifact",
+    }:
+        raise AssertionError("InterruptedRecoveryFixtureV1 resumeTarget must point to step-write-artifact")
+
+    tampered = json.loads(json.dumps(run))
+    del tampered["runControl"]["recoverySnapshot"]["resumeTarget"]
+    try:
+        validate_run_control(tampered, events)
+    except ValueError as exc:
+        if "non-terminal snapshots must include resumeTarget" not in str(exc):
+            raise AssertionError(f"InterruptedRecoveryFixtureV1 forced-failure rejected for the wrong reason: {exc}") from exc
+    else:
+        raise AssertionError("InterruptedRecoveryFixtureV1 forced-failure unexpectedly accepted missing resumeTarget")
 
 
 def compare_artifact_packets(expected_dir: Path, actual_dir: Path) -> None:
@@ -1095,6 +1187,7 @@ def main() -> None:
     validate_committed_capability_catalog()
     validate_committed_verifier_rule_catalog()
     validate_committed_context_packs()
+    validate_interrupted_recovery_fixture(RECOVERY_FIXTURE_DIR)
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_root = Path(temp_dir)
@@ -1120,6 +1213,9 @@ def main() -> None:
         generated_context_packs = temp_root / "context"
         run_context_pack_builder(generated_context_packs)
         compare_context_packs(CONTEXT_PACK_DIR, generated_context_packs)
+        generated_recovery = temp_root / "recovery"
+        run_recovery_fixture_builder(generated_recovery)
+        compare_interrupted_recovery_fixture(RECOVERY_FIXTURE_DIR, generated_recovery / "interrupted_after_extract")
 
     print("Repository validation passed.")
 
