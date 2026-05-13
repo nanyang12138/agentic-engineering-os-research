@@ -1,0 +1,66 @@
+{
+  "adapterRef": "ide-adapter://phase8/cursor-placeholder",
+  "contractRef": "artifacts/ide_adapter/phase8_ide_adapter_contract.json",
+  "externalSideEffect": false,
+  "fixtureId": "all_passed",
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "phase8-static-workspace-observation-all_passed",
+  "mode": "static_fixture_only",
+  "observations": [
+    {
+      "assertion": "IDE workspace observations can provide context refs, but task verdicts remain owned by EvidenceListV1 and VerifierRuntimeV1.",
+      "capability": "ide.workspace.inspect",
+      "capabilityRef": "ide-adapter://phase8/ide.workspace.inspect",
+      "id": "workspace-observation-001",
+      "kind": "workspace_snapshot",
+      "lineRange": [
+        4,
+        4
+      ],
+      "sourcePath": "fixtures/regression/all_passed/input.log",
+      "sourceRef": "artifacts/context/all_passed/context_pack.json#contextItems/ctx-log-evidence-001",
+      "textHash": "d04d89e743f59cd96444043e266f66896c18a18356b2f75f909bcb74deaa48b8",
+      "workspaceRef": "workspace://repo/agentic-engineering-os-research"
+    }
+  ],
+  "policy": {
+    "noExternalSideEffects": true,
+    "noIdeUiAutomationExecuted": true,
+    "noTerminalExecuted": true,
+    "requiresVerifierForTaskVerdict": true,
+    "workspaceMutationAllowed": false
+  },
+  "provider": "static_fixture",
+  "runId": "run-all_passed-988940c2",
+  "schemaVersion": "workspace-observation-v1",
+  "sourceArtifacts": [
+    {
+      "contentHash": "81f2b253be3fe0ef40b80ec6d70a9ec14421e38b67e3cfc05264616e28d69505",
+      "path": "artifacts/ide_adapter/phase8_ide_adapter_contract.json",
+      "role": "ide_adapter_contract"
+    },
+    {
+      "contentHash": "66316ecb6dc942efe906c562f63fe9603f13a953ba85cd345d7c19fbc7827950",
+      "path": "artifacts/context/all_passed/context_pack.json",
+      "role": "context_pack"
+    },
+    {
+      "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
+      "path": "artifacts/runs/all_passed/run.json",
+      "role": "run"
+    }
+  ],
+  "workspace": {
+    "currentFile": "fixtures/regression/all_passed/input.log",
+    "currentFileHash": "5c9da2f9a45eef15aed742fa187b999b8fe34b1dacd72cd75cd6558f5f8b94bd",
+    "repository": "nanyang12138/agentic-engineering-os-research",
+    "root": ".",
+    "visibleFiles": [
+      "README.md",
+      ".cursor/plans/agentic-control-plane.plan.md",
+      "scripts/local_readonly_runner.py",
+      "fixtures/regression/all_passed/input.log"
+    ],
+    "workspaceRef": "workspace://repo/agentic-engineering-os-research"
+  }
+}

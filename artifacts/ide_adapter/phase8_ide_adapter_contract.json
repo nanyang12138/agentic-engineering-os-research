@@ -1,0 +1,275 @@
+{
+  "adapterBoundary": {
+    "adapterResponsibilities": [
+      "expose IDE workspace, current file, diagnostics, diff view, terminal request, and approval surfaces behind capability contracts",
+      "emit workspace observations with stable repository-relative source refs",
+      "avoid deciding whether an engineering task is complete"
+    ],
+    "layer": "Interaction Plane / IDE Adapter",
+    "mvpInvariant": "Phase 8 MVP declares IDE adapter boundaries only; it does not open files, run terminals, mutate workspace state, or call a real IDE provider.",
+    "osResponsibilities": [
+      "own TaskSpec, RunControl, ContextPack, Evidence, Verifier, Policy, and Delivery semantics",
+      "decide whether IDE observations are sufficient evidence for a task",
+      "require approval before any real IDE UI, terminal, or workspace side effect executes"
+    ]
+  },
+  "adapterRef": "ide-adapter://phase8/cursor-placeholder",
+  "buildVsIntegrate": {
+    "build": [
+      "IDEAdapterContractV1 schema",
+      "WorkspaceObservationV1 artifact contract",
+      "machine validation for read-only workspace observation and no IDE side effects"
+    ],
+    "integrateLater": [
+      "real Cursor/IDE extension bridge",
+      "diagnostics streaming",
+      "terminal execution",
+      "diff view and approval UI",
+      "workspace registry service"
+    ]
+  },
+  "capabilities": [
+    {
+      "approvalRequired": false,
+      "category": "workspace",
+      "executionMode": "contract_only",
+      "externalSideEffectAllowed": false,
+      "implemented": false,
+      "inputContract": {
+        "properties": {
+          "workspaceRef": "string:workspace-ref"
+        },
+        "required": [
+          "workspaceRef"
+        ],
+        "schema": "IdeWorkspaceInspectInputV1"
+      },
+      "name": "ide.workspace.inspect",
+      "observationContract": {
+        "produces": [
+          "workspaceObservation"
+        ],
+        "properties": {
+          "workspaceObservation": "workspace-observation-v1"
+        },
+        "schema": "WorkspaceObservationV1"
+      },
+      "permission": "read",
+      "ref": "ide-adapter://phase8/ide.workspace.inspect",
+      "schemaVersion": "ide-adapter-capability-v1",
+      "sideEffectRisk": "workspace_metadata_observation"
+    },
+    {
+      "approvalRequired": false,
+      "category": "workspace",
+      "executionMode": "contract_only",
+      "externalSideEffectAllowed": false,
+      "implemented": false,
+      "inputContract": {
+        "properties": {
+          "workspaceRef": "string:workspace-ref"
+        },
+        "required": [
+          "workspaceRef"
+        ],
+        "schema": "IdeCurrentFileReadInputV1"
+      },
+      "name": "ide.current_file.read",
+      "observationContract": {
+        "produces": [
+          "currentFileRef"
+        ],
+        "properties": {
+          "currentFileRef": "string:path"
+        },
+        "schema": "IdeCurrentFileObservationV1"
+      },
+      "permission": "read",
+      "ref": "ide-adapter://phase8/ide.current_file.read",
+      "schemaVersion": "ide-adapter-capability-v1",
+      "sideEffectRisk": "current_editor_metadata_observation"
+    },
+    {
+      "approvalRequired": false,
+      "category": "diagnostics",
+      "executionMode": "contract_only",
+      "externalSideEffectAllowed": false,
+      "implemented": false,
+      "inputContract": {
+        "properties": {
+          "workspaceRef": "string:workspace-ref"
+        },
+        "required": [
+          "workspaceRef"
+        ],
+        "schema": "IdeDiagnosticsReadInputV1"
+      },
+      "name": "ide.diagnostics.read",
+      "observationContract": {
+        "produces": [
+          "diagnosticsRef"
+        ],
+        "properties": {
+          "diagnosticsRef": "string:observation-ref"
+        },
+        "schema": "IdeDiagnosticsObservationV1"
+      },
+      "permission": "read",
+      "ref": "ide-adapter://phase8/ide.diagnostics.read",
+      "schemaVersion": "ide-adapter-capability-v1",
+      "sideEffectRisk": "diagnostics_observation"
+    },
+    {
+      "approvalRequired": true,
+      "category": "editor",
+      "executionMode": "contract_only",
+      "externalSideEffectAllowed": false,
+      "implemented": false,
+      "inputContract": {
+        "properties": {
+          "path": "string:repo-relative-path",
+          "workspaceRef": "string:workspace-ref"
+        },
+        "required": [
+          "workspaceRef",
+          "path"
+        ],
+        "schema": "IdeOpenFileInputV1"
+      },
+      "name": "ide.open_file",
+      "observationContract": {
+        "produces": [
+          "editorStateRef"
+        ],
+        "properties": {
+          "editorStateRef": "string:observation-ref"
+        },
+        "schema": "IdeUiActionObservationV1"
+      },
+      "permission": "write",
+      "ref": "ide-adapter://phase8/ide.open_file",
+      "schemaVersion": "ide-adapter-capability-v1",
+      "sideEffectRisk": "ide_ui_state_change"
+    },
+    {
+      "approvalRequired": true,
+      "category": "diff",
+      "executionMode": "contract_only",
+      "externalSideEffectAllowed": false,
+      "implemented": false,
+      "inputContract": {
+        "properties": {
+          "artifactRef": "string:artifact-ref",
+          "workspaceRef": "string:workspace-ref"
+        },
+        "required": [
+          "workspaceRef",
+          "artifactRef"
+        ],
+        "schema": "IdeDiffViewOpenInputV1"
+      },
+      "name": "ide.diff_view.open",
+      "observationContract": {
+        "produces": [
+          "diffViewRef"
+        ],
+        "properties": {
+          "diffViewRef": "string:observation-ref"
+        },
+        "schema": "IdeUiActionObservationV1"
+      },
+      "permission": "write",
+      "ref": "ide-adapter://phase8/ide.diff_view.open",
+      "schemaVersion": "ide-adapter-capability-v1",
+      "sideEffectRisk": "ide_ui_state_change"
+    },
+    {
+      "approvalRequired": true,
+      "category": "terminal",
+      "executionMode": "contract_only",
+      "externalSideEffectAllowed": false,
+      "implemented": false,
+      "inputContract": {
+        "properties": {
+          "command": "string:approved-command",
+          "workspaceRef": "string:workspace-ref"
+        },
+        "required": [
+          "workspaceRef",
+          "command"
+        ],
+        "schema": "IdeTerminalRequestInputV1"
+      },
+      "name": "ide.terminal.request",
+      "observationContract": {
+        "produces": [
+          "approvalRequestRef"
+        ],
+        "properties": {
+          "approvalRequestRef": "string:human-gate-ref"
+        },
+        "schema": "IdeTerminalRequestObservationV1"
+      },
+      "permission": "dangerous",
+      "ref": "ide-adapter://phase8/ide.terminal.request",
+      "schemaVersion": "ide-adapter-capability-v1",
+      "sideEffectRisk": "process_or_filesystem_mutation"
+    },
+    {
+      "approvalRequired": false,
+      "category": "human_gate",
+      "executionMode": "contract_only",
+      "externalSideEffectAllowed": false,
+      "implemented": false,
+      "inputContract": {
+        "properties": {
+          "approvalPoint": "string:approval-point",
+          "runRef": "string:run-ref"
+        },
+        "required": [
+          "runRef",
+          "approvalPoint"
+        ],
+        "schema": "IdeApprovalRequestInputV1"
+      },
+      "name": "ide.approval.request",
+      "observationContract": {
+        "produces": [
+          "approvalDecisionRef"
+        ],
+        "properties": {
+          "approvalDecisionRef": "string:human-decision-ref"
+        },
+        "schema": "IdeApprovalObservationV1"
+      },
+      "permission": "read",
+      "ref": "ide-adapter://phase8/ide.approval.request",
+      "schemaVersion": "ide-adapter-capability-v1",
+      "sideEffectRisk": "approval_prompt_only"
+    }
+  ],
+  "id": "phase8-static-ide-adapter-contract",
+  "mode": "static_contract_only",
+  "phase": "phase8",
+  "policy": {
+    "dangerousCapabilitiesRequireApproval": true,
+    "externalSideEffectsAllowed": false,
+    "realIdeExecutionAllowed": false,
+    "terminalExecutionAllowed": false,
+    "workspaceMutationAllowed": false
+  },
+  "schemaVersion": "ide-adapter-contract-v1",
+  "scope": "ide_adapter_boundary",
+  "workspaceObservationContract": {
+    "allowedObservationKinds": [
+      "workspace_snapshot"
+    ],
+    "requiredBindings": [
+      "workspaceRef",
+      "sourceArtifacts",
+      "capabilityRef"
+    ],
+    "schemaVersion": "workspace-observation-v1",
+    "taskVerdictOwner": "verifier-runtime-v1"
+  }
+}
