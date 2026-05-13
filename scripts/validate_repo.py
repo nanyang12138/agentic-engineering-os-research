@@ -41,6 +41,11 @@ from evaluation_report import (
     build_evaluation_report,
     validate_evaluation_report,
 )
+from durable_run_store import (
+    STORE_ARTIFACT_PATH as DURABLE_RUN_STORE_ARTIFACT_PATH,
+    build_durable_run_store,
+    validate_durable_run_store,
+)
 from human_approval import (
     DECISION_ARTIFACT_PATH as HUMAN_APPROVAL_DECISION_ARTIFACT_PATH,
     build_human_approval_decision,
@@ -96,6 +101,7 @@ MULTI_AGENT_DELIVERY_MANIFEST_PATH = ROOT / MULTI_AGENT_DELIVERY_MANIFEST_ARTIFA
 DELIVERY_REPORT_PATH = ROOT / DELIVERY_REPORT_ARTIFACT_PATH
 HUMAN_APPROVAL_DECISION_PATH = ROOT / HUMAN_APPROVAL_DECISION_ARTIFACT_PATH
 EVALUATION_REPORT_PATH = ROOT / EVALUATION_REPORT_ARTIFACT_PATH
+DURABLE_RUN_STORE_PATH = ROOT / DURABLE_RUN_STORE_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -152,6 +158,7 @@ REQUIRED_FILES = [
     "scripts/ide_adapter.py",
     "scripts/multi_agent_delivery.py",
     "scripts/human_approval.py",
+    "scripts/durable_run_store.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
     "artifacts/recovery/interrupted_after_extract/run.json",
@@ -166,6 +173,7 @@ REQUIRED_FILES = [
     "artifacts/delivery/phase9_multi_agent_delivery_manifest.json",
     "artifacts/delivery/phase9_delivery_report.json",
     "artifacts/approval/phase9_human_approval_decision_fixture.json",
+    "artifacts/state/post_mvp_durable_run_store.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -222,6 +230,9 @@ PLAN_REQUIRED_MARKERS = [
     "HumanApprovalDecisionV1",
     "human-approval-decision-v1",
     "phase9_human_approval_decision_fixture.json",
+    "DurableRunStoreV1",
+    "durable-run-store-v1",
+    "post_mvp_durable_run_store.json",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -1806,6 +1817,106 @@ def run_human_approval_decision_builder(decision_out: Path) -> None:
         )
 
 
+def expect_durable_run_store_validation_failure(
+    label: str,
+    store: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_durable_run_store(store, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"DurableRunStoreV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"DurableRunStoreV1 forced-failure case {label} unexpectedly passed validation")
+
+
+def validate_committed_durable_run_store_artifact() -> None:
+    store = load_json(DURABLE_RUN_STORE_PATH)
+    try:
+        validate_durable_run_store(store, ROOT)
+    except ValueError as exc:
+        raise AssertionError(f"Committed DurableRunStoreV1 artifact failed validation: {exc}") from exc
+
+    expected_store = build_durable_run_store(ROOT)
+    if store != expected_store:
+        raise AssertionError("Committed DurableRunStoreV1 artifact differs from deterministic builder output")
+
+    tampered_store = json.loads(json.dumps(store))
+    tampered_store["persistencePolicy"]["databaseUsed"] = True
+    expect_durable_run_store_validation_failure(
+        "database_enabled",
+        tampered_store,
+        "must remain a static JSON fixture without a database",
+    )
+
+    tampered_store = json.loads(json.dumps(store))
+    tampered_store["persistencePolicy"]["externalSideEffectsAllowed"] = True
+    expect_durable_run_store_validation_failure(
+        "external_side_effects_allowed",
+        tampered_store,
+        "must disallow external side effects",
+    )
+
+    tampered_store = json.loads(json.dumps(store))
+    tampered_store["runIndex"]["appendOnlyEventIds"] = list(reversed(tampered_store["runIndex"]["appendOnlyEventIds"]))
+    expect_durable_run_store_validation_failure(
+        "event_order_drift",
+        tampered_store,
+        "append-only event ids must match",
+    )
+
+    tampered_store = json.loads(json.dumps(store))
+    tampered_store["runIndex"]["eventLogContentHash"] = "0" * 64
+    expect_durable_run_store_validation_failure(
+        "event_log_hash_mismatch",
+        tampered_store,
+        "event log content hash must match",
+    )
+
+    tampered_store = json.loads(json.dumps(store))
+    tampered_store["sourceArtifacts"] = [
+        source
+        for source in tampered_store["sourceArtifacts"]
+        if source.get("role") != "human_approval_decision"
+    ]
+    expect_durable_run_store_validation_failure(
+        "missing_human_approval_source",
+        tampered_store,
+        "source roles must equal",
+    )
+
+    tampered_store = json.loads(json.dumps(store))
+    tampered_store["approvalIndex"]["approvalGranted"] = True
+    expect_durable_run_store_validation_failure(
+        "approval_granted",
+        tampered_store,
+        "must not grant external delivery approval",
+    )
+
+
+def run_durable_run_store_builder(store_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/durable_run_store.py"),
+        "--store-out",
+        str(store_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "DurableRunStoreV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -2197,6 +2308,7 @@ def main() -> None:
     validate_committed_multi_agent_delivery_artifact()
     validate_committed_delivery_report_artifact()
     validate_committed_human_approval_decision_artifact()
+    validate_committed_durable_run_store_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -2266,6 +2378,10 @@ def main() -> None:
         run_human_approval_decision_builder(generated_human_approval_decision)
         if load_json(generated_human_approval_decision) != load_json(HUMAN_APPROVAL_DECISION_PATH):
             raise AssertionError("Committed HumanApprovalDecisionV1 artifact differs from deterministic CLI output")
+        generated_durable_run_store = temp_root / "post_mvp_durable_run_store.json"
+        run_durable_run_store_builder(generated_durable_run_store)
+        if load_json(generated_durable_run_store) != load_json(DURABLE_RUN_STORE_PATH):
+            raise AssertionError("Committed DurableRunStoreV1 artifact differs from deterministic CLI output")
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)
         if load_json(generated_evaluation_report) != load_json(EVALUATION_REPORT_PATH):
