@@ -1,0 +1,114 @@
+{
+  "approvalIndex": {
+    "approvalDecisionSynthesized": false,
+    "approvalGranted": false,
+    "decisionId": "human-decision-all_passed-send-email-rejected",
+    "externalDeliveryAllowed": false,
+    "externalSideEffectsAllowed": false,
+    "humanDecisionRecorded": true,
+    "postDecisionBlockers": [
+      "human_approval_not_granted",
+      "external_delivery_disabled_by_mvp_policy"
+    ],
+    "sendEmailAllowed": false,
+    "taskVerdictOverrideAllowed": false
+  },
+  "deliveryIndex": {
+    "blockers": [
+      "human_approval_missing",
+      "external_delivery_disabled_by_mvp_policy"
+    ],
+    "deliveryReportId": "phase9-delivery-report-all_passed",
+    "externalSideEffectsAllowed": false,
+    "readyForExternalDelivery": false,
+    "readyForHumanReview": true,
+    "sendEmailAllowed": false
+  },
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "post-mvp-durable-run-store-fixture-all_passed",
+  "invariants": [
+    "DurableRunStoreV1 is a source-bound replay index, not a database or scheduler.",
+    "Events remain append-only and must match the committed events.jsonl order and hash.",
+    "Delivery and human approval state remain blocked from external side effects."
+  ],
+  "mode": "static_json_index_only",
+  "persistencePolicy": {
+    "appendOnlyEventsRequired": true,
+    "databaseUsed": false,
+    "durableBackendImplemented": false,
+    "externalSideEffectsAllowed": false,
+    "realProviderExecutionAllowed": false,
+    "replayOnly": true,
+    "sourceHashValidationRequired": true,
+    "storageMode": "committed_json_fixture"
+  },
+  "phase": "post_mvp",
+  "replayPlan": {
+    "replayMode": "source_hash_bound_replay",
+    "requiredInputs": [
+      "artifacts/runs/all_passed/run.json",
+      "artifacts/runs/all_passed/events.jsonl",
+      "artifacts/delivery/phase9_delivery_report.json",
+      "artifacts/approval/phase9_human_approval_decision_fixture.json"
+    ],
+    "verificationCommand": "/usr/bin/python3 scripts/validate_repo.py"
+  },
+  "runIndex": {
+    "appendOnlyEventIds": [
+      "event-all_passed-001",
+      "event-all_passed-002",
+      "event-all_passed-003",
+      "event-all_passed-004",
+      "event-all_passed-005",
+      "event-all_passed-006",
+      "event-all_passed-007"
+    ],
+    "currentState": "completed",
+    "deliveryReportRef": "artifacts/delivery/phase9_delivery_report.json",
+    "eventCount": 7,
+    "eventLogContentHash": "02f5a82d1765a4443aae0d3c50502e7ee0ae6e3dcd1c2201b6e2a83daae4a6fc",
+    "eventsRef": "artifacts/runs/all_passed/events.jsonl",
+    "fixtureId": "all_passed",
+    "humanApprovalDecisionRef": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+    "lastEventId": "event-all_passed-007",
+    "permissionPolicyRef": "permission-policy-all_passed",
+    "recoverySnapshotRef": "artifacts/runs/all_passed/run.json#runControl.recoverySnapshot",
+    "runContentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
+    "runId": "run-all_passed-988940c2",
+    "runRef": "artifacts/runs/all_passed/run.json",
+    "runStatus": "completed",
+    "taskSpecRef": "artifacts/runs/all_passed/run.json#taskSpec"
+  },
+  "schemaVersion": "durable-run-store-v1",
+  "scope": "durable_run_store_fixture",
+  "sourceArtifacts": [
+    {
+      "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
+      "path": "artifacts/runs/all_passed/run.json",
+      "role": "run"
+    },
+    {
+      "contentHash": "02f5a82d1765a4443aae0d3c50502e7ee0ae6e3dcd1c2201b6e2a83daae4a6fc",
+      "path": "artifacts/runs/all_passed/events.jsonl",
+      "role": "events"
+    },
+    {
+      "contentHash": "2a340e1323b927385a2844f59110439d3ff12078c37f63a874287b006bdf8e5e",
+      "path": "artifacts/delivery/phase9_delivery_report.json",
+      "role": "delivery_report"
+    },
+    {
+      "contentHash": "99b6e4391d1fd0111b375c3393f20374f3c37419f3c4d6a043c1dc2eebdcb017",
+      "path": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+      "role": "human_approval_decision"
+    }
+  ],
+  "stateIndex": {
+    "currentState": "completed",
+    "nextAction": "none_terminal",
+    "recoveryMode": "terminal_replay_only",
+    "replayArtifactCount": 6,
+    "resumeFromEventId": "event-all_passed-007",
+    "terminal": true
+  }
+}

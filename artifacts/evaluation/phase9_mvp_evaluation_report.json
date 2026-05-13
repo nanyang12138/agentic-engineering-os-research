@@ -56,7 +56,7 @@
   "nextRecommendedSlice": {
     "mustRemainMachineVerifiable": true,
     "phase": "post_mvp",
-    "slice": "Add a durable run store fixture only after preserving the current no-side-effect MVP contract and HumanApprovalDecisionV1 source binding."
+    "slice": "Add a replay query fixture over DurableRunStoreV1 or an identity-bound approval backend fixture while preserving the no-side-effect contract."
   },
   "outOfScope": [
     {
@@ -263,7 +263,7 @@
   "scope": "read_only_regression_evidence_demo_mvp_completion",
   "sourceArtifacts": [
     {
-      "contentHash": "d467911092938f7e1a3cf65d285d749f277a9bfcda5cd8030c98b22d2157eff0",
+      "contentHash": "6f959777c23259e773cb525b5af2bc86b8ed209d90631b44edfdbde784ed8fd8",
       "path": "scripts/validate_repo.py",
       "role": "validation_script"
     },
@@ -281,6 +281,11 @@
       "contentHash": "63b0bf38ff0d41c8480252ad3dd59859faac0890b7b24cedafb1105b521b9391",
       "path": "scripts/task_spec.py",
       "role": "phase2_task_spec_script"
+    },
+    {
+      "contentHash": "5e56232ecc5b158136cf3e0d9c40432e6c5245071b9f28ad16a1da48a39e31f4",
+      "path": "scripts/durable_run_store.py",
+      "role": "post_mvp_durable_run_store_script"
     },
     {
       "contentHash": "531bbbbb30b4793d94effe78c4e1ce37d79ceb0f53b5c3da9d652f7ecf465d1a",
@@ -351,6 +356,11 @@
       "contentHash": "99b6e4391d1fd0111b375c3393f20374f3c37419f3c4d6a043c1dc2eebdcb017",
       "path": "artifacts/approval/phase9_human_approval_decision_fixture.json",
       "role": "post_mvp_human_approval_decision"
+    },
+    {
+      "contentHash": "5e57764de6e9c125d9644d0e4a6797bf8922e5fe346062b77a8dc7c50f7cd0af",
+      "path": "artifacts/state/post_mvp_durable_run_store.json",
+      "role": "post_mvp_durable_run_store"
     },
     {
       "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",

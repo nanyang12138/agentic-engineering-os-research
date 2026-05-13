@@ -1204,6 +1204,26 @@ Build vs Integrate：
 
 当前 whole-plan contract-only MVP gate 已满足：主链路 Intent -> Spec -> Plan -> DAG/Step -> ToolCall/Capability -> Observation -> Evidence -> Artifact -> Delivery 已由 Phase 1a-9 的 deterministic artifacts 和 `EvaluationReportV1` 汇总验证。完整 Agentic Engineering OS 产品仍在进行中，因为真实 durable runtime、approval backend、provider integrations、external delivery 和 learning analytics 明确后移。
 
+#### Post-MVP DurableRunStoreV1 Static Replay Index Gate
+
+2026-05-13 22:02 UTC 自动化实现结论：Phase 1a-9 contract-only MVP 和 HumanApprovalDecisionV1 fixture 已完成后，最早有价值的 post-MVP 前置切片不是接入 SQLite、Temporal、LangGraph checkpoint、真实 worker lease 或 provider runtime，而是先把当前 `all_passed` Run、append-only `events.jsonl`、`DeliveryReportV1` 和 `HumanApprovalDecisionV1` 收敛成一个 source-hash-bound replay index。这个 gate 证明 durable state store 的核心契约是“可重放、可校验、不可绕过 policy”，不是先引入数据库。
+
+最小 DurableRunStoreV1 contract：
+
+- `scripts/durable_run_store.py` 提供 `durable-run-store-v1` / `DurableRunStoreV1` builder、validator 和 CLI。
+- `artifacts/state/post_mvp_durable_run_store.json` 采用 POSIX 相对路径和 normalized content hash，索引 `artifacts/runs/all_passed/run.json`、`events.jsonl`、`phase9_delivery_report.json` 和 `phase9_human_approval_decision_fixture.json`。
+- `runIndex` 固定 run id、fixture id、status/current state、TaskSpec ref、permission policy ref、recovery snapshot ref、event count、append-only event ids、last event id、run hash 和 event log hash。
+- `stateIndex` 绑定 RunControlV1 terminal replay snapshot；`deliveryIndex` 和 `approvalIndex` 继续保持 human review ready 但 external delivery / send email / external side effects blocked。
+- `persistencePolicy` 明确当前只是 `committed_json_fixture`，`durableBackendImplemented=false`、`databaseUsed=false`、`replayOnly=true`、`externalSideEffectsAllowed=false`、`realProviderExecutionAllowed=false`。
+- validator 拒绝关键错误：source hash 漂移、append-only event order 漂移、缺少 human approval source、database/durable backend 伪完成、外部副作用打开、approval grant 或 email/external delivery 被打开。
+
+Build vs Integrate：
+
+- Build：post-MVP 最小 `DurableRunStoreV1` schema、source-bound replay index artifact、builder/validator/CLI、deterministic repository validation gate。
+- Integrate later：SQLite/Postgres/Temporal/LangGraph durable backend、worker lease、resume executor、event compaction、query API、approval audit database、provider runtime checkpointing。
+
+当前 post-MVP durable state 前置 gate 已启动并满足 static replay index：Run/events/DeliveryReport/HumanApprovalDecision 可以被一个 deterministic store artifact 重新索引和校验，但完整 durable runtime、真实数据库、resume executor、调度器和 provider checkpoint 仍未实现。下一步应补一个 replay query fixture 或 identity-bound approval backend fixture，继续保持 no-side-effect policy。
+
 ## 13. 第一版应该证明什么
 
 第一版只需要证明一个核心闭环：
@@ -1838,6 +1858,7 @@ Add forced-failure verifier checks so that python3 scripts/validate_repo.py prov
 14. Evidence Packet Stop Rule：已由 2026-05-12 14:39 UTC artifact packet 解锁；后续修改必须基于 committed `artifacts/runs/*`、`verifier_report.json` failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据，不再无证据扩写 adapter mapping 或正式设计章节。
 15. Phase 1a Verifier Hardening：已实现 deterministic negative validation，`scripts/validate_repo.py` 会验证 malformed schema、missing evidence refs、failure-marker-to-passed tamper 和 pass-style email injection 均被拒绝或生成 failed verifier report。
 16. RunControlV1 State / Permission / Recovery：Phase 6 regression MVP gate 基本满足：`scripts/run_control.py` 提供 `RunControlV1` validator / CLI，`run.json#runControl` 使用 `run-control-v1`、`permission-policy-v1` 和 `recovery-snapshot-v1` 记录 stateHistory、permissionPolicy、stepAttempts 和 recoverySnapshot；`scripts/validate_repo.py` 会拒绝 state history 漂移、允许 external side effects、recovery last event 损坏或 non-terminal recovery 缺失 `resumeTarget` 的契约。`scripts/recovery_fixture.py` 生成 committed `artifacts/recovery/interrupted_after_extract/*`，证明 interrupted `running` 状态可以指向下一步 `write_artifact` resume action。
+17. Post-MVP DurableRunStoreV1：已实现 static replay index gate，入口为 `python3 scripts/durable_run_store.py --store-out artifacts/state/post_mvp_durable_run_store.json`；`durable-run-store-v1` 索引 `all_passed` Run、append-only events、DeliveryReportV1 和 HumanApprovalDecisionV1 的 source hashes、state/delivery/approval/persistence policy，并由 `scripts/validate_repo.py` 拒绝 source hash 漂移、event order 漂移、缺少 approval source、database/外部副作用/approval grant 伪完成。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -4669,6 +4690,72 @@ git diff --check
 ```text
 进入 post-MVP durable state slice：
 新增最小 DurableRunStoreV1 fixture / validator，保存 Run、events、HumanApprovalDecisionV1 和 DeliveryReportV1 的可重放索引；仍不得接入真实数据库、真实邮件发送、PR 创建或 provider side effects。
+```
+
+### 2026-05-13 22:02 UTC: Post-MVP DurableRunStoreV1 Static Replay Index Gate
+
+Active phase：post-MVP durable state 前置切片，基于 Phase 1a-9 contract-only MVP 与 HumanApprovalDecisionV1 fixture 已完成后的 state store 收敛。
+
+Selected slice：
+
+```text
+Add DurableRunStoreV1 fixture so that /usr/bin/python3 scripts/validate_repo.py proves Run/events/HumanApprovalDecisionV1/DeliveryReportV1 are source-hash indexed, replayable, and still blocked from runtime side effects.
+```
+
+为什么这是下一步：`validate.yml` 和 `auto-merge-cursor-pr.yml` 均存在且 baseline validation 通过。主计划上一轮明确推荐 post-MVP durable state slice；最小有用实现不是接入 SQLite、Temporal、LangGraph checkpoint、真实 worker lease 或 provider runtime，而是先提交 deterministic replay index，证明 durable store 的核心契约可以在 no-side-effect MVP 内被机器校验。
+
+验收标准：
+
+- 新增 `DurableRunStoreV1` builder / validator / CLI，输出 deterministic `durable-run-store-v1` artifact。
+- committed fixture 必须绑定 `all_passed` Run、append-only `events.jsonl`、`DeliveryReportV1` 和 `HumanApprovalDecisionV1` source hashes。
+- validator 必须拒绝 source hash 漂移、event order 漂移、缺少 human approval source、database/durable backend 伪完成、外部副作用打开、approval grant 或 email/external delivery 被打开。
+- `scripts/validate_repo.py` 必须验证 committed fixture、deterministic builder output 和 forced-failure cases。
+- 不接入真实数据库、resume executor、邮件发送、PR 创建、IDE/CUA provider、workspace mutation 或外部 side effect。
+
+预期改动文件：
+
+- `scripts/durable_run_store.py`
+- `artifacts/state/post_mvp_durable_run_store.json`
+- `scripts/validate_repo.py`
+- `scripts/evaluation_report.py`
+- `artifacts/evaluation/phase9_mvp_evaluation_report.json`
+- `.cursor/plans/agentic-control-plane.plan.md`
+
+实现摘要：
+
+- 新增 `scripts/durable_run_store.py`，提供 `DurableRunStoreV1` / `durable-run-store-v1` builder、validator 和 CLI。
+- 新增 committed `artifacts/state/post_mvp_durable_run_store.json`，索引 `all_passed` run、events、DeliveryReportV1 和 HumanApprovalDecisionV1 的 POSIX relative paths 与 normalized content hashes。
+- store 包含 `runIndex`、`stateIndex`、`deliveryIndex`、`approvalIndex`、`persistencePolicy` 和 `replayPlan`，明确当前是 `static_json_index_only` / `committed_json_fixture`，不声明真实 durable backend 或数据库。
+- `scripts/validate_repo.py` 纳入 DurableRunStoreV1 required file/markers、committed artifact validation、deterministic CLI output comparison，以及 database enabled、external side effects allowed、event order drift、event log hash mismatch、missing human approval source、approval granted forced-failure cases。
+- `scripts/evaluation_report.py` 将 durable store script 和 artifact 纳入 source artifact hash 汇总，并把下一推荐切片更新为 replay query fixture 或 identity-bound approval backend fixture。
+
+验证结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline `/usr/bin/python3 scripts/validate_repo.py` before edits：通过。
+- `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 DurableRunStoreV1 committed artifact、deterministic builder output，以及 database / external side effects / event order / event hash / missing approval source / approval grant forced-failure cases。
+- `/usr/bin/python3 scripts/durable_run_store.py --validate-store artifacts/state/post_mvp_durable_run_store.json`：通过。
+- `/usr/bin/python3 scripts/durable_run_store.py --store-out /tmp/post_mvp_durable_run_store.json`：通过，可 deterministic 生成 DurableRunStoreV1 artifact。
+- `/usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json`：通过。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/post-mvp-durable-fixture-smoke`：通过。
+- `/usr/bin/python3 scripts/task_spec.py ... --out /tmp/post-mvp-durable-task-spec.json`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json`：通过。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- DurableRunStoreV1 仍是 static JSON replay index，不是 production durable database、worker lease、resume executor、query service 或 event compaction backend。
+- 本切片只索引 `all_passed` read-only regression run；真实代码修改、多 run 查询、失败恢复执行、provider checkpoints 和 approval audit DB 仍后移。
+- 完整 Agentic Engineering OS 产品仍缺真实 durable runtime、approval backend、IDE/CUA providers、external delivery adapters 和 production learning/evaluation loop。
+
+下一轮建议：
+
+```text
+进入 post-MVP replay query / approval backend 前置切片：
+新增一个最小 ReplayQueryV1 fixture 或 identity-bound approval backend fixture，基于 DurableRunStoreV1 查询 run/delivery/approval 状态；仍不得接入真实数据库、真实邮件发送、PR 创建或 provider side effects。
 ```
 
 ## 22. Parking Lot
