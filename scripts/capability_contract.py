@@ -10,7 +10,7 @@ from typing import Any
 CAPABILITY_METADATA_SCHEMA_VERSION = "capability-metadata-v1"
 CAPABILITY_ENVELOPE_SCHEMA_VERSION = "capability-envelope-v1"
 CAPABILITY_CATALOG_SCHEMA_VERSION = "capability-catalog-v1"
-CAPABILITY_CATALOG_ID = "phase3-readonly-regression-mvp"
+PHASE3_CAPABILITY_CATALOG_ID = "phase3-regression-readonly-capabilities"
 CAPABILITY_URI_PREFIX = "capability://phase3/"
 
 PERMISSIONS = {"read", "write", "dangerous"}
@@ -124,12 +124,13 @@ def build_capability_envelope(names: list[str] | tuple[str, ...]) -> dict[str, A
     }
 
 
-def build_capability_catalog(names: list[str] | tuple[str, ...] = PHASE3_CAPABILITY_NAMES) -> dict[str, Any]:
+def build_capability_catalog(names: list[str] | tuple[str, ...] = tuple(PHASE3_CAPABILITY_NAMES)) -> dict[str, Any]:
     return {
         "schemaVersion": CAPABILITY_CATALOG_SCHEMA_VERSION,
-        "id": CAPABILITY_CATALOG_ID,
-        "description": "Static Phase 3 capability catalogue for the read-only regression evidence MVP.",
-        "capabilities": [capability_metadata(name) for name in names],
+        "id": PHASE3_CAPABILITY_CATALOG_ID,
+        "phase": "phase3",
+        "scope": "regression_readonly_mvp",
+        "capabilityEnvelope": build_capability_envelope(list(names)),
     }
 
 
@@ -191,22 +192,23 @@ def validate_capability_envelope(envelope: dict[str, Any], expected_names: list[
         validate_capability_metadata(item)
 
 
-def validate_capability_catalog(catalog: dict[str, Any], expected_names: list[str] | tuple[str, ...] = PHASE3_CAPABILITY_NAMES) -> None:
-    if catalog.get("schemaVersion") != CAPABILITY_CATALOG_SCHEMA_VERSION:
+def validate_capability_catalog(catalog: dict[str, Any], expected_names: list[str] | tuple[str, ...]) -> None:
+    required_fields = ["schemaVersion", "id", "phase", "scope", "capabilityEnvelope"]
+    missing = [field for field in required_fields if field not in catalog]
+    if missing:
+        raise ValueError(f"Capability catalog is missing required fields: {missing}")
+    if catalog["schemaVersion"] != CAPABILITY_CATALOG_SCHEMA_VERSION:
         raise ValueError(f"Capability catalog schemaVersion must be {CAPABILITY_CATALOG_SCHEMA_VERSION}")
-    if catalog.get("id") != CAPABILITY_CATALOG_ID:
-        raise ValueError(f"Capability catalog id must be {CAPABILITY_CATALOG_ID}")
-    capabilities = catalog.get("capabilities")
-    if not isinstance(capabilities, list) or not capabilities:
-        raise ValueError("Capability catalog capabilities must be a non-empty list")
-
-    names = [item.get("name") for item in capabilities if isinstance(item, dict)]
-    if names != list(expected_names):
-        raise ValueError(f"Capability catalog names must equal {list(expected_names)}")
-    for item in capabilities:
-        if not isinstance(item, dict):
-            raise ValueError("Capability catalog capabilities must be objects")
-        validate_capability_metadata(item)
+    if catalog["id"] != PHASE3_CAPABILITY_CATALOG_ID:
+        raise ValueError(f"Capability catalog id must be {PHASE3_CAPABILITY_CATALOG_ID}")
+    if catalog["phase"] != "phase3":
+        raise ValueError("Capability catalog phase must be phase3")
+    if catalog["scope"] != "regression_readonly_mvp":
+        raise ValueError("Capability catalog scope must be regression_readonly_mvp")
+    envelope = catalog["capabilityEnvelope"]
+    if not isinstance(envelope, dict):
+        raise ValueError("Capability catalog capabilityEnvelope must be an object")
+    validate_capability_envelope(envelope, expected_names)
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -215,7 +217,7 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog="capability-catalog")
+    parser = argparse.ArgumentParser(prog="capability-catalog-builder")
     parser.add_argument("--out", type=Path)
     return parser.parse_args(argv)
 
@@ -223,7 +225,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     catalog = build_capability_catalog()
-    validate_capability_catalog(catalog)
+    validate_capability_catalog(catalog, PHASE3_CAPABILITY_NAMES)
     if args.out:
         write_json(args.out, catalog)
         print(f"Wrote capability catalog {catalog['id']} to {args.out}.")

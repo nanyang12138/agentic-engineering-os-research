@@ -790,21 +790,21 @@ Build vs Integrate：
 
 #### Phase 3 Capability Catalogue Artifact Gate
 
-2026-05-13 05:52 UTC 自动化实现结论：最新 main 已经把当前 regression demo 的每个 step 纳入 `capability-envelope-v1`，但这些 metadata 仍只嵌在每个 `run.json` 里。Phase 3 在进入 Context Broker 前还需要一个独立、可复用、可机器校验的静态 catalogue artifact，使后续 ContextPack 和 Verifier Runtime 能引用同一份 capability provenance。
+2026-05-13 05:40 UTC 自动化实现结论：在当前 regression demo 的四个 same-process capability 都具备 metadata/ref 后，Phase 3 的下一步不是提前实现 provider discovery 或 policy engine，而是把 `capability-envelope-v1` 提升为独立、可提交、可重新生成的 catalogue artifact。这样 Phase 4 Context Broker 和后续 verifier/policy runtime 可以引用稳定 capability provenance，而不是从某个 `run.json` 反向抽取接口定义。
 
 本切片完成后：
 
-- `scripts/capability_contract.py` 可导出 `capability-catalog-v1`，包含当前 MVP 的 `read_log`、`extract_regression_result`、`write_artifact` 和 `rule_verifier` metadata。
-- `artifacts/capabilities/phase3_capability_catalog.json` 是提交到仓库的 deterministic catalogue artifact。
-- `scripts/validate_repo.py` 会比较 committed catalogue、builder 输出和 CLI 输出，并拒绝缺失当前 capability（例如 `rule_verifier`）的 tampered catalogue。
-- 该 catalogue 仍是静态 contract，不引入动态 registry、provider discovery、daemon、adapter lifecycle、MCP/tool server 或外部副作用。
+- `scripts/capability_contract.py` 同时提供 builder/validator/CLI，可导出 `capability-catalog-v1`。
+- 提交 `artifacts/capabilities/phase3_capability_catalog.json`，包含 `read_log`、`extract_regression_result`、`write_artifact`、`rule_verifier` 的完整 `capability-envelope-v1`。
+- `scripts/validate_repo.py` 校验 committed catalogue 与 deterministic builder 输出完全一致，并用 forced-failure case 证明缺失 `rule_verifier` 会被拒绝。
+- `run.json#capabilityEnvelope` 继续保留每次 run 的执行快照；catalogue artifact 成为 Phase 3 当前能力边界的独立事实源。
 
 Build vs Integrate：
 
-- Build：Phase 3 v1 static capability catalogue artifact、CLI export 和 deterministic validation gate。
-- Integrate later：动态 registry、adapter plugin lifecycle、remote capability provider、policy backend、IDE/CUA/browser/sandbox provider discovery。
+- Build：Phase 3 read-only MVP capability catalogue artifact、CLI export 和 repository validation gate。
+- Integrate later：动态 registry、provider discovery、adapter plugin lifecycle、MCP/tool server、IDE/CUA/browser/sandbox provider、policy backend。
 
-当前 Phase 3 regression-log MVP gate 已满足：当前执行链路的 capability metadata 可在 run artifact 中内嵌，也可作为独立 catalogue artifact 被后续 Phase 4/5 引用。完整 provider discovery、policy enforcement、adapter runtime 和非 regression 场景 capability 仍后移。
+当前 Phase 3 regression-log MVP gate 已满足：现有执行能力有统一 metadata、run/event refs 和独立 catalogue artifact。通用 catalogue 扩展、provider discovery、policy enforcement 和 adapter runtime 后移到对应后续阶段，不阻塞进入 Phase 4 Context Broker。
 
 ### Phase 4：Context Broker
 
@@ -1507,7 +1507,7 @@ Add forced-failure verifier checks so that python3 scripts/validate_repo.py prov
 5. Intent-to-Spec MVP：已实现 Phase 2 deterministic `RegressionTaskSpecV1` builder / validator / CLI gate，入口为 `python3 scripts/task_spec.py --goal <goal> --input-log-path <log> --out <task_spec.json>`；schema version 为 `regression-task-spec-v1`，fixture runner 和 local read-only runner 均复用该 spec gate。local read-only runner 现在也支持 `--task-spec-path <task_spec.json>`，并在读取日志前拒绝与请求 goal/log 不匹配的 spec。LLM 仍只能作为后续草稿生成器，必须通过同一 schema/rule verifier。
 6. Evidence List + Verifier Runtime：已固化 `LogEvidenceV1`、`RegressionResultArtifactV1`、email grounding 规则和 fixture gate；下一步以 fixture runner 验证规则是否过多或不足。
 7. Local Read-only Runner：已实现 Phase 1b one-shot CLI `python3 scripts/local_readonly_runner.py --log-path <log> --goal <goal> --out-dir <out>`；该 runner 复用 Phase 1a schema、evidence list、email grounding 和 verifier report，`scripts/validate_repo.py` 已加入本地 read-only smoke gate。SQLite event store、daemon、正式 capability registry、真实外部 adapter 和更完整 run state 仍后移。
-8. Capability Metadata Gate：已实现 Phase 3 最小 `capability-envelope-v1` / `capability-metadata-v1`，覆盖 `read_log`、`extract_regression_result`、`write_artifact` 和 `rule_verifier` 的 permission、sideEffect、timeout、input/output contract；`run.json` 和 `events.jsonl` 引用 capability ref，`scripts/validate_repo.py` 会拒绝缺失 permission、声明外部 side effect 或缺失 `step-verify.capabilityRef` 的 envelope。已新增独立 `capability-catalog-v1` artifact `artifacts/capabilities/phase3_capability_catalog.json`，并通过 validation gate 比较 committed catalogue、deterministic builder 和 CLI 输出。
+8. Capability Metadata Gate：已实现 Phase 3 最小 `capability-envelope-v1` / `capability-metadata-v1`，覆盖 `read_log`、`extract_regression_result`、`write_artifact` 和 `rule_verifier` 的 permission、sideEffect、timeout、input/output contract；`run.json` 和 `events.jsonl` 引用 capability ref，`artifacts/capabilities/phase3_capability_catalog.json` 作为独立 catalogue artifact，`scripts/validate_repo.py` 会拒绝缺失 permission、声明外部 side effect、缺失 `step-verify.capabilityRef` 或 catalogue 缺失当前 capability 的契约。
 9. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
 10. Phase 1a Evidence Intake Review：在 fixture runner 输出完整 artifact packet 前，后续优化只允许维护评分、Decision Log、Open Questions 和 Research Sprint Log；只有 `verifier_report.json` 失败、grounded email 问题、真实脱敏日志差异或 Build vs Integrate 运行证据出现后，才修改正式设计章节。
 11. Evidence Packet Stop Rule：已由 2026-05-12 14:39 UTC artifact packet 解锁；后续修改必须基于 committed `artifacts/runs/*`、`verifier_report.json` failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据，不再无证据扩写 adapter mapping 或正式设计章节。
@@ -1796,6 +1796,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-13 03:01 UTC：Phase 2 TaskSpec Intake Gate 已实现；决定让 local read-only runner 接收 `--task-spec-path`，并在读取 log 前校验该 spec 与请求 goal/log 匹配，`run.json#taskSpec` 使用传入 spec 原文。Phase 2 regression-log MVP gate 视为满足，下一轮进入 Phase 3 capability interface standardization。
 - 2026-05-13 03:20 UTC：Phase 3 Capability Metadata Gate 已实现；决定先用 `capability-envelope-v1` / `capability-metadata-v1` 标准化 `read_log`、`extract_regression_result`、`write_artifact` 的 permission、sideEffect、timeout 和 input/output contract，并把正式 registry、adapter plugin、daemon、MCP/tool server、IDE/CUA/browser/sandbox provider 继续后移。
 - 2026-05-13 05:20 UTC：Phase 3 Rule Verifier Capability Boundary Gate 已实现；决定把现有 `step-verify` 的 `rule_verifier` 纳入同一最小 capability envelope，以保证当前 run 的每个 step 都有 `capabilityRef`。这不等于进入完整 Phase 5 Verifier Runtime；可插拔 verifier、review agent、human verifier 和 policy engine 继续后移。
+- 2026-05-13 05:40 UTC：Phase 3 Capability Catalogue Artifact Gate 已实现；决定将当前 read-only regression MVP 的 capability envelope 导出为 committed `capability-catalog-v1` artifact，并由 `scripts/validate_repo.py` 比对 deterministic builder 输出。动态 registry、provider discovery、adapter lifecycle 和 policy backend 继续后移；Phase 4 可从独立 catalogue 引用 capability provenance。
 
 ## 20. Open Questions
 
@@ -1820,6 +1821,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - Phase 1a Evidence Review 的 forced-failure gate 已收敛为 deterministic validation：malformed schema、missing evidence refs、failure marker 被篡改为 passed、负例邮件注入 pass-style claim 都必须失败。
 - Phase 2 regression-log MVP gate 已收敛为 deterministic TaskSpec builder + runner intake：`task_spec.py` 生成审查对象，`local_readonly_runner.py --task-spec-path` 在执行前校验并使用该 spec。
 - Phase 3 的最小 capability metadata envelope 已收敛为 `capability-envelope-v1` / `capability-metadata-v1`，覆盖 `schemaVersion`、`name`、`ref`、`permission`、`sideEffect`、`timeoutMs`、`inputContract` 和 `outputContract`；当前 regression demo 的 `read_log`、`extract_regression_result`、`write_artifact`、`rule_verifier` 都必须有 `capabilityRef`，正式 registry、daemon、adapter plugin 和外部 provider 继续后移。
+- `capability-envelope-v1` 先作为 `artifacts/capabilities/phase3_capability_catalog.json` 独立 artifact 提交和验证；Phase 4 Context Broker 可引用该静态 catalogue，动态 registry / provider discovery 后移。
 
 ### 20.2 仍开放的问题
 
@@ -1839,7 +1841,6 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 已有 5 个 synthetic fixture artifact packet 后，后续自动化是否应该从 Plan Maintenance 切换为 Evidence Review / implementation loop，并停止追加 no-evidence no-op 日志？
 - Phase 1a verifier hardening 通过 PR / GitHub checks 后，是否足以直接进入 Phase 1b Local Read-only Runner，还是需要先用真实脱敏日志校准 marker 常量？
 - 当前 marker 常量是否对真实脱敏 regression log 足够，还是 Evidence Review 会证明需要新增 project-specific marker 配置？
-- Phase 3 的下一步是否应先把 `capability-envelope-v1` 抽成独立 artifact 以便后续 registry/adapter 复用，还是先补 policy enforcement / approval metadata？
 - `write_artifact.permission="write"` 且 `sideEffect=false` 是否足够表达“只写本地 artifact、无外部副作用”，还是需要在 Phase 6 policy gate 中引入更明确的 effect boundary 类型？
 
 ## 21. Research Sprint Log
@@ -3127,9 +3128,9 @@ git diff --check
 将 `capability-envelope-v1` 抽成可单独复用的 artifact contract，或补齐 policy enforcement / approval metadata，让 Phase 4 Context Broker 能引用稳定的 capability provenance。
 ```
 
-### 2026-05-13 05:52 UTC: Phase 3 Capability Catalogue Artifact Gate
+### 2026-05-13 05:40 UTC: Phase 3 Capability Catalogue Artifact Gate
 
-本轮目标：从最新 main 重新确认已完成 Phase 1a/1b/2 和 Phase 3 run-level capability metadata 后，完成最早仍缺失的 Phase 3 独立 capability catalogue artifact。开放 PR #46 已实现同类切片但仍为 draft，当前环境没有 write-capable GitHub cleanup/ready/merge tool；因此本轮在新临时分支上重做一个 ready implementation PR，并把 #46 记录为 stale cleanup blocker。
+本轮目标：把当前 Phase 3 capability envelope 从 run 内嵌结构提升为独立、可提交、可验证的 catalogue artifact，完成进入 Phase 4 前的最小 capability contract 边界。
 
 Active phase：
 
@@ -3140,28 +3141,29 @@ Phase 3: capability interface standardization
 Selected slice：
 
 ```text
-Add capability-catalog-v1 artifact export so that python3 scripts/validate_repo.py proves the current capability contract is reusable outside run.json.
+Add a deterministic Phase 3 capability catalogue export so that repository validation proves the current capability contract independently of run artifacts.
 ```
 
-为什么这是下一步：`run.json#capabilityEnvelope` 已覆盖 `read_log`、`extract_regression_result`、`write_artifact` 和 `rule_verifier`，但 Phase 4 Context Broker 和 Phase 5 Verifier Runtime 不能稳定引用只嵌在 run artifact 内的 metadata。独立 `capability-catalog-v1` 是进入 ContextPack provenance 前的最小可验证边界。
+为什么这是下一步：Phase 3 已经覆盖 `read_log`、`extract_regression_result`、`write_artifact` 和 `rule_verifier` 的 metadata/ref，但缺少脱离单次 run 的稳定事实源。独立 catalogue 是 Context Broker / Verifier / Policy 后续复用 capability provenance 的最小前置条件，同时不提前实现动态 registry 或 provider discovery。
 
 实现摘要：
 
-- `scripts/capability_contract.py` 新增 `capability-catalog-v1` builder / validator / CLI，并保持同一份 `capability-metadata-v1` 定义作为来源。
-- 新增 committed artifact `artifacts/capabilities/phase3_capability_catalog.json`，包含当前 read-only regression MVP 的四个 capability。
-- `scripts/validate_repo.py` 新增 capability catalog gate：比较 committed catalogue、deterministic builder 和 CLI 输出，并用缺失 `rule_verifier` 的 tampered catalogue 证明验证会失败。
-- 主计划 Phase 3 章节和 Research Backlog 更新为当前 Phase 3 regression-log MVP gate 已满足；动态 registry、provider discovery、policy backend、adapter lifecycle 和非 regression capability 仍后移。
+- `scripts/capability_contract.py` 新增 `capability-catalog-v1` builder、validator 和 CLI export。
+- 新增 committed artifact `artifacts/capabilities/phase3_capability_catalog.json`。
+- `scripts/validate_repo.py` 验证 committed catalogue 与 deterministic builder 完全一致，并新增 missing `rule_verifier` catalogue forced-failure check。
+- 主计划将 Phase 3 regression-log MVP gate 标记为满足；通用 provider discovery、policy enforcement 和 adapter runtime 后移。
 
 验收标准：
 
-- CLI 可生成 deterministic Phase 3 capability catalogue：通过。
-- committed catalogue 包含 `read_log`、`extract_regression_result`、`write_artifact` 和 `rule_verifier` metadata：通过。
-- repository validation 能拒绝缺失当前 capability 的 tampered catalogue：通过。
-- 不引入 registry、daemon、MCP/tool server、CUA、IDE、browser/sandbox adapter、外部 provider、credentials 或 destructive side effects：通过。
+- CLI 能生成 deterministic Phase 3 capability catalogue：通过。
+- committed catalogue 包含当前四个 capability 的完整 metadata envelope：通过。
+- `scripts/validate_repo.py` 能拒绝缺失当前 capability 的 tampered catalogue：通过。
+- 不引入 registry、daemon、MCP/tool server、CUA、IDE、browser、sandbox provider 或外部副作用：通过。
 
 验证命令：
 
 ```text
+python scripts/validate_repo.py
 python3 scripts/validate_repo.py
 python3 -m py_compile scripts/capability_contract.py scripts/fixture_runner.py scripts/validate_repo.py scripts/local_readonly_runner.py scripts/task_spec.py
 python3 scripts/capability_contract.py --out /tmp/phase3-capability-catalog.json
@@ -3174,10 +3176,10 @@ git diff --check
 验证结果：
 
 ```text
-- Python executable resolved for this environment: python3.
-- `python3 scripts/validate_repo.py`：通过，覆盖 Phase 1a/1b/2 gates、Phase 3 capability envelope、rule_verifier refs、capability catalog deterministic comparison 和 missing-capability forced-failure。
+- `python scripts/validate_repo.py`：本地镜像缺少 `python` 命令，返回 command not found；GitHub Actions 的 setup-python 环境预期提供 `python`。
+- `python3 scripts/validate_repo.py`：通过，覆盖 Phase 1a fixture/schema/verifier gate、Phase 1b local read-only smoke、Phase 2 TaskSpec gate、Phase 3 run/event capability refs，以及独立 capability catalogue deterministic/forced-failure validation。
 - `python3 -m py_compile scripts/capability_contract.py scripts/fixture_runner.py scripts/validate_repo.py scripts/local_readonly_runner.py scripts/task_spec.py`：通过。
-- `python3 scripts/capability_contract.py --out /tmp/phase3-capability-catalog.json`：通过。
+- `python3 scripts/capability_contract.py --out /tmp/phase3-capability-catalog.json`：通过，生成 deterministic catalogue。
 - `python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase3-catalog-fixtures`：通过，处理 5 个 fixtures。
 - `python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase3-catalog-task-spec.json`：通过。
 - `python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --task-spec-path /tmp/phase3-catalog-task-spec.json --out-dir /tmp/phase3-catalog-local`：通过。
@@ -3186,14 +3188,14 @@ git diff --check
 
 剩余风险：
 
-- `capability-catalog-v1` 仍是 static catalogue，只覆盖 regression-log MVP；动态 provider discovery、adapter runtime、policy enforcement 和 effect-boundary approval 留给后续阶段。
-- 开放 PR #46 是同类 draft PR；当前环境只有 read-only `gh` 和创建 PR 的工具，无法将其 ready/close/comment，因此 cleanup blocked。
+- catalogue 仍是静态 read-only MVP artifact，不是动态 registry。
+- `write_artifact` 的更细 effect boundary / approval policy 仍需在 Phase 6 state, permission, and recovery 中验证。
 
 下一轮建议：
 
 ```text
-进入 Phase 4：
-添加最小 read-only ContextPackV1 builder，使 validation 证明 ContextPack 引用 TaskSpec、输入 log excerpt、capability catalogue 和 committed artifact refs，并保留 source provenance。
+进入 Phase 4 Context Broker：
+实现最小 read-only context pack builder，读取 TaskSpec、input log excerpt、capability catalogue 和 committed artifact refs，输出带 source refs 的 ContextPackV1，并由 scripts/validate_repo.py 校验 source refs 与 token/line budget。
 ```
 
 ## 22. Parking Lot

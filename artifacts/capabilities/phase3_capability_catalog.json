@@ -1,128 +1,132 @@
 {
-  "capabilities": [
-    {
-      "inputContract": {
-        "properties": {
-          "sourcePath": "string:path"
+  "capabilityEnvelope": {
+    "items": [
+      {
+        "inputContract": {
+          "properties": {
+            "sourcePath": "string:path"
+          },
+          "required": [
+            "sourcePath"
+          ],
+          "schema": "ReadLogInputV1"
         },
-        "required": [
-          "sourcePath"
-        ],
-        "schema": "ReadLogInputV1"
-      },
-      "name": "read_log",
-      "outputContract": {
-        "produces": [
-          "logTextRef"
-        ],
-        "properties": {
-          "logTextRef": "string:memory-ref"
+        "name": "read_log",
+        "outputContract": {
+          "produces": [
+            "logTextRef"
+          ],
+          "properties": {
+            "logTextRef": "string:memory-ref"
+          },
+          "schema": "ReadLogOutputV1"
         },
-        "schema": "ReadLogOutputV1"
+        "permission": "read",
+        "ref": "capability://phase3/read_log",
+        "schemaVersion": "capability-metadata-v1",
+        "sideEffect": false,
+        "timeoutMs": 1000
       },
-      "permission": "read",
-      "ref": "capability://phase3/read_log",
-      "schemaVersion": "capability-metadata-v1",
-      "sideEffect": false,
-      "timeoutMs": 1000
-    },
-    {
-      "inputContract": {
-        "properties": {
-          "logTextRef": "string:memory-ref",
-          "taskSpecRef": "string:run-json-pointer"
+      {
+        "inputContract": {
+          "properties": {
+            "logTextRef": "string:memory-ref",
+            "taskSpecRef": "string:run-json-pointer"
+          },
+          "required": [
+            "logTextRef",
+            "taskSpecRef"
+          ],
+          "schema": "ExtractRegressionResultInputV1"
         },
-        "required": [
-          "logTextRef",
-          "taskSpecRef"
-        ],
-        "schema": "ExtractRegressionResultInputV1"
-      },
-      "name": "extract_regression_result",
-      "outputContract": {
-        "produces": [
-          "evidenceItems",
-          "regressionResultCandidate"
-        ],
-        "properties": {
-          "evidenceItems": "LogEvidenceV1[]",
-          "regressionResultCandidate": "RegressionResultArtifactV1"
+        "name": "extract_regression_result",
+        "outputContract": {
+          "produces": [
+            "evidenceItems",
+            "regressionResultCandidate"
+          ],
+          "properties": {
+            "evidenceItems": "LogEvidenceV1[]",
+            "regressionResultCandidate": "RegressionResultArtifactV1"
+          },
+          "schema": "ExtractRegressionResultOutputV1"
         },
-        "schema": "ExtractRegressionResultOutputV1"
+        "permission": "read",
+        "ref": "capability://phase3/extract_regression_result",
+        "schemaVersion": "capability-metadata-v1",
+        "sideEffect": false,
+        "timeoutMs": 1000
       },
-      "permission": "read",
-      "ref": "capability://phase3/extract_regression_result",
-      "schemaVersion": "capability-metadata-v1",
-      "sideEffect": false,
-      "timeoutMs": 1000
-    },
-    {
-      "inputContract": {
-        "properties": {
-          "emailDraftRef": "string:artifact-ref",
-          "evidenceRef": "string:artifact-ref",
-          "regressionResultRef": "string:artifact-ref",
-          "runRef": "string:run-json-pointer"
+      {
+        "inputContract": {
+          "properties": {
+            "emailDraftRef": "string:artifact-ref",
+            "evidenceRef": "string:artifact-ref",
+            "regressionResultRef": "string:artifact-ref",
+            "runRef": "string:run-json-pointer"
+          },
+          "required": [
+            "runRef",
+            "evidenceRef",
+            "regressionResultRef",
+            "emailDraftRef"
+          ],
+          "schema": "WriteArtifactInputV1"
         },
-        "required": [
-          "runRef",
-          "evidenceRef",
-          "regressionResultRef",
-          "emailDraftRef"
-        ],
-        "schema": "WriteArtifactInputV1"
-      },
-      "name": "write_artifact",
-      "outputContract": {
-        "effectBoundary": "local_artifact_output_only",
-        "produces": [
-          "artifactPaths"
-        ],
-        "properties": {
-          "artifactPaths": "string:path[]"
+        "name": "write_artifact",
+        "outputContract": {
+          "effectBoundary": "local_artifact_output_only",
+          "produces": [
+            "artifactPaths"
+          ],
+          "properties": {
+            "artifactPaths": "string:path[]"
+          },
+          "schema": "WriteArtifactOutputV1"
         },
-        "schema": "WriteArtifactOutputV1"
+        "permission": "write",
+        "ref": "capability://phase3/write_artifact",
+        "schemaVersion": "capability-metadata-v1",
+        "sideEffect": false,
+        "timeoutMs": 1000
       },
-      "permission": "write",
-      "ref": "capability://phase3/write_artifact",
-      "schemaVersion": "capability-metadata-v1",
-      "sideEffect": false,
-      "timeoutMs": 1000
-    },
-    {
-      "inputContract": {
-        "properties": {
-          "emailDraftRef": "string:artifact-ref",
-          "evidenceRef": "string:artifact-ref",
-          "regressionResultRef": "string:artifact-ref",
-          "taskSpecRef": "string:run-json-pointer"
+      {
+        "inputContract": {
+          "properties": {
+            "emailDraftRef": "string:artifact-ref",
+            "evidenceRef": "string:artifact-ref",
+            "regressionResultRef": "string:artifact-ref",
+            "taskSpecRef": "string:run-json-pointer"
+          },
+          "required": [
+            "taskSpecRef",
+            "evidenceRef",
+            "regressionResultRef",
+            "emailDraftRef"
+          ],
+          "schema": "RuleVerifierInputV1"
         },
-        "required": [
-          "taskSpecRef",
-          "evidenceRef",
-          "regressionResultRef",
-          "emailDraftRef"
-        ],
-        "schema": "RuleVerifierInputV1"
-      },
-      "name": "rule_verifier",
-      "outputContract": {
-        "produces": [
-          "verifierReport"
-        ],
-        "properties": {
-          "verifierReport": "VerifierReportV1"
+        "name": "rule_verifier",
+        "outputContract": {
+          "produces": [
+            "verifierReport"
+          ],
+          "properties": {
+            "verifierReport": "VerifierReportV1"
+          },
+          "schema": "RuleVerifierOutputV1"
         },
-        "schema": "RuleVerifierOutputV1"
-      },
-      "permission": "read",
-      "ref": "capability://phase3/rule_verifier",
-      "schemaVersion": "capability-metadata-v1",
-      "sideEffect": false,
-      "timeoutMs": 1000
-    }
-  ],
-  "description": "Static Phase 3 capability catalogue for the read-only regression evidence MVP.",
-  "id": "phase3-readonly-regression-mvp",
-  "schemaVersion": "capability-catalog-v1"
+        "permission": "read",
+        "ref": "capability://phase3/rule_verifier",
+        "schemaVersion": "capability-metadata-v1",
+        "sideEffect": false,
+        "timeoutMs": 1000
+      }
+    ],
+    "schemaVersion": "capability-envelope-v1"
+  },
+  "id": "phase3-regression-readonly-capabilities",
+  "phase": "phase3",
+  "schemaVersion": "capability-catalog-v1",
+  "scope": "regression_readonly_mvp"
 }
