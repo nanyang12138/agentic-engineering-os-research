@@ -449,6 +449,8 @@ def validate_schema_structure(
             expected_capability = "extract_regression_result"
         elif event["type"] == "artifact.write.completed":
             expected_capability = "write_artifact"
+        elif event["type"] == "verifier.completed":
+            expected_capability = "rule_verifier"
         if expected_capability:
             require_fields(event_label, event, ["capability", "capabilityRef"])
             if event["capability"] != expected_capability:
@@ -572,6 +574,16 @@ def add_external_capability_side_effect(tampered_dir: Path) -> None:
     write_json(run_path, run)
 
 
+def remove_rule_verifier_step_ref(tampered_dir: Path) -> None:
+    run_path = tampered_dir / "all_passed/run.json"
+    run = load_json(run_path)
+    for step in run["steps"]:
+        if step["capability"] == "rule_verifier":
+            del step["capabilityRef"]
+            break
+    write_json(run_path, run)
+
+
 def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
     scratch_root.mkdir(parents=True, exist_ok=True)
     expect_artifact_validation_failure(
@@ -608,6 +620,13 @@ def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
         scratch_root,
         add_external_capability_side_effect,
         "must not declare external side effects",
+    )
+    expect_artifact_validation_failure(
+        "missing_rule_verifier_capability_ref",
+        source_dir,
+        scratch_root,
+        remove_rule_verifier_step_ref,
+        "step step-verify",
     )
 
 

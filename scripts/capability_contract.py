@@ -9,7 +9,7 @@ CAPABILITY_ENVELOPE_SCHEMA_VERSION = "capability-envelope-v1"
 CAPABILITY_URI_PREFIX = "capability://phase3/"
 
 PERMISSIONS = {"read", "write", "dangerous"}
-PHASE3_CAPABILITY_NAMES = ["read_log", "extract_regression_result", "write_artifact"]
+PHASE3_CAPABILITY_NAMES = ["read_log", "extract_regression_result", "write_artifact", "rule_verifier"]
 
 CAPABILITY_DEFINITIONS: dict[str, dict[str, Any]] = {
     "read_log": {
@@ -73,6 +73,28 @@ CAPABILITY_DEFINITIONS: dict[str, dict[str, Any]] = {
             "produces": ["artifactPaths"],
             "properties": {"artifactPaths": "string:path[]"},
             "effectBoundary": "local_artifact_output_only",
+        },
+    },
+    "rule_verifier": {
+        "schemaVersion": CAPABILITY_METADATA_SCHEMA_VERSION,
+        "name": "rule_verifier",
+        "permission": "read",
+        "sideEffect": False,
+        "timeoutMs": 1000,
+        "inputContract": {
+            "schema": "RuleVerifierInputV1",
+            "required": ["taskSpecRef", "evidenceRef", "regressionResultRef", "emailDraftRef"],
+            "properties": {
+                "taskSpecRef": "string:run-json-pointer",
+                "evidenceRef": "string:artifact-ref",
+                "regressionResultRef": "string:artifact-ref",
+                "emailDraftRef": "string:artifact-ref",
+            },
+        },
+        "outputContract": {
+            "schema": "RuleVerifierOutputV1",
+            "produces": ["verifierReport"],
+            "properties": {"verifierReport": "VerifierReportV1"},
         },
     },
 }

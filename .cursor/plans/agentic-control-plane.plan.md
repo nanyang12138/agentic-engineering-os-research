@@ -769,6 +769,25 @@ Build vs Integrate：
 
 当前 Phase 3 仍未完成：本切片只标准化 regression demo 中已有的三个 same-process capability；`run_command`、`run_test`、`apply_patch`、`request_approval`、provider discovery、权限审批策略和 adapter runtime 仍后移。
 
+#### Phase 3 Rule Verifier Capability Boundary Gate
+
+2026-05-13 05:20 UTC 自动化实现结论：最新 main 已经具备三项执行 capability 的 metadata envelope，但 `run.json#steps[]` 中的 `step-verify` 仍然是裸 `rule_verifier` 字符串。Phase 3 的下一步不是扩大到 Phase 5 的完整 verifier runtime，而是补齐现有 verify step 的接口边界：它是一个只读、无外部副作用、输入为 TaskSpec/evidence/result/email draft、输出为 `verifier_report.json` 的本地 capability metadata。
+
+本切片完成后：
+
+- `capability-envelope-v1` 额外包含 `capability-metadata-v1 rule_verifier`。
+- `rule_verifier.permission=read`，`sideEffect=false`，`outputContract.produces=["verifierReport"]`。
+- `run.json#steps[]` 中所有 step 都必须有 `capabilityRef`，包括 `step-verify`。
+- `events.jsonl` 的 `verifier.completed` 事件引用 `rule_verifier` 的 `capabilityRef`。
+- `scripts/validate_repo.py` 会拒绝缺失 `step-verify.capabilityRef` 的 artifact packet。
+
+Build vs Integrate：
+
+- Build：现有 verify step 的 metadata contract、artifact/event refs、deterministic validation。
+- Integrate later：完整 Verifier Runtime、可插拔 verifier、review agent、human verifier、policy engine 与外部 approval backend。
+
+当前 Phase 3 仍未完成：本切片只保证 regression demo 的所有当前 step 都有 capability metadata。通用 capability catalogue、provider discovery、policy enforcement、adapter runtime 和非 regression 场景能力仍后移。
+
 ### Phase 4：Context Broker
 
 把上下文收集从 prompt 里拆出来：
@@ -1470,7 +1489,7 @@ Add forced-failure verifier checks so that python3 scripts/validate_repo.py prov
 5. Intent-to-Spec MVP：已实现 Phase 2 deterministic `RegressionTaskSpecV1` builder / validator / CLI gate，入口为 `python3 scripts/task_spec.py --goal <goal> --input-log-path <log> --out <task_spec.json>`；schema version 为 `regression-task-spec-v1`，fixture runner 和 local read-only runner 均复用该 spec gate。local read-only runner 现在也支持 `--task-spec-path <task_spec.json>`，并在读取日志前拒绝与请求 goal/log 不匹配的 spec。LLM 仍只能作为后续草稿生成器，必须通过同一 schema/rule verifier。
 6. Evidence List + Verifier Runtime：已固化 `LogEvidenceV1`、`RegressionResultArtifactV1`、email grounding 规则和 fixture gate；下一步以 fixture runner 验证规则是否过多或不足。
 7. Local Read-only Runner：已实现 Phase 1b one-shot CLI `python3 scripts/local_readonly_runner.py --log-path <log> --goal <goal> --out-dir <out>`；该 runner 复用 Phase 1a schema、evidence list、email grounding 和 verifier report，`scripts/validate_repo.py` 已加入本地 read-only smoke gate。SQLite event store、daemon、正式 capability registry、真实外部 adapter 和更完整 run state 仍后移。
-8. Capability Metadata Gate：已实现 Phase 3 最小 `capability-envelope-v1` / `capability-metadata-v1`，覆盖 `read_log`、`extract_regression_result`、`write_artifact` 的 permission、sideEffect、timeout、input/output contract；`run.json` 和 `events.jsonl` 引用 capability ref，`scripts/validate_repo.py` 会拒绝缺失 permission 或声明外部 side effect 的 envelope。
+8. Capability Metadata Gate：已实现 Phase 3 最小 `capability-envelope-v1` / `capability-metadata-v1`，覆盖 `read_log`、`extract_regression_result`、`write_artifact` 和 `rule_verifier` 的 permission、sideEffect、timeout、input/output contract；`run.json` 和 `events.jsonl` 引用 capability ref，`scripts/validate_repo.py` 会拒绝缺失 permission、声明外部 side effect 或缺失 `step-verify.capabilityRef` 的 envelope。
 9. CUA Adapter Contract：post-MVP，只定义 `computer.*` / `trajectory.*` schema，不实际集成。
 10. Phase 1a Evidence Intake Review：在 fixture runner 输出完整 artifact packet 前，后续优化只允许维护评分、Decision Log、Open Questions 和 Research Sprint Log；只有 `verifier_report.json` 失败、grounded email 问题、真实脱敏日志差异或 Build vs Integrate 运行证据出现后，才修改正式设计章节。
 11. Evidence Packet Stop Rule：已由 2026-05-12 14:39 UTC artifact packet 解锁；后续修改必须基于 committed `artifacts/runs/*`、`verifier_report.json` failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据，不再无证据扩写 adapter mapping 或正式设计章节。
@@ -1758,6 +1777,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-13 02:02 UTC：Phase 2 Intent-to-Spec 的首个最小实现已完成；决定将 deterministic `scripts/task_spec.py` 作为 regression 场景 TaskSpec builder / validator / CLI gate，schema version 固定为 `regression-task-spec-v1`，并让 fixture runner 与 local read-only runner 在执行前复用同一 spec validation。LLM intent parser、用户审查 UI 和多场景 spec router 继续后移。
 - 2026-05-13 03:01 UTC：Phase 2 TaskSpec Intake Gate 已实现；决定让 local read-only runner 接收 `--task-spec-path`，并在读取 log 前校验该 spec 与请求 goal/log 匹配，`run.json#taskSpec` 使用传入 spec 原文。Phase 2 regression-log MVP gate 视为满足，下一轮进入 Phase 3 capability interface standardization。
 - 2026-05-13 03:20 UTC：Phase 3 Capability Metadata Gate 已实现；决定先用 `capability-envelope-v1` / `capability-metadata-v1` 标准化 `read_log`、`extract_regression_result`、`write_artifact` 的 permission、sideEffect、timeout 和 input/output contract，并把正式 registry、adapter plugin、daemon、MCP/tool server、IDE/CUA/browser/sandbox provider 继续后移。
+- 2026-05-13 05:20 UTC：Phase 3 Rule Verifier Capability Boundary Gate 已实现；决定把现有 `step-verify` 的 `rule_verifier` 纳入同一最小 capability envelope，以保证当前 run 的每个 step 都有 `capabilityRef`。这不等于进入完整 Phase 5 Verifier Runtime；可插拔 verifier、review agent、human verifier 和 policy engine 继续后移。
 
 ## 20. Open Questions
 
@@ -1781,7 +1801,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - Phase 1a synthetic fixture artifact packet 已由 `scripts/fixture_runner.py` 生成并由 `scripts/validate_repo.py` 校验；当前默认门槛是先完成 Evidence Review，再决定是否进入 Phase 1b。
 - Phase 1a Evidence Review 的 forced-failure gate 已收敛为 deterministic validation：malformed schema、missing evidence refs、failure marker 被篡改为 passed、负例邮件注入 pass-style claim 都必须失败。
 - Phase 2 regression-log MVP gate 已收敛为 deterministic TaskSpec builder + runner intake：`task_spec.py` 生成审查对象，`local_readonly_runner.py --task-spec-path` 在执行前校验并使用该 spec。
-- Phase 3 的最小 capability metadata envelope 已收敛为 `capability-envelope-v1` / `capability-metadata-v1`，覆盖 `schemaVersion`、`name`、`ref`、`permission`、`sideEffect`、`timeoutMs`、`inputContract` 和 `outputContract`；正式 registry、daemon、adapter plugin 和外部 provider 继续后移。
+- Phase 3 的最小 capability metadata envelope 已收敛为 `capability-envelope-v1` / `capability-metadata-v1`，覆盖 `schemaVersion`、`name`、`ref`、`permission`、`sideEffect`、`timeoutMs`、`inputContract` 和 `outputContract`；当前 regression demo 的 `read_log`、`extract_regression_result`、`write_artifact`、`rule_verifier` 都必须有 `capabilityRef`，正式 registry、daemon、adapter plugin 和外部 provider 继续后移。
 
 ### 20.2 仍开放的问题
 
@@ -1801,7 +1821,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 已有 5 个 synthetic fixture artifact packet 后，后续自动化是否应该从 Plan Maintenance 切换为 Evidence Review / implementation loop，并停止追加 no-evidence no-op 日志？
 - Phase 1a verifier hardening 通过 PR / GitHub checks 后，是否足以直接进入 Phase 1b Local Read-only Runner，还是需要先用真实脱敏日志校准 marker 常量？
 - 当前 marker 常量是否对真实脱敏 regression log 足够，还是 Evidence Review 会证明需要新增 project-specific marker 配置？
-- Phase 3 的下一步是否应先加入 `rule_verifier` metadata，还是先把 capability envelope 抽成独立 artifact 以便后续 registry/adapter 复用？
+- Phase 3 的下一步是否应先把 `capability-envelope-v1` 抽成独立 artifact 以便后续 registry/adapter 复用，还是先补 policy enforcement / approval metadata？
 - `write_artifact.permission="write"` 且 `sideEffect=false` 是否足够表达“只写本地 artifact、无外部副作用”，还是需要在 Phase 6 policy gate 中引入更明确的 effect boundary 类型？
 
 ## 21. Research Sprint Log
@@ -3018,6 +3038,75 @@ git diff --check
 ```text
 继续 Phase 3 的最小后续切片：
 要么为 `rule_verifier` 增加同样的 capability metadata，使 verifier step 也进入统一 envelope；要么将 `capabilityEnvelope` 抽成独立 artifact/contract validation，为 Phase 4 Context Broker 和 Phase 5 Verifier Runtime 复用。
+```
+
+### 2026-05-13 05:20 UTC: Phase 3 Rule Verifier Capability Boundary Gate
+
+本轮目标：在最新 main 已合入 Phase 3 capability metadata gate 后，推进最早仍不完整的 Phase 3 子切片，补齐现有 `step-verify` 的 capability metadata/ref。
+
+Active phase：
+
+```text
+Phase 3: capability interface standardization
+```
+
+Selected slice：
+
+```text
+Add rule_verifier to the capability metadata envelope so that python3 scripts/validate_repo.py proves every run.json step has a valid capabilityRef.
+```
+
+为什么这是下一步：`read_log`、`extract_regression_result`、`write_artifact` 已经有 metadata envelope，但 `rule_verifier` 仍作为裸字符串存在于 `run.json#steps[]`。在进入 Context Broker 或 Verifier Runtime 扩展前，当前 run 的每个 step 都应该具备统一 capability provenance。
+
+实现摘要：
+
+- `scripts/capability_contract.py` 将 `rule_verifier` 纳入 `PHASE3_CAPABILITY_NAMES`，定义只读、无外部副作用、输入为 TaskSpec/evidence/result/email draft、输出为 `VerifierReportV1` 的 metadata。
+- `fixture_runner.py` / `local_readonly_runner.py` 的 `capabilityEnvelope` 包含 `rule_verifier`，`step-verify` 使用 `capabilityRef`，`verifier.completed` event 引用同一 capability。
+- `scripts/validate_repo.py` 要求 `step-verify.capabilityRef` 存在并匹配，并新增 missing `rule_verifier` ref 的 forced-failure self-test。
+- 重新生成 committed `artifacts/runs/*`，保持 deterministic artifact packet。
+
+验收标准：
+
+- `rule_verifier` 有 permission、sideEffect、timeout、input/output contract：通过。
+- `run.json#steps[]` 的每个当前 step 都有合法 `capabilityRef`：通过。
+- `events.jsonl#verifier.completed` 引用 `rule_verifier`：通过。
+- validation gate 能拒绝缺失 `step-verify.capabilityRef` 的篡改：通过。
+- 不引入完整 Phase 5 Verifier Runtime、review agent、human verifier、registry、daemon、adapter 或外部副作用：通过。
+
+验证命令：
+
+```text
+python scripts/validate_repo.py
+python3 scripts/validate_repo.py
+python3 -m py_compile scripts/capability_contract.py scripts/fixture_runner.py scripts/validate_repo.py scripts/local_readonly_runner.py scripts/task_spec.py
+python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase3-rule-verifier-fixtures
+python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase3-rule-verifier-task-spec.json
+python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --task-spec-path /tmp/phase3-rule-verifier-task-spec.json --out-dir /tmp/phase3-rule-verifier-local
+git diff --check
+```
+
+验证结果：
+
+```text
+- `python scripts/validate_repo.py`：本地镜像缺少 `python` 命令，返回 command not found；GitHub Actions 的 setup-python 环境预期提供 `python`。
+- `python3 scripts/validate_repo.py`：通过，覆盖 Phase 1a/1b/2 gates、Phase 3 capability envelope，以及 `rule_verifier` step/event refs 和 forced-failure validation。
+- `python3 -m py_compile scripts/capability_contract.py scripts/fixture_runner.py scripts/validate_repo.py scripts/local_readonly_runner.py scripts/task_spec.py`：通过。
+- `python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase3-rule-verifier-fixtures`：通过，处理 5 个 fixtures。
+- `python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase3-rule-verifier-task-spec.json`：通过。
+- `python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --task-spec-path /tmp/phase3-rule-verifier-task-spec.json --out-dir /tmp/phase3-rule-verifier-local`：通过。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- `rule_verifier` 现在只描述当前本地规则验证 step 的 metadata，不代表完整 Verifier Runtime 已完成。
+- 后续仍需决定 capability envelope 是否应成为独立 artifact，以及 policy/approval metadata 如何表达。
+
+下一轮建议：
+
+```text
+继续 Phase 3：
+将 `capability-envelope-v1` 抽成可单独复用的 artifact contract，或补齐 policy enforcement / approval metadata，让 Phase 4 Context Broker 能引用稳定的 capability provenance。
 ```
 
 ## 22. Parking Lot
