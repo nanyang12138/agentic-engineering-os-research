@@ -3432,10 +3432,10 @@ Add a minimal ContextPackV1 budget/source-selection policy so that scripts/valid
 
 验收标准：
 
-- ContextPack builder 为 5 个 committed packs 生成 deterministic budget：待本轮验证。
-- validator 强制 `sourceSelection=evidence_items_only_v1`：待本轮验证。
-- validator 强制所有 `log_excerpt` 有 `evidenceId` 且不超过 item/line budget：待本轮验证。
-- over-budget forced-failure 能被 `scripts/validate_repo.py` 捕获：待本轮验证。
+- ContextPack builder 为 5 个 committed packs 生成 deterministic budget：通过。
+- validator 强制 `sourceSelection=evidence_items_only_v1`：通过。
+- validator 强制所有 `log_excerpt` 有 `evidenceId` 且不超过 item/line budget：通过。
+- over-budget forced-failure 能被 `scripts/validate_repo.py` 捕获：通过。
 - 不引入动态 retrieval、embedding store、外部 adapter、数据库、CUA、IDE 或 browser automation：通过。
 
 验证命令：
@@ -3456,13 +3456,13 @@ git diff --check
 ```text
 - Python executable resolved for this run: /usr/bin/python3.
 - `/usr/bin/python3 scripts/context_pack.py ... --out-dir artifacts/context`：通过，重新生成 5 个 committed ContextPack artifacts。
-- `/usr/bin/python3 scripts/validate_repo.py`：待本轮验证。
-- `/usr/bin/python3 -m py_compile ...`：待本轮验证。
-- `/usr/bin/python3 scripts/context_pack.py ... --out-dir /tmp/phase4-budget-context-smoke`：待本轮验证。
-- `/usr/bin/python3 scripts/task_spec.py ... --out /tmp/phase4-budget-task-spec.json`：待本轮验证。
-- `/usr/bin/python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json ...`：待本轮验证。
-- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase4-budget-fixture-smoke`：待本轮验证。
-- `git diff --check`：待本轮验证。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 committed ContextPack budget、deterministic builder comparison 和 over-budget forced-failure。
+- `/usr/bin/python3 -m py_compile ...`：通过。
+- `/usr/bin/python3 scripts/context_pack.py ... --out-dir /tmp/phase4-budget-context-smoke`：通过，写出 5 个 ContextPack artifacts。
+- `/usr/bin/python3 scripts/task_spec.py ... --out /tmp/phase4-budget-task-spec.json`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json ...`：通过。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase4-budget-fixture-smoke`：通过。
+- `git diff --check`：通过。
 ```
 
 剩余风险：
