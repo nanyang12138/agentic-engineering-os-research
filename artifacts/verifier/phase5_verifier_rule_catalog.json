@@ -1,0 +1,82 @@
+{
+  "artifactChecks": [
+    {
+      "artifactType": "evidence",
+      "blocking": true,
+      "description": "Evidence artifact must contain at least one item.",
+      "id": "artifact.evidence_present"
+    },
+    {
+      "artifactType": "regression_result",
+      "blocking": true,
+      "description": "Regression result artifact must contain a supported verdict and evidence ids.",
+      "id": "artifact.regression_result_valid"
+    },
+    {
+      "artifactType": "email_draft",
+      "blocking": true,
+      "description": "Email draft artifact must be grounded in structured verifier inputs.",
+      "id": "artifact.email_draft_grounded"
+    }
+  ],
+  "id": "phase5-regression-verifier-rules",
+  "phase": "phase5",
+  "rules": [
+    {
+      "blocking": true,
+      "description": "TaskSpec, evidence, and regression result required fields must be present.",
+      "id": "schema_validation",
+      "kind": "schema"
+    },
+    {
+      "blocking": true,
+      "description": "Non-unknown verdicts must reference evidence ids that exist in evidence.json.",
+      "id": "evidence_refs",
+      "kind": "evidence_link"
+    },
+    {
+      "blocking": true,
+      "description": "Regression verdict must match marker precedence rules.",
+      "id": "classification_consistency",
+      "kind": "classification"
+    },
+    {
+      "blocking": true,
+      "description": "Failure markers cannot be overridden by a passed verdict.",
+      "id": "verdict.failed_precedence",
+      "kind": "classification"
+    },
+    {
+      "blocking": true,
+      "description": "Incomplete markers cannot be converted into a passed verdict.",
+      "id": "verdict.incomplete_precedence",
+      "kind": "classification"
+    },
+    {
+      "blocking": true,
+      "description": "Warnings or waivers require a review-oriented verdict.",
+      "id": "verdict.warning_guard",
+      "kind": "classification"
+    },
+    {
+      "blocking": true,
+      "description": "Passed verdicts require explicit all-pass evidence with no conflicts.",
+      "id": "verdict.passed_sufficiency",
+      "kind": "classification"
+    },
+    {
+      "blocking": true,
+      "description": "Email drafts must cite the structured result, verdict, and evidence ids.",
+      "id": "email_draft_uses_structured_facts",
+      "kind": "artifact_grounding"
+    }
+  ],
+  "runtime": {
+    "id": "phase5-regression-verifier-runtime",
+    "mode": "same_process_readonly",
+    "schemaVersion": "verifier-runtime-v1",
+    "sideEffect": false
+  },
+  "schemaVersion": "verifier-rule-catalog-v1",
+  "scope": "regression_readonly_mvp"
+}

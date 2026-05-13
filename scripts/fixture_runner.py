@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import Iterable
 
 from capability_contract import build_capability_envelope, capability_ref
-from task_spec import EXPECTED_ARTIFACTS, build_regression_task_spec, validate_regression_task_spec
+from task_spec import EXPECTED_ARTIFACTS, build_regression_task_spec
+from verifier_runtime import verify_artifacts
 
 
 GENERATED_AT = "2026-05-12T14:39:00Z"
@@ -170,93 +171,6 @@ def classify(evidence: list[dict]) -> tuple[str, str, list[str]]:
     return "unknown", "No sufficient pass/fail/incomplete marker was found.", ids
 
 
-def rule_result(rule_id: str, status: str, message: str, evidence_ids: list[str]) -> dict:
-    return {
-        "ruleId": rule_id,
-        "status": status,
-        "message": message,
-        "evidenceIds": evidence_ids,
-    }
-
-
-def build_rule_results(task_spec: dict, evidence: list[dict], verdict: str, verdict_evidence_ids: list[str]) -> list[dict]:
-    ids = {item["id"] for item in evidence}
-    classes = {item["classification"] for item in evidence}
-    task_spec_error = ""
-    try:
-        validate_regression_task_spec(task_spec)
-    except ValueError as exc:
-        task_spec_error = str(exc)
-    required_evidence_fields = {"id", "type", "sourcePath", "excerpt", "observedAt", "classification", "confidence"}
-    bad_evidence = [item.get("id", "<missing-id>") for item in evidence if not required_evidence_fields.issubset(item)]
-    referenced = [evidence_id for evidence_id in verdict_evidence_ids if evidence_id in ids]
-    evidence_status = "passed" if verdict == "unknown" or bool(referenced) else "failed"
-
-    results = [
-        rule_result(
-            "schema_validation",
-            "passed" if not task_spec_error and not bad_evidence and verdict in VERDICTS else "failed",
-            "TaskSpec, evidence, and regression result required fields are present."
-            if not task_spec_error and not bad_evidence and verdict in VERDICTS
-            else f"TaskSpec error={task_spec_error}; bad evidence={bad_evidence}; verdict={verdict}",
-            referenced,
-        ),
-        rule_result(
-            "evidence_refs",
-            evidence_status,
-            "Verdict evidence ids resolve to evidence.json items."
-            if evidence_status == "passed"
-            else "Non-unknown verdict must reference at least one evidence id.",
-            verdict_evidence_ids,
-        ),
-        rule_result(
-            "classification_consistency",
-            "passed" if verdict_matches_classes(verdict, classes) else "failed",
-            "Verdict is consistent with marker precedence rules."
-            if verdict_matches_classes(verdict, classes)
-            else f"Verdict {verdict} conflicts with classifications {sorted(classes)}.",
-            verdict_evidence_ids,
-        ),
-        rule_result(
-            "verdict.failed_precedence",
-            "passed" if "failure_marker" not in classes or verdict in {"failed", "needs_human_check"} else "failed",
-            "Failure markers are not overridden by a passed verdict.",
-            [item["id"] for item in evidence if item["classification"] == "failure_marker"],
-        ),
-        rule_result(
-            "verdict.incomplete_precedence",
-            "passed" if "incomplete_marker" not in classes or verdict in {"incomplete", "unknown", "needs_human_check"} else "failed",
-            "Incomplete markers are not converted into a passed verdict.",
-            [item["id"] for item in evidence if item["classification"] == "incomplete_marker"],
-        ),
-        rule_result(
-            "verdict.warning_guard",
-            "passed" if not ({"warning_marker", "waiver_marker"} & classes) or verdict in {"warning_or_waiver", "needs_human_check"} else "failed",
-            "Warning or waiver markers require review-oriented verdicts.",
-            [item["id"] for item in evidence if item["classification"] in {"warning_marker", "waiver_marker"}],
-        ),
-        rule_result(
-            "verdict.passed_sufficiency",
-            "passed" if verdict != "passed" or classes == {"all_passed_marker"} else "failed",
-            "Passed verdict is only allowed for explicit all-pass evidence with no conflicts.",
-            verdict_evidence_ids,
-        ),
-    ]
-    return results
-
-
-def verdict_matches_classes(verdict: str, classes: set[str]) -> bool:
-    if "failure_marker" in classes:
-        return verdict in {"failed", "needs_human_check"}
-    if "incomplete_marker" in classes:
-        return verdict in {"incomplete", "unknown", "needs_human_check"}
-    if {"warning_marker", "waiver_marker"} & classes:
-        return verdict in {"warning_or_waiver", "needs_human_check"}
-    if "all_passed_marker" in classes and "ambiguous" not in classes:
-        return verdict == "passed"
-    return verdict in {"unknown", "needs_human_check"}
-
-
 def build_email(fixture: Fixture, result: dict) -> str:
     evidence_line = ", ".join(result["evidenceIds"]) if result["evidenceIds"] else "none"
     header = [
@@ -300,76 +214,6 @@ def build_email(fixture: Fixture, result: dict) -> str:
         ]
     footer = ["", "Regards,", "Agentic Engineering OS Fixture Runner", ""]
     return "\n".join(header + body + footer)
-
-
-def email_grounding_status(fixture: Fixture, email: str, result: dict) -> tuple[str, str]:
-    lower_email = email.lower()
-    references_result = result["id"].lower() in lower_email and f"`{result['verdict']}`" in email
-    references_evidence = all(evidence_id.lower() in lower_email for evidence_id in result["evidenceIds"])
-    forbidden_pass_style = any(
-        phrase in lower_email
-        for phrase in ["all passed", "clean pass", "passed successfully", "no failures"]
-    )
-    if not references_result or not references_evidence:
-        return "failed", "Email draft must reference the structured result id, verdict, and evidence ids."
-    if not fixture.allow_all_passed_email and forbidden_pass_style:
-        return "failed", "Negative or uncertain fixtures must not generate a pass-style email."
-    return "passed", "Email draft is grounded in regression_result.json and evidence ids."
-
-
-def artifact_check(artifact_id: str, artifact_type: str, status: str, message: str) -> dict:
-    return {
-        "artifactId": artifact_id,
-        "artifactType": artifact_type,
-        "status": status,
-        "message": message,
-    }
-
-
-def verify_artifacts(
-    fixture: Fixture,
-    run_id: str,
-    fixture_hash: str,
-    task_spec: dict,
-    evidence: list[dict],
-    result: dict,
-    email: str,
-) -> dict:
-    verdict = result["verdict"]
-    verdict_evidence_ids = result["evidenceIds"]
-    rule_results = build_rule_results(task_spec, evidence, verdict, verdict_evidence_ids)
-    email_status, email_message = email_grounding_status(fixture, email, result)
-    rule_results.append(rule_result("email_draft_uses_structured_facts", email_status, email_message, verdict_evidence_ids))
-    result["ruleResults"] = rule_results
-
-    artifact_checks = [
-        artifact_check("evidence.json", "evidence", "passed" if evidence else "failed", "Evidence artifact contains at least one item."),
-        artifact_check(result["id"], "regression_result", "passed" if verdict in VERDICTS and bool(result["evidenceIds"]) else "failed", "Regression result has a valid verdict and evidence ids."),
-        artifact_check("email_draft.md", "email_draft", email_status, email_message),
-    ]
-    blocking_failures = [
-        {"ruleId": item["ruleId"], "message": item["message"], "evidenceIds": item["evidenceIds"]}
-        for item in rule_results
-        if item["status"] == "failed"
-    ] + [
-        {"ruleId": f"artifact.{item['artifactType']}", "message": item["message"], "evidenceIds": verdict_evidence_ids}
-        for item in artifact_checks
-        if item["status"] == "failed"
-    ]
-    report_status = "passed" if not blocking_failures else "failed"
-    return {
-        "schemaVersion": "verifier-report-v1",
-        "id": f"verifier-report-{fixture.id}",
-        "runId": run_id,
-        "fixtureId": fixture.id,
-        "status": report_status,
-        "generatedAt": GENERATED_AT,
-        "fixtureHash": fixture_hash,
-        "ruleResults": rule_results,
-        "artifactChecks": artifact_checks,
-        "blockingFailures": blocking_failures,
-        "summary": f"Fixture {fixture.id} produced verdict {verdict}; verifier status {report_status}.",
-    }
 
 
 def capability_step(step_id: str, capability: str, status: str) -> dict:
