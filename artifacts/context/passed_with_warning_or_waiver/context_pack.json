@@ -32,14 +32,9 @@
     }
   ],
   "budget": {
-    "actualLogExcerptItems": 8,
-    "actualLogExcerptLines": 8,
     "maxLogExcerptItems": 8,
     "maxLogExcerptLines": 8,
-    "overflowBehavior": "reject_context_pack",
-    "policy": "regression-log-evidence-v1",
-    "schemaVersion": "context-budget-v1",
-    "selectionRule": "ordered_unique_log_evidence_markers"
+    "sourceSelection": "evidence_items_only_v1"
   },
   "capabilityCatalogRef": "artifacts/capabilities/phase3_capability_catalog.json",
   "contextItems": [

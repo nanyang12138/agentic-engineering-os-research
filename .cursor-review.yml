@@ -8,15 +8,17 @@ review_focus:
   - edge-cases
 max_findings: 5
 max_diff_bytes: 120000
+timeout_seconds: 600
 filter_mode: added
+scope_mode: full
 persistent_comment: true
+skip_generated_files: true
+exclude_patterns:
+  - "*.lock"
+  - "dist/**"
+  - "build/**"
 enabled_commands:
   - review
   - ask
   - improve
   - describe
-include_patterns: []
-exclude_patterns:
-  - "*.lock"
-  - "dist/**"
-  - "build/**"

@@ -891,6 +891,24 @@ Build vs Integrate：
 
 当前 Phase 4 regression-log MVP gate 已满足：ContextPack 具备静态 provenance、runtime consumption/evidence enforcement 和最小 budget/source-selection policy。动态 Context Broker service、retrieval/ranking、cache 和外部 source adapters 后移，不阻塞进入 Phase 5 Evidence List / MVP Verifier Runtime。
 
+#### Phase 4 ContextPackV1 Budget / Source Selection Gate
+
+2026-05-13 07:20 UTC 自动化实现结论：Phase 4 的第三个执行切片为 `ContextPackV1` 增加最小 budget/source-selection policy，使 Context Broker 不只记录来源，也能声明并验证本次上下文选择的边界。当前 policy 仍限定在 read-only regression MVP：ContextPack 只包含 evidence-backed log excerpts，且 validator 强制 log excerpt 数量与总行数不超过 pack 内声明的预算。
+
+本切片完成后：
+
+- `scripts/context_pack.py` 为每个 pack 写入 `budget.sourceSelection="evidence_items_only_v1"`、`budget.maxLogExcerptItems` 和 `budget.maxLogExcerptLines`。
+- `validate_context_pack(...)` 要求每个 `log_excerpt` 引用 `evidenceId`，并拒绝超过 `budget.maxLogExcerptItems` 或 `budget.maxLogExcerptLines` 的 ContextPack。
+- `scripts/validate_repo.py` 加入 forced-failure：把 `all_passed` 的 `budget.maxLogExcerptLines` 降到 1 时必须触发 `ContextPack log_excerpt line budget exceeded`。
+- 重新生成并提交 `artifacts/context/<fixture_id>/context_pack.json`，使 committed artifacts 与 deterministic builder 输出一致。
+
+Build vs Integrate：
+
+- Build：最小 ContextPack budget/source-selection schema、deterministic artifact regeneration 和 over-budget validation gate。
+- Integrate later：token estimator、semantic source ranking、dynamic retrieval service、ContextPack cache、symbol/docs/issues/CI adapters 和 model-facing broker API。
+
+当前 Phase 4 regression MVP gate 已满足：ContextPack 有静态 provenance、runtime consumption/enforcement，以及最小 budget/source-selection policy。下一步可进入 Phase 5 Evidence List / MVP Verifier Runtime，但仍不引入完整 Evidence Graph、数据库、外部 review agent 或 human approval backend。
+
 ### Phase 5：Evidence List 和 MVP Verifier Runtime
 
 MVP 不先实现完整图数据库或复杂 Evidence Graph，而是先实现 Evidence list：
@@ -1873,7 +1891,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-13 05:40 UTC：Phase 3 Capability Catalogue Artifact Gate 已实现；决定将当前 read-only regression MVP 的 capability envelope 导出为 committed `capability-catalog-v1` artifact，并由 `scripts/validate_repo.py` 比对 deterministic builder 输出。动态 registry、provider discovery、adapter lifecycle 和 policy backend 继续后移；Phase 4 可从独立 catalogue 引用 capability provenance。
 - 2026-05-13 06:03 UTC：Phase 4 ContextPackV1 Static Provenance Gate 已实现；决定先自研 deterministic `context-pack-v1` artifact，把 TaskSpec、regression log excerpts、capability catalogue 和 run artifact refs 统一成带 POSIX relative path 与 contentHash 的 context provenance。动态 retrieval、symbol/docs/issues/CI adapters、embedding store 和 ContextPack runtime injection 后移。
 - 2026-05-13 07:01 UTC：Phase 4 ContextPackV1 Runtime Consumption Gate 已实现；决定让 local read-only runner 可选消费 committed ContextPack，并强制每条 log evidence 必须由 ContextPack 声明的 `log_excerpt` source ref 支持。动态 retrieval、cache、broker service 和 token budget optimizer 继续后移；下一步优先补最小 budget/source-selection policy。
-- 2026-05-13 07:16 UTC：Phase 4 ContextPackV1 Budget / Source-Selection Gate 已实现；决定自研最小 `context-budget-v1` contract，固定 read-only regression MVP 的 log excerpt 条数/行数预算和 overflow reject 行为，并由 `scripts/validate_repo.py` 用超预算 forced-failure 证明 ContextPack 不能无限膨胀。动态 token estimator、ranking/retrieval 和外部 source adapters 继续后移；下一轮进入 Phase 5。
+- 2026-05-13 07:20 UTC：Phase 4 ContextPackV1 Budget / Source Selection Gate 已实现；决定在 `context-pack-v1` 中自研最小 `budget` 字段，先用 `sourceSelection=evidence_items_only_v1`、`maxLogExcerptItems` 和 `maxLogExcerptLines` 约束 read-only regression context。token estimator、semantic ranking 和动态 broker service 继续后移；Phase 5 可从已受限的 ContextPack 输入继续推进 Evidence/Verifier Runtime。
 
 ## 20. Open Questions
 
@@ -1899,8 +1917,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - Phase 2 regression-log MVP gate 已收敛为 deterministic TaskSpec builder + runner intake：`task_spec.py` 生成审查对象，`local_readonly_runner.py --task-spec-path` 在执行前校验并使用该 spec。
 - Phase 3 的最小 capability metadata envelope 已收敛为 `capability-envelope-v1` / `capability-metadata-v1`，覆盖 `schemaVersion`、`name`、`ref`、`permission`、`sideEffect`、`timeoutMs`、`inputContract` 和 `outputContract`；当前 regression demo 的 `read_log`、`extract_regression_result`、`write_artifact`、`rule_verifier` 都必须有 `capabilityRef`，正式 registry、daemon、adapter plugin 和外部 provider 继续后移。
 - `capability-envelope-v1` 先作为 `artifacts/capabilities/phase3_capability_catalog.json` 独立 artifact 提交和验证；Phase 4 Context Broker 可引用该静态 catalogue，动态 registry / provider discovery 后移。
-- Phase 4 的首个 Context Broker artifact 固定为 `ContextPackV1` / `context-pack-v1`：先用静态 builder 收敛 TaskSpec、log excerpts、capability catalogue 和 artifact refs，并用 contentHash 验证来源可复查；动态 retrieval 与 runtime consumption 后移到后续 Phase 4 slice。
-- `ContextPackV1` 的最小 budget/source-selection 合约固定为 `context-budget-v1`：当前 read-only regression MVP 限制最多 8 条 log excerpt / 8 行 log excerpt，selection rule 为 `ordered_unique_log_evidence_markers`，超预算必须拒绝。
+- Phase 4 的 Context Broker artifact 固定为 `ContextPackV1` / `context-pack-v1`：先用静态 builder 收敛 TaskSpec、log excerpts、capability catalogue 和 artifact refs，并用 contentHash 验证来源可复查；local runner 可选消费 committed ContextPack，且最小 `budget` 会限制 evidence-backed log excerpt 的数量和总行数。动态 retrieval 与 broker service 后移。
 
 ### 20.2 仍开放的问题
 
@@ -1921,7 +1938,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - Phase 1a verifier hardening 通过 PR / GitHub checks 后，是否足以直接进入 Phase 1b Local Read-only Runner，还是需要先用真实脱敏日志校准 marker 常量？
 - 当前 marker 常量是否对真实脱敏 regression log 足够，还是 Evidence Review 会证明需要新增 project-specific marker 配置？
 - `write_artifact.permission="write"` 且 `sideEffect=false` 是否足够表达“只写本地 artifact、无外部副作用”，还是需要在 Phase 6 policy gate 中引入更明确的 effect boundary 类型？
-- Phase 4 regression-log MVP gate 已满足；下一步进入 Phase 5 Evidence List / MVP Verifier Runtime，验证 `evidence.json` 是否能升级为独立、可复用的 evidence contract，而不是只作为 fixture runner 内部产物。
+- Phase 4 已把 ContextPack 作为 local runner 的可选执行输入，并已加入最小 budget/source-selection negative test；下一步应进入 Phase 5 Evidence List / MVP Verifier Runtime。
 
 ## 21. Research Sprint Log
 
@@ -3416,7 +3433,7 @@ git diff --check
 增加最小 ContextPack budget/source-selection policy，例如 schema 中声明 `budget.maxLogExcerptLines` 和 validator 强制 log_excerpt 总行数不超预算；加入 committed artifact 校验和超预算 forced-failure，然后再进入 Phase 5 Evidence List / MVP Verifier Runtime。
 ```
 
-### 2026-05-13 07:22 UTC Automation Implementation Log - Phase 4 ContextPackV1 Budget / Source-Selection Gate
+### 2026-05-13 07:20 UTC Automation Implementation Log - Phase 4 ContextPackV1 Budget / Source Selection Gate
 
 Active phase：
 
@@ -3427,64 +3444,65 @@ Phase 4: Context Broker
 Selected slice：
 
 ```text
-Add ContextPackV1 budget/source-selection policy so that scripts/validate_repo.py rejects over-budget ContextPacks.
+Add a minimal ContextPackV1 budget/source-selection policy so that scripts/validate_repo.py rejects over-budget log excerpt context.
 ```
 
-为什么这是下一步：Phase 4 已有 committed ContextPack、source/hash provenance 和 local runner runtime consumption，但仍缺少显式预算，ContextPack 可以无上限扩张。当前切片用最小 `context-budget-v1` 合约固定 read-only regression MVP 的 log excerpt 数量/行数边界，并用 forced-failure 证明超预算 artifact 会被机器拒绝。
+为什么这是下一步：最新 main 已经具备 ContextPack 静态 provenance 和 local runner runtime consumption。Phase 4 的剩余最小缺口是明确 Context Broker 选择了多少上下文、按什么策略选择，并用机器负例证明过量上下文不会被悄悄接受；这比提前进入 Phase 5 更能稳定 Evidence/Verifier Runtime 的输入边界。
 
 实现摘要：
 
-- `scripts/context_pack.py` 新增 `context-budget-v1` builder/validator，固定 `maxLogExcerptItems=8`、`maxLogExcerptLines=8`、`selectionRule=ordered_unique_log_evidence_markers`、`overflowBehavior=reject_context_pack`。
-- committed `artifacts/context/*/context_pack.json` 全部重新生成并包含 deterministic budget block。
-- `scripts/validate_repo.py` 要求主计划记录 `context-budget-v1`，并新增超预算 ContextPack forced-failure；删除 log excerpts 的 runner 负例同步归零 budget actuals，继续验证未声明 evidence 会被拒绝。
-- Phase 4 regression-log MVP gate 标记为满足，下一步进入 Phase 5 Evidence List / MVP Verifier Runtime。
+- `scripts/context_pack.py` 新增 `SOURCE_SELECTION_POLICY="evidence_items_only_v1"`、`build_context_budget(...)` 和 `validate_context_budget(...)`。
+- 每个 `context-pack-v1` artifact 现在包含 `budget.maxLogExcerptItems`、`budget.maxLogExcerptLines` 和 `budget.sourceSelection`。
+- `validate_context_pack(...)` 要求每个 `log_excerpt` 有 `evidenceId`，并拒绝超过 item/line budget 的 ContextPack。
+- `scripts/validate_repo.py` 新增超预算 forced-failure：将 `all_passed` 的 `budget.maxLogExcerptLines` 降到 1 后必须失败。
+- 已重新生成 `artifacts/context/<fixture_id>/context_pack.json`，保持 committed artifacts 与 deterministic builder 输出一致。
 
 验收标准：
 
-- ContextPack schema 包含可验证的 budget/source-selection policy：通过。
-- committed ContextPack 与 deterministic builder 输出一致：通过。
-- 超过 log excerpt 条数/行数预算的 ContextPack 会被 validator 拒绝：通过。
-- local read-only runner 继续消费 ContextPack 并拒绝未声明 log evidence：通过。
-- 不引入外部 side effects、动态 retrieval、embedding store、CUA、IDE 或 browser automation：通过。
+- ContextPack builder 为 5 个 committed packs 生成 deterministic budget：通过。
+- validator 强制 `sourceSelection=evidence_items_only_v1`：通过。
+- validator 强制所有 `log_excerpt` 有 `evidenceId` 且不超过 item/line budget：通过。
+- over-budget forced-failure 能被 `scripts/validate_repo.py` 捕获：通过。
+- 不引入动态 retrieval、embedding store、外部 adapter、数据库、CUA、IDE 或 browser automation：通过。
 
 验证命令：
 
 ```text
-python3 scripts/context_pack.py --run-root artifacts/runs --fixture-root fixtures/regression --capability-catalog artifacts/capabilities/phase3_capability_catalog.json --out-dir artifacts/context
-python3 scripts/validate_repo.py
-python3 -m py_compile scripts/*.py
-python3 scripts/context_pack.py --run-root artifacts/runs --fixture-root fixtures/regression --capability-catalog artifacts/capabilities/phase3_capability_catalog.json --out-dir /tmp/phase4-budget-context-smoke
-python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase4-budget-fixture-smoke
-python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase4-budget-task-spec.json
-python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --task-spec-path /tmp/phase4-budget-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json --out-dir /tmp/phase4-budget-local-smoke
+/usr/bin/python3 scripts/context_pack.py --run-root artifacts/runs --fixture-root fixtures/regression --capability-catalog artifacts/capabilities/phase3_capability_catalog.json --out-dir artifacts/context
+/usr/bin/python3 scripts/validate_repo.py
+/usr/bin/python3 -m py_compile scripts/capability_contract.py scripts/context_pack.py scripts/fixture_runner.py scripts/local_readonly_runner.py scripts/task_spec.py scripts/validate_repo.py
+/usr/bin/python3 scripts/context_pack.py --run-root artifacts/runs --fixture-root fixtures/regression --capability-catalog artifacts/capabilities/phase3_capability_catalog.json --out-dir /tmp/phase4-budget-context-smoke
+/usr/bin/python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase4-budget-task-spec.json
+/usr/bin/python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --task-spec-path /tmp/phase4-budget-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json --out-dir /tmp/phase4-budget-runner-smoke
+/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase4-budget-fixture-smoke
 git diff --check
 ```
 
 验证结果：
 
 ```text
-- Python executable resolved for this run: python3.
-- `python3 scripts/context_pack.py ... --out-dir artifacts/context`：通过，写出 5 个 ContextPack artifacts。
-- `python3 scripts/validate_repo.py`：第一次失败，因为计划尚未包含新 `context-budget-v1` marker；补齐计划后第二次失败，因为删除 log excerpts 的负例未同步 budget actuals；修复负例后通过。
-- `python3 -m py_compile scripts/*.py`：通过。
-- `python3 scripts/context_pack.py ... --out-dir /tmp/phase4-budget-context-smoke`：通过，写出 5 个 ContextPack artifacts。
-- `python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase4-budget-fixture-smoke`：通过。
-- `python3 scripts/task_spec.py ... --out /tmp/phase4-budget-task-spec.json`：通过。
-- `python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json ...`：通过。
+- Python executable resolved for this run: /usr/bin/python3.
+- `/usr/bin/python3 scripts/context_pack.py ... --out-dir artifacts/context`：通过，重新生成 5 个 committed ContextPack artifacts。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 committed ContextPack budget、deterministic builder comparison 和 over-budget forced-failure。
+- `/usr/bin/python3 -m py_compile ...`：通过。
+- `/usr/bin/python3 scripts/context_pack.py ... --out-dir /tmp/phase4-budget-context-smoke`：通过，写出 5 个 ContextPack artifacts。
+- `/usr/bin/python3 scripts/task_spec.py ... --out /tmp/phase4-budget-task-spec.json`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json ...`：通过。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/phase4-budget-fixture-smoke`：通过。
 - `git diff --check`：通过。
 ```
 
 剩余风险：
 
-- ContextPack budget 仍使用固定 line/item count，不是真实 token estimator；动态 ranking、retrieval 和 source compression 后移。
-- 当前 budget policy 只覆盖 regression log excerpts；repo/docs/issues/CI sources 仍未进入 Phase 4 MVP。
-- open PR #51 为旧草稿且与 main 冲突，本环境没有写权限工具可关闭或标 ready；本次只能报告 stale PR 清理 blocker。
+- Budget 目前以行数和 excerpt item 数约束，不包含 token estimator 或语义去重。
+- `sourceSelection=evidence_items_only_v1` 仍是 deterministic regression MVP 策略，不是通用 retrieval/ranking API。
+- PR #51 是由本轮自动化更新的同一指定分支；先前重复的 runtime-consumption 内容已被最新 main supersede 并通过 merge-main 处理。
 
 下一轮建议：
 
 ```text
 进入 Phase 5 Evidence List / MVP Verifier Runtime：
-抽出并验证独立 EvidenceListV1 contract，使 evidence items、artifact refs 和 verifier report 的 evidence 引用可被单独校验，并加入缺失 evidence/artifact link 的 forced-failure。
+把当前内嵌在 `fixture_runner.verify_artifacts(...)` 的规则验证提升为更明确的 Verifier Runtime v1 contract，例如独立 verifier rule catalogue / CLI，并由 validation 证明 schema、evidence refs、classification precedence、email grounding 和 human-approval-before-side-effect checks 都由该 runtime 统一执行。
 ```
 
 ## 22. Parking Lot
