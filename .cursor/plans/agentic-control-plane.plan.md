@@ -2677,7 +2677,10 @@ python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_pass
 验证结果：
 
 ```text
-待本轮自动化运行后回填。
+- `python scripts/validate_repo.py`：本地环境缺少 `python` 命令，返回 command not found；GitHub Actions 的 `actions/setup-python` 环境预期提供 `python`。
+- `python3 scripts/validate_repo.py`：通过，覆盖 Phase 1a fixture/schema/verifier gate 和 Phase 1b local read-only smoke gate。
+- `python3 -m py_compile scripts/fixture_runner.py scripts/validate_repo.py scripts/local_readonly_runner.py`：通过。
+- `python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --out-dir /tmp/phase1b-local-readonly-smoke`：通过，生成 `/tmp/phase1b-local-readonly-smoke/all_passed` artifact packet。
 ```
 
 剩余风险：
