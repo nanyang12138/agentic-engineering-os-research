@@ -251,7 +251,18 @@ def build_rule_results(task_spec: dict[str, Any], evidence: list[dict[str, Any]]
         validate_regression_task_spec(task_spec)
     except ValueError as exc:
         task_spec_error = str(exc)
-    required_evidence_fields = {"id", "type", "sourcePath", "excerpt", "observedAt", "classification", "confidence"}
+    required_evidence_fields = {
+        "id",
+        "type",
+        "sourcePath",
+        "sourceRef",
+        "lineRange",
+        "excerpt",
+        "excerptHash",
+        "observedAt",
+        "classification",
+        "confidence",
+    }
     bad_evidence = [item.get("id", "<missing-id>") for item in evidence if not required_evidence_fields.issubset(item)]
     referenced = [evidence_id for evidence_id in verdict_evidence_ids if evidence_id in ids]
     evidence_status = "passed" if verdict == "unknown" or bool(referenced) else "failed"

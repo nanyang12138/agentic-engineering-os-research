@@ -1,10 +1,34 @@
 {
+  "artifactBacklinks": [
+    {
+      "artifact": "regression_result.json",
+      "jsonPointer": "/evidenceIds",
+      "relation": "supports_regression_result"
+    },
+    {
+      "artifact": "verifier_report.json",
+      "jsonPointer": "/ruleResults/*/evidenceIds",
+      "relation": "checked_by_verifier"
+    },
+    {
+      "artifact": "events.jsonl",
+      "jsonPointer": "/*.evidenceIds",
+      "relation": "audited_by_events"
+    },
+    {
+      "artifact": "email_draft.md",
+      "jsonPointer": "/text",
+      "relation": "cited_by_delivery_draft"
+    }
+  ],
   "fixtureId": "all_passed",
+  "id": "evidence-list-all_passed",
   "items": [
     {
       "classification": "all_passed_marker",
       "confidence": "high",
       "excerpt": "STATUS: PASSED",
+      "excerptHash": "d04d89e743f59cd96444043e266f66896c18a18356b2f75f909bcb74deaa48b8",
       "id": "ev-all_passed-001",
       "lineRange": [
         4,
@@ -12,12 +36,14 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/all_passed/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     },
     {
       "classification": "all_passed_marker",
       "confidence": "high",
       "excerpt": "failed_tests: 0",
+      "excerptHash": "bad49455f8f0795ab00cd096f0896a493347730bb17ce8994fe9da292fa98214",
       "id": "ev-all_passed-002",
       "lineRange": [
         6,
@@ -25,12 +51,14 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/all_passed/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     },
     {
       "classification": "all_passed_marker",
       "confidence": "high",
       "excerpt": "incomplete_jobs: 0",
+      "excerptHash": "452f2ef5604d8a91494c7d79e324fe35cc6204daa13c171170fcd1d47cd93cc7",
       "id": "ev-all_passed-003",
       "lineRange": [
         7,
@@ -38,12 +66,14 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/all_passed/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     },
     {
       "classification": "all_passed_marker",
       "confidence": "high",
       "excerpt": "ALL TESTS PASSED",
+      "excerptHash": "2cff4fad5febf0b77ddf241fcc91d1908fded88fe3ad37df56fec8f60a9f75b2",
       "id": "ev-all_passed-004",
       "lineRange": [
         8,
@@ -51,6 +81,7 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/all_passed/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     }
   ],

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Iterable
 
 from capability_contract import build_capability_envelope, capability_ref
+from evidence_list import build_evidence_list
 from task_spec import EXPECTED_ARTIFACTS, build_regression_task_spec
 from verifier_runtime import verify_artifacts
 
@@ -277,7 +278,8 @@ def run_fixture(fixture: Fixture, out_dir: Path) -> dict:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     task_spec = task_spec_for(fixture)
-    evidence = extract_evidence(fixture)
+    evidence_payload = build_evidence_list(fixture.id, extract_evidence(fixture))
+    evidence = evidence_payload["items"]
     verdict, summary, verdict_evidence_ids = classify(evidence)
     result = {
         "schemaVersion": "regression-result-v1",
@@ -310,7 +312,7 @@ def run_fixture(fixture: Fixture, out_dir: Path) -> dict:
 
     write_json(run_dir / "run.json", run)
     (run_dir / "events.jsonl").write_text("\n".join(json.dumps(event, sort_keys=True) for event in events) + "\n", encoding="utf-8")
-    write_json(run_dir / "evidence.json", {"schemaVersion": "evidence-list-v1", "fixtureId": fixture.id, "items": evidence})
+    write_json(run_dir / "evidence.json", evidence_payload)
     write_json(run_dir / "regression_result.json", result)
     (run_dir / "email_draft.md").write_text(email, encoding="utf-8")
     write_json(run_dir / "verifier_report.json", verifier_report)

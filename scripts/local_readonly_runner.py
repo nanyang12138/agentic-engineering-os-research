@@ -14,6 +14,7 @@ from context_pack import (
     validate_context_pack_for_request,
     validate_evidence_with_context_pack,
 )
+from evidence_list import build_evidence_list
 from fixture_runner import (
     EXPECTED_ARTIFACTS,
     GENERATED_AT,
@@ -69,7 +70,8 @@ def write_local_run(
         context_pack = load_context_pack_json(context_pack_path)
         validate_context_pack(context_pack, ROOT)
         validate_context_pack_for_request(context_pack, log_path, goal, ROOT)
-    evidence = extract_evidence(initial_fixture)
+    evidence_payload = build_evidence_list(case_id, extract_evidence(initial_fixture))
+    evidence = evidence_payload["items"]
     if context_pack:
         validate_evidence_with_context_pack(evidence, context_pack, ROOT)
     verdict, summary, verdict_evidence_ids = classify(evidence)
@@ -119,7 +121,7 @@ def write_local_run(
 
     write_json(run_dir / "run.json", run)
     (run_dir / "events.jsonl").write_text("\n".join(json.dumps(event, sort_keys=True) for event in events) + "\n", encoding="utf-8")
-    write_json(run_dir / "evidence.json", {"schemaVersion": "evidence-list-v1", "fixtureId": case_id, "items": evidence})
+    write_json(run_dir / "evidence.json", evidence_payload)
     write_json(run_dir / "regression_result.json", result)
     (run_dir / "email_draft.md").write_text(email, encoding="utf-8")
     write_json(run_dir / "verifier_report.json", verifier_report)

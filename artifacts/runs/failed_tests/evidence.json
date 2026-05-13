@@ -1,10 +1,34 @@
 {
+  "artifactBacklinks": [
+    {
+      "artifact": "regression_result.json",
+      "jsonPointer": "/evidenceIds",
+      "relation": "supports_regression_result"
+    },
+    {
+      "artifact": "verifier_report.json",
+      "jsonPointer": "/ruleResults/*/evidenceIds",
+      "relation": "checked_by_verifier"
+    },
+    {
+      "artifact": "events.jsonl",
+      "jsonPointer": "/*.evidenceIds",
+      "relation": "audited_by_events"
+    },
+    {
+      "artifact": "email_draft.md",
+      "jsonPointer": "/text",
+      "relation": "cited_by_delivery_draft"
+    }
+  ],
   "fixtureId": "failed_tests",
+  "id": "evidence-list-failed_tests",
   "items": [
     {
       "classification": "failure_marker",
       "confidence": "high",
       "excerpt": "STATUS: FAILED",
+      "excerptHash": "73b006702c8c67dfb03fbceb5f23dca7d7498bc95771f5078898ff4aea07b9e0",
       "id": "ev-failed_tests-001",
       "lineRange": [
         4,
@@ -12,12 +36,14 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/failed_tests/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     },
     {
       "classification": "failure_marker",
       "confidence": "high",
       "excerpt": "failed_tests: 2",
+      "excerptHash": "8f27d93bb3d067b13f737233696f3d3f3dfad7e1410a38661d038987f66adbd6",
       "id": "ev-failed_tests-002",
       "lineRange": [
         6,
@@ -25,12 +51,14 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/failed_tests/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     },
     {
       "classification": "failure_marker",
       "confidence": "high",
       "excerpt": "ERROR: test m2b_lec_case_017 failed with compare mismatch",
+      "excerptHash": "0abcc42d43c31f5f42d132ed9e123dfde780ff0bda29204a74be7237f62126ca",
       "id": "ev-failed_tests-003",
       "lineRange": [
         7,
@@ -38,12 +66,14 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/failed_tests/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     },
     {
       "classification": "failure_marker",
       "confidence": "high",
       "excerpt": "ERROR: test m2b_lec_case_042 failed with unexpected X propagation",
+      "excerptHash": "d053c021ebeab8c4d9e757354e390e5ed20d9dfee514df74ca3c4591ce559644",
       "id": "ev-failed_tests-004",
       "lineRange": [
         8,
@@ -51,6 +81,7 @@
       ],
       "observedAt": "2026-05-12T14:39:00Z",
       "sourcePath": "fixtures/regression/failed_tests/input.log",
+      "sourceRef": "source-regression-log",
       "type": "log"
     }
   ],
