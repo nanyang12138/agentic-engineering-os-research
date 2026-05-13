@@ -1,7 +1,7 @@
 {
   "artifactRefs": [
     {
-      "contentHash": "f9cc3781315038709d8ecc5863afc5fc238dbab8c55c975785bc9e4788f5978e",
+      "contentHash": "edf1e44b94ceec826ae0e7881952bae6673cdc5ae2b28de5693f50c3172d95f6",
       "path": "artifacts/runs/ambiguous_summary/run.json",
       "type": "run"
     },
@@ -171,7 +171,7 @@
       "type": "artifact"
     },
     {
-      "contentHash": "f9cc3781315038709d8ecc5863afc5fc238dbab8c55c975785bc9e4788f5978e",
+      "contentHash": "edf1e44b94ceec826ae0e7881952bae6673cdc5ae2b28de5693f50c3172d95f6",
       "id": "source-run-json",
       "path": "artifacts/runs/ambiguous_summary/run.json",
       "role": "run_artifact",

@@ -23,6 +23,7 @@ from evidence_list import (
     validate_evidence_list,
 )
 from fixture_runner import load_fixture
+from run_control import validate_run_control
 from task_spec import TASK_SPEC_SCHEMA_VERSION, build_regression_task_spec, validate_regression_task_spec
 from verifier_runtime import (
     REQUIRED_ARTIFACT_CHECK_IDS,
@@ -89,6 +90,7 @@ REQUIRED_FILES = [
     "scripts/capability_contract.py",
     "scripts/context_pack.py",
     "scripts/evidence_list.py",
+    "scripts/run_control.py",
     "scripts/verifier_runtime.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
@@ -109,6 +111,10 @@ PLAN_REQUIRED_MARKERS = [
     "verifier-rule-catalog-v1",
     "phase5_verifier_rule_catalog.json",
     "EvidenceListV1",
+    "RunControlV1",
+    "run-control-v1",
+    "permission-policy-v1",
+    "recovery-snapshot-v1",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -396,6 +402,7 @@ def validate_schema_structure(
             "task",
             "taskSpec",
             "capabilityEnvelope",
+            "runControl",
             "steps",
             "events",
             "artifacts",
@@ -435,6 +442,10 @@ def validate_schema_structure(
         validate_capability_envelope(run["capabilityEnvelope"], PHASE3_CAPABILITY_NAMES)
     except ValueError as exc:
         raise AssertionError(f"Fixture {fixture_id} capabilityEnvelope failed validation: {exc}") from exc
+    try:
+        validate_run_control(run, events)
+    except ValueError as exc:
+        raise AssertionError(f"Fixture {fixture_id} RunControlV1 failed validation: {exc}") from exc
     if not isinstance(run["steps"], list) or not run["steps"]:
         raise AssertionError(f"Fixture {fixture_id} run.steps must be a non-empty list")
     for step in run["steps"]:
@@ -779,6 +790,25 @@ def run_evidence_list_validator(fixture_id: str) -> None:
         )
 
 
+def run_run_control_validator(fixture_id: str) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/run_control.py"),
+        "--run",
+        str(ARTIFACT_DIR / fixture_id / "run.json"),
+        "--events",
+        str(ARTIFACT_DIR / fixture_id / "events.jsonl"),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "RunControlV1 validator failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def compare_context_packs(expected_dir: Path, actual_dir: Path) -> None:
     for fixture_id in FIXTURE_IDS:
         expected = expected_dir / fixture_id / "context_pack.json"
@@ -892,6 +922,27 @@ def remove_rule_verifier_step_ref(tampered_dir: Path) -> None:
     write_json(run_path, run)
 
 
+def break_run_control_transition(tampered_dir: Path) -> None:
+    run_path = tampered_dir / "all_passed/run.json"
+    run = load_json(run_path)
+    run["runControl"]["stateHistory"][2]["state"] = "running"
+    write_json(run_path, run)
+
+
+def allow_external_side_effects(tampered_dir: Path) -> None:
+    run_path = tampered_dir / "all_passed/run.json"
+    run = load_json(run_path)
+    run["runControl"]["permissionPolicy"]["externalSideEffectsAllowed"] = True
+    write_json(run_path, run)
+
+
+def break_recovery_last_event(tampered_dir: Path) -> None:
+    run_path = tampered_dir / "all_passed/run.json"
+    run = load_json(run_path)
+    run["runControl"]["recoverySnapshot"]["lastEventId"] = "event-all_passed-missing"
+    write_json(run_path, run)
+
+
 def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
     scratch_root.mkdir(parents=True, exist_ok=True)
     expect_artifact_validation_failure(
@@ -942,6 +993,27 @@ def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
         scratch_root,
         remove_rule_verifier_step_ref,
         "missing required fields",
+    )
+    expect_artifact_validation_failure(
+        "illegal_run_control_transition",
+        source_dir,
+        scratch_root,
+        break_run_control_transition,
+        "stateHistory must match events.jsonl",
+    )
+    expect_artifact_validation_failure(
+        "external_side_effects_allowed",
+        source_dir,
+        scratch_root,
+        allow_external_side_effects,
+        "must disallow external side effects",
+    )
+    expect_artifact_validation_failure(
+        "broken_recovery_last_event",
+        source_dir,
+        scratch_root,
+        break_recovery_last_event,
+        "must point to the last event",
     )
 
 
@@ -1032,6 +1104,7 @@ def main() -> None:
             raise AssertionError("Committed verifier rule catalog differs from deterministic CLI output")
         for fixture_id in FIXTURE_IDS:
             run_evidence_list_validator(fixture_id)
+            run_run_control_validator(fixture_id)
         generated_artifacts = temp_root / "runs"
         run_fixture_runner(generated_artifacts)
         validate_artifact_packet(generated_artifacts)

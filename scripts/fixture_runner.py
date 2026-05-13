@@ -11,6 +11,7 @@ from typing import Iterable
 
 from capability_contract import build_capability_envelope, capability_ref
 from evidence_list import build_evidence_list
+from run_control import build_run_control
 from task_spec import EXPECTED_ARTIFACTS, build_regression_task_spec
 from verifier_runtime import verify_artifacts
 
@@ -296,19 +297,24 @@ def run_fixture(fixture: Fixture, out_dir: Path) -> dict:
     report_status = verifier_report["status"]
 
     events = build_events(fixture, run_id, verdict_evidence_ids, "completed" if report_status == "passed" else "failed")
+    capability_envelope = build_capability_envelope(task_spec["allowedActions"] + ["rule_verifier"])
+    steps = build_run_steps(report_status)
+    artifacts = EXPECTED_ARTIFACTS + ["run.json", "events.jsonl", "verifier_report.json"]
+    run_status = "completed" if report_status == "passed" else "failed"
     run = {
         "schemaVersion": "run-v1",
         "id": run_id,
         "fixtureId": fixture.id,
         "task": fixture.goal,
         "taskSpec": task_spec,
-        "capabilityEnvelope": build_capability_envelope(task_spec["allowedActions"] + ["rule_verifier"]),
-        "steps": build_run_steps(report_status),
+        "capabilityEnvelope": capability_envelope,
+        "steps": steps,
         "events": [event["id"] for event in events],
-        "artifacts": EXPECTED_ARTIFACTS + ["run.json", "events.jsonl", "verifier_report.json"],
-        "status": "completed" if report_status == "passed" else "failed",
+        "artifacts": artifacts,
+        "status": run_status,
         "generatedAt": GENERATED_AT,
     }
+    run["runControl"] = build_run_control(fixture.id, run_id, run_status, capability_envelope, steps, events, artifacts)
 
     write_json(run_dir / "run.json", run)
     (run_dir / "events.jsonl").write_text("\n".join(json.dumps(event, sort_keys=True) for event in events) + "\n", encoding="utf-8")
