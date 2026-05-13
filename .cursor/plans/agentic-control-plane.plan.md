@@ -1000,22 +1000,22 @@ Build vs Integrate：
 
 #### Phase 6 InterruptedRecoveryFixtureV1 Non-terminal Resume Gate
 
-2026-05-13 11:01 UTC 自动化实现结论：Phase 6 的第二个执行切片不是引入 durable daemon、SQLite/Temporal backend 或真实 resume executor，而是提交一个可重生成的 interrupted recovery fixture，证明当前 RunControlV1 可以表达非终态 `running` run，并从最后事件确定下一步 resume target。
+2026-05-13 09:27 UTC 自动化实现结论：Phase 6 的第二步补齐了非终态恢复证据。当前不引入 durable daemon、SQLite/Temporal checkpoint、retry scheduler、外部 approval backend、CUA 或 IDE adapter，而是提交一个确定性的 interrupted run fixture，证明 `RunControlV1` 不只会审计 terminal run，也能描述 `running` 状态下从最后 event 恢复到下一步 capability。
 
 最小 InterruptedRecoveryFixtureV1 contract：
 
-- `scripts/recovery_fixture.py` deterministic 生成 `artifacts/recovery/interrupted_after_extract/run.json` 和 `events.jsonl`。
-- 该 fixture 停在 `capability.extract_regression_result.completed` 之后，`run.status` / `runControl.currentState` 为 `running`，最后事件可推导 state history 的非终态位置。
-- `RecoverySnapshotV1` 对非终态 run 使用 `resumeMode="from_last_event"`、`nextAction="resume_step"`，并强制声明 `resumeTarget`：`step-write-artifact` / `capability://phase3/write_artifact` / `regression_result_candidate`。
-- `run.json#artifactRoot="artifacts/recovery"` 让 permission policy 和 replay refs 指向 recovery fixture 目录，而不是假装已经写完 `artifacts/runs/*` 交付物。
-- `scripts/validate_repo.py` 比对 committed recovery fixture 与 deterministic builder 输出，并包含缺失 non-terminal `resumeTarget` 的 forced-failure case。
+- `scripts/recovery_fixture.py` 从 `fixtures/regression/all_passed/input.log` deterministic 生成 `artifacts/recovery/interrupted_after_extract/run.json` 和 `events.jsonl`。
+- fixture 在 `capability.extract_regression_result.completed` 后停止，`run.status="interrupted"`，`runControl.currentState="running"`，`recoverySnapshot.resumeMode="from_last_event"`。
+- `recoverySnapshot.nextAction="resume_step"`，并要求 `resumeTarget` 指向 `step-write-artifact`、`capability://phase3/write_artifact` 和 `regression_result_candidate`。
+- `scripts/run_control.py` 支持 terminal run status 和 `interrupted` non-terminal status 的同一 validator；terminal snapshot 不允许 `resumeTarget`，non-terminal snapshot 必须提供完整 `resumeTarget`。
+- `scripts/validate_repo.py` 比对 committed recovery fixture 与 deterministic CLI 输出，并包含删除 `resumeTarget` 的 forced-failure case。
 
 Build vs Integrate：
 
-- Build：RunControlV1 non-terminal schema validation、artifact-root-aware permission/replay refs、deterministic interrupted fixture builder、repository validation gate。
-- Integrate later：durable checkpoint store、真实 resume executor、retry scheduler、approval service、distributed worker lease、Temporal/LangGraph state backend、CUA/IDE/browser adapter runtime。
+- Build：最小 interrupted recovery fixture、non-terminal RunControlV1 validation、resume target validation、artifact-root-aware recovery refs 和 deterministic repository gate。
+- Integrate later：durable checkpoint store、真实 resume executor、retry scheduler、approval workflow backend、distributed worker lease、CUA/IDE/browser adapter runtime。
 
-当前 Phase 6 regression MVP gate 已满足：现有 artifacts 能证明 terminal replay snapshot 和 non-terminal interrupted recovery snapshot。下一步应进入 Phase 7 Computer Runtime / CUA Adapter static contract boundary，先定义 `computer.*` / `sandbox.*` / `trajectory.*` observation/adapter artifact contract，不执行真实 GUI 自动化或外部副作用。
+当前 Phase 6 regression MVP gate 基本满足：terminal run artifacts 已能证明 state/permission/recovery snapshot，non-terminal interrupted fixture 已能证明 resume action contract。下一步可以进入 Phase 7 的 Computer Runtime / CUA Adapter contract，但仍只应定义 adapter boundary 和 observation/trajectory artifact contract，不实际执行 GUI 自动化或外部 side effect。
 
 ### Phase 7：Computer Runtime 和 CUA Adapter
 
@@ -1682,7 +1682,7 @@ Add forced-failure verifier checks so that python3 scripts/validate_repo.py prov
 10. Phase 1a Evidence Intake Review：在 fixture runner 输出完整 artifact packet 前，后续优化只允许维护评分、Decision Log、Open Questions 和 Research Sprint Log；只有 `verifier_report.json` 失败、grounded email 问题、真实脱敏日志差异或 Build vs Integrate 运行证据出现后，才修改正式设计章节。
 11. Evidence Packet Stop Rule：已由 2026-05-12 14:39 UTC artifact packet 解锁；后续修改必须基于 committed `artifacts/runs/*`、`verifier_report.json` failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据，不再无证据扩写 adapter mapping 或正式设计章节。
 12. Phase 1a Verifier Hardening：已实现 deterministic negative validation，`scripts/validate_repo.py` 会验证 malformed schema、missing evidence refs、failure-marker-to-passed tamper 和 pass-style email injection 均被拒绝或生成 failed verifier report。
-13. RunControlV1 State / Permission / Recovery：已满足 Phase 6 regression MVP gate：`scripts/run_control.py` 提供 `RunControlV1` validator / CLI，`run.json#runControl` 使用 `run-control-v1`、`permission-policy-v1` 和 `recovery-snapshot-v1` 记录 stateHistory、permissionPolicy、stepAttempts 和 recoverySnapshot；`scripts/validate_repo.py` 会拒绝 state history 漂移、允许 external side effects、recovery last event 损坏和 non-terminal recovery 缺失 resume target 的契约；`scripts/recovery_fixture.py` 会 deterministic 生成 `artifacts/recovery/interrupted_after_extract` 来证明 `running` 状态可恢复。
+13. RunControlV1 State / Permission / Recovery：Phase 6 regression MVP gate 基本满足：`scripts/run_control.py` 提供 `RunControlV1` validator / CLI，`run.json#runControl` 使用 `run-control-v1`、`permission-policy-v1` 和 `recovery-snapshot-v1` 记录 stateHistory、permissionPolicy、stepAttempts 和 recoverySnapshot；`scripts/validate_repo.py` 会拒绝 state history 漂移、允许 external side effects、recovery last event 损坏或 non-terminal recovery 缺失 `resumeTarget` 的契约。`scripts/recovery_fixture.py` 生成 committed `artifacts/recovery/interrupted_after_extract/*`，证明 interrupted `running` 状态可以指向下一步 `write_artifact` resume action。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -1973,7 +1973,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-13 07:20 UTC：Phase 4 ContextPackV1 Budget / Source Selection Gate 已实现；决定在 `context-pack-v1` 中自研最小 `budget` 字段，先用 `sourceSelection=evidence_items_only_v1`、`maxLogExcerptItems` 和 `maxLogExcerptLines` 约束 read-only regression context。token estimator、semantic ranking 和动态 broker service 继续后移；Phase 5 可从已受限的 ContextPack 输入继续推进 Evidence/Verifier Runtime。
 - 2026-05-13 07:45 UTC：Phase 5 VerifierRuntimeV1 Rule Catalog / Replay Gate 已实现；决定将当前规则验证自研为 `verifier-runtime-v1` / `verifier-rule-catalog-v1`、committed `artifacts/verifier/phase5_verifier_rule_catalog.json` 和 deterministic replay gate。外部 review agent、human verifier backend、policy engine 和完整 Evidence Graph 继续后移。
 - 2026-05-13 08:00 UTC：Phase 5 EvidenceListV1 Provenance / Backlink Gate 已实现；决定将 `evidence.json` 固化为独立 `EvidenceListV1` contract，由 `scripts/evidence_list.py` 校验 sourcePath、lineRange、excerptHash、ContextPack provenance 和 artifact backlinks。数据库 Evidence Graph、跨任务 evidence store、review agent 和 human verifier backend 继续后移；下一轮进入 Phase 6 state, permission, and recovery。
-- 2026-05-13 11:01 UTC：Phase 6 InterruptedRecoveryFixtureV1 Non-terminal Resume Gate 已实现；决定将非终态恢复先自研为 committed `artifacts/recovery/interrupted_after_extract` fixture、RunControlV1 artifact-root-aware recovery refs 和强制 `resumeTarget` validation。真实 durable checkpoint store、resume executor、retry scheduler、approval backend、Temporal/LangGraph 和 CUA/IDE/browser runtime 继续后移；下一轮进入 Phase 7 Computer Runtime / CUA Adapter static contract boundary。
+- 2026-05-13 09:27 UTC：Phase 6 InterruptedRecoveryFixtureV1 Non-terminal Resume Gate 已实现；决定先用 committed interrupted fixture 证明 `RunControlV1` 的 non-terminal recovery contract，`resumeTarget` 指向下一步 `write_artifact`，而不是提前引入 durable workflow backend、真实 resume executor、CUA 或 IDE adapter。Phase 6 regression MVP gate 视为基本满足；下一轮可以进入 Phase 7 adapter contract boundary。
 
 ## 20. Open Questions
 
@@ -2001,6 +2001,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - `capability-envelope-v1` 先作为 `artifacts/capabilities/phase3_capability_catalog.json` 独立 artifact 提交和验证；Phase 4 Context Broker 可引用该静态 catalogue，动态 registry / provider discovery 后移。
 - Phase 4 的 Context Broker artifact 固定为 `ContextPackV1` / `context-pack-v1`：先用静态 builder 收敛 TaskSpec、log excerpts、capability catalogue 和 artifact refs，并用 contentHash 验证来源可复查；local runner 可选消费 committed ContextPack，且最小 `budget` 会限制 evidence-backed log excerpt 的数量和总行数。动态 retrieval 与 broker service 后移。
 - Phase 5 的 Evidence / Verifier artifacts 固定为 `EvidenceListV1`、`verifier-runtime-v1` 和 `verifier-rule-catalog-v1`：先用 same-process read-only evidence validator、rule catalog 和 replay gate 验证 sourcePath/lineRange/excerptHash、ContextPack provenance、artifact backlinks 与 `verifier_report.json`，review agent、human verifier backend、policy engine 和数据库 Evidence Graph 后移。
+- Phase 6 的 state/permission/recovery gate 固定为 `RunControlV1` + `InterruptedRecoveryFixtureV1`：terminal run 使用 `terminal_replay_only`，non-terminal interrupted run 必须提供 `resumeTarget` 和 `resume_step`；durable checkpoint store、真实 resume executor、retry scheduler 和 approval backend 后移。
 
 ### 20.2 仍开放的问题
 
@@ -3805,7 +3806,7 @@ git diff --check
 新增 interrupted-run 或 non-terminal failure fixture，使 runner 能产出 waiting_context/running/verifying 中断状态和 recovery snapshot，并用 validate_repo 证明可以从最后 event/artifacts 判断下一步 resume action。
 ```
 
-### 2026-05-13 11:01 UTC Automation Implementation Log - Phase 6 InterruptedRecoveryFixtureV1 Non-terminal Resume Gate
+### 2026-05-13 09:27 UTC Automation Implementation Log - Phase 6 InterruptedRecoveryFixtureV1 Non-terminal Resume Gate
 
 Active phase：
 
@@ -3816,35 +3817,35 @@ Phase 6: state, permission, and recovery
 Selected slice：
 
 ```text
-Add InterruptedRecoveryFixtureV1 so that python3 scripts/validate_repo.py proves a non-terminal running RunControlV1 snapshot can resume from the last event to the next write_artifact step.
+Add an InterruptedRecoveryFixtureV1 generator and committed artifact so that scripts/validate_repo.py proves a non-terminal running recovery snapshot points to the next resumable step.
 ```
 
-为什么这是下一步：Phase 6 已经有 terminal RunControlV1 replay snapshot，但主计划仍要求 interrupted/non-terminal fixture 来证明系统不仅能事后审计完成 run，也能在中断点记录 current state、last event 和下一步 resume action。最小有价值切片是 deterministic recovery fixture 和 validation gate，而不是提前引入 durable backend、真实 resume executor、CUA 或 IDE adapter。
+为什么这是下一步：Phase 6 首个 gate 已经让 terminal run artifacts 具备 state history、permission policy、step attempts 和 recovery snapshot，但计划明确指出这还只是事后审计。最早未完成切片是提交一个非终态 interrupted fixture，让同一 RunControlV1 contract 能证明从最后 event 恢复到下一步 capability，而不是提前进入 durable backend、CUA 或 IDE adapter。
 
 实现摘要：
 
-- `scripts/run_control.py` 现在支持非终态 `running` run.status，并允许 artifact-root-aware permission policy / replay refs。
-- `RecoverySnapshotV1` 对 terminal snapshot 禁止 `resumeTarget`，对 non-terminal snapshot 强制 `resumeTarget`。
-- 新增 `scripts/recovery_fixture.py`，deterministic 生成 `artifacts/recovery/interrupted_after_extract/run.json` 和 `events.jsonl`。
-- `scripts/validate_repo.py` 校验 committed interrupted recovery fixture 与 deterministic builder 输出一致，并加入缺失 `resumeTarget` 的 forced-failure case。
+- `scripts/run_control.py` 支持 `interrupted` non-terminal run status，并要求 non-terminal `RecoverySnapshotV1` 必须包含 `resumeTarget`。
+- 新增 `scripts/recovery_fixture.py`，从 `fixtures/regression/all_passed` deterministic 生成 `artifacts/recovery/interrupted_after_extract/run.json` 和 `events.jsonl`。
+- committed interrupted fixture 停在 `capability.extract_regression_result.completed`，`runControl.currentState="running"`、`resumeMode="from_last_event"`、`nextAction="resume_step"`，并把 `resumeTarget` 指向 `step-write-artifact`。
+- `scripts/validate_repo.py` 比对 committed fixture 与 deterministic CLI 输出，并加入删除 `resumeTarget` 的 forced-failure case。
 
 验收标准：
 
-- Committed `artifacts/recovery/interrupted_after_extract` 包含 `run.json` 和 `events.jsonl`：通过。
-- `run.status` / `runControl.currentState` 为 `running`，最后 event 停在 `capability.extract_regression_result.completed`：通过。
-- `RecoverySnapshotV1` 使用 `resumeMode="from_last_event"`、`nextAction="resume_step"` 和 `resumeTarget=step-write-artifact`：通过。
-- 缺失 non-terminal `resumeTarget` 会被 validation 拒绝：通过。
+- `artifacts/recovery/interrupted_after_extract` 包含 deterministic `run.json` 和 `events.jsonl`：通过。
+- RunControlV1 CLI 接受 `run.status="interrupted"`、`currentState="running"` 和 `resumeMode="from_last_event"`：通过。
+- Non-terminal snapshot 缺失 `resumeTarget` 会被仓库验证拒绝：通过。
+- 不引入外部 side effects、真实 resume executor、数据库、approval backend、CUA、IDE 或 browser automation：通过。
 
 验证命令：
 
 ```text
-/usr/bin/python3 scripts/validate_repo.py
-/usr/bin/python3 -m py_compile scripts/*.py
-/usr/bin/python3 scripts/recovery_fixture.py --out-dir /tmp/agentic-os-recovery-smoke
-/usr/bin/python3 scripts/run_control.py --run artifacts/recovery/interrupted_after_extract/run.json --events artifacts/recovery/interrupted_after_extract/events.jsonl
-/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/agentic-os-fixture-smoke
-/usr/bin/python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/agentic-os-task-spec.json
-/usr/bin/python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --out-dir /tmp/agentic-os-local-smoke --task-spec-path /tmp/agentic-os-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json
+<python_executable> scripts/validate_repo.py
+<python_executable> -m py_compile scripts/*.py
+<python_executable> scripts/recovery_fixture.py --source-fixture-dir fixtures/regression/all_passed --out-dir /tmp/agentic-os-recovery-smoke
+<python_executable> scripts/run_control.py --run artifacts/recovery/interrupted_after_extract/run.json --events artifacts/recovery/interrupted_after_extract/events.jsonl
+<python_executable> scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/agentic-os-fixture-smoke
+<python_executable> scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/agentic-os-task-spec.json
+<python_executable> scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --out-dir /tmp/agentic-os-local-smoke --task-spec-path /tmp/agentic-os-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json
 git diff --check
 ```
 
@@ -3852,27 +3853,27 @@ git diff --check
 
 ```text
 - Python executable resolved for this run: /usr/bin/python3.
-- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 Phase 1a/1b/2/3/4/5 gates、Phase 6 RunControlV1 terminal gate，以及 InterruptedRecoveryFixtureV1 deterministic builder / forced-failure validation。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 committed InterruptedRecoveryFixtureV1、deterministic builder comparison 和缺失 resumeTarget forced-failure。
 - `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
-- `/usr/bin/python3 scripts/recovery_fixture.py --out-dir /tmp/agentic-os-recovery-smoke`：通过。
+- `/usr/bin/python3 scripts/recovery_fixture.py --source-fixture-dir fixtures/regression/all_passed --out-dir /tmp/agentic-os-recovery-smoke`：通过。
 - `/usr/bin/python3 scripts/run_control.py --run artifacts/recovery/interrupted_after_extract/run.json --events artifacts/recovery/interrupted_after_extract/events.jsonl`：通过。
 - `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/agentic-os-fixture-smoke`：通过。
-- `/usr/bin/python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/agentic-os-task-spec.json`：通过。
-- `/usr/bin/python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --out-dir /tmp/agentic-os-local-smoke --task-spec-path /tmp/agentic-os-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json`：通过。
+- `/usr/bin/python3 scripts/task_spec.py ... --out /tmp/agentic-os-task-spec.json`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py ... --task-spec-path /tmp/agentic-os-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json ...`：通过。
 - `git diff --check`：通过。
 ```
 
 剩余风险：
 
-- InterruptedRecoveryFixtureV1 仍是 static fixture，不是 durable backend。
-- `resumeTarget` 证明下一步 action 可确定，但还没有真实 resume executor 执行后续 write/verify。
-- `.github/workflows/auto-merge-cursor-pr.yml` 存在；本 PR #63 的 validate 成功后，该 workflow 实际失败并输出 `Refusing to auto-merge PR authored by app/cursor`。这是基础设施 blocker，不在本产品实现切片中修复。
+- InterruptedRecoveryFixtureV1 仍是 file-based contract fixture，不是 durable checkpoint store 或真实 resume executor。
+- 当前只覆盖 `running` 状态 after-extract 中断；`waiting_context`、`verifying`、approval wait 和 retry policy 仍后移。
+- `resumeTarget` 指向下一步 capability，但不会自动执行该 step；真实恢复执行器留到后续控制平面 runtime。
 
 下一轮建议：
 
 ```text
-进入 Phase 7：
-定义最小 Computer Runtime / CUA Adapter static contract，先提交 `computer.*`、`sandbox.*`、`trajectory.*` capability/observation schema 和 trajectory-to-evidence boundary artifact，不执行真实 GUI automation、desktop control 或外部副作用。
+进入 Phase 7 Computer Runtime / CUA Adapter：
+先定义 `computer.*` / `trajectory.*` adapter contract 和 observation/evidence 边界，并用静态 schema/fixture 验证 CUA 只作为底层 runtime adapter；不要实际执行 GUI 自动化、发送外部 side effect 或引入 desktop/sandbox provider。
 ```
 
 ## 22. Parking Lot

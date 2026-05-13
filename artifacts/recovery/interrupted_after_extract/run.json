@@ -138,7 +138,7 @@
   ],
   "fixtureId": "interrupted_after_extract",
   "generatedAt": "2026-05-12T14:39:00Z",
-  "id": "run-interrupted_after_extract-45c1c423",
+  "id": "run-interrupted_after_extract-988940c2",
   "runControl": {
     "currentState": "running",
     "permissionPolicy": {
@@ -209,10 +209,10 @@
         "capability": "write_artifact",
         "capabilityRef": "capability://phase3/write_artifact",
         "inputRef": "regression_result_candidate",
-        "outputRef": "evidence.json,regression_result.json,email_draft.md,run.json",
+        "reason": "resume_after_last_completed_event",
         "stepId": "step-write-artifact"
       },
-      "runId": "run-interrupted_after_extract-45c1c423",
+      "runId": "run-interrupted_after_extract-988940c2",
       "schemaVersion": "recovery-snapshot-v1"
     },
     "schemaVersion": "run-control-v1",
@@ -311,11 +311,37 @@
         "status": "completed",
         "stepId": "step-extract-regression-result",
         "timeoutMs": 1000
+      },
+      {
+        "attempt": 1,
+        "capability": "write_artifact",
+        "capabilityRef": "capability://phase3/write_artifact",
+        "inputRef": null,
+        "lastError": null,
+        "maxRetries": 0,
+        "outputRef": null,
+        "permission": "write",
+        "status": "pending",
+        "stepId": "step-write-artifact",
+        "timeoutMs": 1000
+      },
+      {
+        "attempt": 1,
+        "capability": "rule_verifier",
+        "capabilityRef": "capability://phase3/rule_verifier",
+        "inputRef": null,
+        "lastError": null,
+        "maxRetries": 0,
+        "outputRef": null,
+        "permission": "read",
+        "status": "pending",
+        "stepId": "step-verify",
+        "timeoutMs": 1000
       }
     ]
   },
   "schemaVersion": "run-v1",
-  "status": "running",
+  "status": "interrupted",
   "steps": [
     {
       "capability": "read_log",
@@ -328,9 +354,21 @@
       "capabilityRef": "capability://phase3/extract_regression_result",
       "id": "step-extract-regression-result",
       "status": "completed"
+    },
+    {
+      "capability": "write_artifact",
+      "capabilityRef": "capability://phase3/write_artifact",
+      "id": "step-write-artifact",
+      "status": "pending"
+    },
+    {
+      "capability": "rule_verifier",
+      "capabilityRef": "capability://phase3/rule_verifier",
+      "id": "step-verify",
+      "status": "pending"
     }
   ],
-  "task": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",
+  "task": "Resume an interrupted read-only regression run after result extraction.",
   "taskSpec": {
     "allowedActions": [
       "read_log",
@@ -352,7 +390,7 @@
       "call_gui_desktop_cua_or_browser_capability",
       "claim_all_passed_without_sufficient_evidence"
     ],
-    "goal": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",
+    "goal": "Resume an interrupted read-only regression run after result extraction.",
     "id": "task-spec-interrupted_after_extract",
     "inputLogPath": "fixtures/regression/all_passed/input.log",
     "requiredEvidence": [
