@@ -46,6 +46,11 @@ from durable_run_store import (
     build_durable_run_store,
     validate_durable_run_store,
 )
+from replay_query import (
+    QUERY_ARTIFACT_PATH as REPLAY_QUERY_ARTIFACT_PATH,
+    build_replay_query,
+    validate_replay_query,
+)
 from human_approval import (
     DECISION_ARTIFACT_PATH as HUMAN_APPROVAL_DECISION_ARTIFACT_PATH,
     build_human_approval_decision,
@@ -102,6 +107,7 @@ DELIVERY_REPORT_PATH = ROOT / DELIVERY_REPORT_ARTIFACT_PATH
 HUMAN_APPROVAL_DECISION_PATH = ROOT / HUMAN_APPROVAL_DECISION_ARTIFACT_PATH
 EVALUATION_REPORT_PATH = ROOT / EVALUATION_REPORT_ARTIFACT_PATH
 DURABLE_RUN_STORE_PATH = ROOT / DURABLE_RUN_STORE_ARTIFACT_PATH
+REPLAY_QUERY_PATH = ROOT / REPLAY_QUERY_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -159,6 +165,7 @@ REQUIRED_FILES = [
     "scripts/multi_agent_delivery.py",
     "scripts/human_approval.py",
     "scripts/durable_run_store.py",
+    "scripts/replay_query.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
     "artifacts/recovery/interrupted_after_extract/run.json",
@@ -174,6 +181,7 @@ REQUIRED_FILES = [
     "artifacts/delivery/phase9_delivery_report.json",
     "artifacts/approval/phase9_human_approval_decision_fixture.json",
     "artifacts/state/post_mvp_durable_run_store.json",
+    "artifacts/state/post_mvp_replay_query.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -233,6 +241,9 @@ PLAN_REQUIRED_MARKERS = [
     "DurableRunStoreV1",
     "durable-run-store-v1",
     "post_mvp_durable_run_store.json",
+    "ReplayQueryV1",
+    "replay-query-v1",
+    "post_mvp_replay_query.json",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -1917,6 +1928,107 @@ def run_durable_run_store_builder(store_out: Path) -> None:
         )
 
 
+def expect_replay_query_validation_failure(
+    label: str,
+    query_artifact: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_replay_query(query_artifact, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"ReplayQueryV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"ReplayQueryV1 forced-failure case {label} unexpectedly passed validation")
+
+
+def validate_committed_replay_query_artifact() -> None:
+    query_artifact = load_json(REPLAY_QUERY_PATH)
+    try:
+        validate_replay_query(query_artifact, ROOT)
+    except ValueError as exc:
+        raise AssertionError(f"Committed ReplayQueryV1 artifact failed validation: {exc}") from exc
+
+    expected_query = build_replay_query(ROOT)
+    if query_artifact != expected_query:
+        raise AssertionError("Committed ReplayQueryV1 artifact differs from deterministic builder output")
+
+    tampered_query = json.loads(json.dumps(query_artifact))
+    tampered_query["queryPolicy"]["databaseUsed"] = True
+    expect_replay_query_validation_failure(
+        "database_enabled",
+        tampered_query,
+        "must not use a database",
+    )
+
+    tampered_query = json.loads(json.dumps(query_artifact))
+    tampered_query["queryPolicy"]["externalSideEffectsAllowed"] = True
+    expect_replay_query_validation_failure(
+        "external_side_effects_allowed",
+        tampered_query,
+        "must disallow external side effects",
+    )
+
+    tampered_query = json.loads(json.dumps(query_artifact))
+    tampered_query["queryPolicy"]["approvalGrantAllowed"] = True
+    expect_replay_query_validation_failure(
+        "approval_grant_allowed",
+        tampered_query,
+        "must not grant approvals",
+    )
+
+    tampered_query = json.loads(json.dumps(query_artifact))
+    tampered_query["queries"][0]["result"]["currentState"] = "running"
+    expect_replay_query_validation_failure(
+        "run_state_result_drift",
+        tampered_query,
+        "query results must match",
+    )
+
+    tampered_query = json.loads(json.dumps(query_artifact))
+    tampered_query["queries"][3]["result"]["appendOnlyEventIds"] = list(
+        reversed(tampered_query["queries"][3]["result"]["appendOnlyEventIds"])
+    )
+    expect_replay_query_validation_failure(
+        "event_order_drift",
+        tampered_query,
+        "query results must match",
+    )
+
+    tampered_query = json.loads(json.dumps(query_artifact))
+    for source in tampered_query["sourceArtifacts"]:
+        if source.get("role") == "durable_run_store":
+            source["contentHash"] = "0" * 64
+            break
+    expect_replay_query_validation_failure(
+        "store_hash_mismatch",
+        tampered_query,
+        "source hash mismatch",
+    )
+
+
+def run_replay_query_builder(query_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/replay_query.py"),
+        "--query-out",
+        str(query_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "ReplayQueryV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -2309,6 +2421,7 @@ def main() -> None:
     validate_committed_delivery_report_artifact()
     validate_committed_human_approval_decision_artifact()
     validate_committed_durable_run_store_artifact()
+    validate_committed_replay_query_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -2382,6 +2495,10 @@ def main() -> None:
         run_durable_run_store_builder(generated_durable_run_store)
         if load_json(generated_durable_run_store) != load_json(DURABLE_RUN_STORE_PATH):
             raise AssertionError("Committed DurableRunStoreV1 artifact differs from deterministic CLI output")
+        generated_replay_query = temp_root / "post_mvp_replay_query.json"
+        run_replay_query_builder(generated_replay_query)
+        if load_json(generated_replay_query) != load_json(REPLAY_QUERY_PATH):
+            raise AssertionError("Committed ReplayQueryV1 artifact differs from deterministic CLI output")
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)
         if load_json(generated_evaluation_report) != load_json(EVALUATION_REPORT_PATH):
