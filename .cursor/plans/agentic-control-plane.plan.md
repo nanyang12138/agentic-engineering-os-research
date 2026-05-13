@@ -2938,6 +2938,77 @@ python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_pass
 定义 read_log / extract_regression_result / write_artifact 的 capability metadata envelope（permission、sideEffect、timeout、input/output contract），并让 run.json/events.jsonl 引用该 envelope；仍保持同进程、只读、无 registry/daemon/adapter。
 ```
 
+### 2026-05-13 04:01 UTC: Phase 3 Capability Contract Gate
+
+本轮目标：推进最早未完成的 Phase 3，把 Phase 1a/1b 已验证的同进程 runner step 标准化为可机器校验的 capability metadata envelope，但不提前引入正式 registry、daemon、adapter 或外部工具。
+
+Active phase：
+
+```text
+Phase 3: capability interface standardization
+```
+
+Selected slice：
+
+```text
+Add a minimal capability contract catalogue so that python3 scripts/validate_repo.py verifies runner steps embed permission, sideEffect, timeout, and input/output schema metadata for the active read-only capabilities.
+```
+
+为什么这是下一步：Phase 2 已完成 regression-log 场景的 TaskSpec builder + runner intake gate；进入 Context Broker 或 Evidence/Verifier 扩展前，workflow 需要先证明 step 不只是字符串名称，而是带权限、sideEffect、超时和输入输出契约的标准 capability。
+
+实现摘要：
+
+- 新增 `scripts/capability_contract.py`，定义 `capability-contract-v1`、MVP catalogue 和 validator。
+- MVP catalogue 覆盖 `read_log`、`extract_regression_result`、`write_artifact`，并为现有 verifier step 记录内部 `rule_verifier` contract。
+- `scripts/fixture_runner.py` 和 `scripts/local_readonly_runner.py` 在 `run.json.steps[*].capabilityContract` 嵌入对应 contract。
+- 重新生成 committed `artifacts/runs/*/run.json`，使 Phase 1a artifact packet 包含 capability metadata。
+- `scripts/validate_repo.py` 验证 catalogue、TaskSpec allowed actions、run step contract，并加入缺失/篡改 `capabilityContract` forced-failure gate。
+
+验收标准：
+
+- `capability-contract-v1` 至少包含 `name`、`permission`、`sideEffect`、`timeoutMs`、`inputSchema`、`outputSchema`、`description`。
+- `read_log`、`extract_regression_result`、`write_artifact` 的 contract 存在并通过 deterministic validation。
+- runner 输出的 `run.json.steps[*].capabilityContract` 与 catalogue 完全一致。
+- validation gate 能拒绝缺失或被篡改的 capability contract。
+- 本切片不引入 SQLite、daemon、HTTP API、adapter plugin、CUA、IDE、browser、multi-agent 或真实外部副作用。
+
+验证命令：
+
+```text
+python scripts/validate_repo.py
+python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir artifacts/runs
+python3 scripts/validate_repo.py
+python3 -m py_compile scripts/capability_contract.py scripts/fixture_runner.py scripts/local_readonly_runner.py scripts/task_spec.py scripts/validate_repo.py
+python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase3-capability-task-spec.json
+python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --task-spec-path /tmp/phase3-capability-task-spec.json --out-dir /tmp/phase3-capability-smoke
+git diff --check
+```
+
+验证结果：
+
+```text
+- `python scripts/validate_repo.py`：本地环境缺少 `python` 命令，返回 command not found；GitHub Actions 的 `actions/setup-python` 环境预期提供 `python`。
+- `python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir artifacts/runs`：通过，重新生成 5 个 fixture artifact packet。
+- `python3 scripts/validate_repo.py`：通过，覆盖 Phase 1a fixture/schema/verifier gate、Phase 1b local runner、Phase 2 TaskSpec gate，以及本轮 capability catalogue / run step contract / forced-failure gate。
+- `python3 -m py_compile scripts/capability_contract.py scripts/fixture_runner.py scripts/local_readonly_runner.py scripts/task_spec.py scripts/validate_repo.py`：通过。
+- `python3 scripts/task_spec.py ... --out /tmp/phase3-capability-task-spec.json`：通过，生成 TaskSpec。
+- `python3 scripts/local_readonly_runner.py ... --task-spec-path /tmp/phase3-capability-task-spec.json --out-dir /tmp/phase3-capability-smoke`：通过，生成带 capability contract 的 local artifact packet。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- 当前 contract validator 是标准库手写校验；是否引入 JSON Schema 库应等通用 catalogue 或 adapter provider 增多后再决定。
+- `capability-contract-v1` 仍是 metadata envelope，不执行真实 provider dispatch、policy decision、approval gate 或 retry/timeout runtime。
+- 通用 capability catalogue（`read_file`、`search_code`、`run_command`、`get_git_status`、`apply_patch`、`run_test`、`summarize_log`、`request_approval`）仍未实现。
+
+下一轮建议：
+
+```text
+继续 Phase 3 的下一最小切片：
+扩展只读/低风险通用 capability catalogue（优先 `read_file`、`search_code`、`get_git_status`、`run_test`），并让 validation gate 证明 dangerous/write capabilities 默认不能出现在 read-only TaskSpec allowedActions 中；仍不接入真实 IDE/CUA/daemon。
+```
+
 ## 22. Parking Lot
 
 以下内容仍然重要，但不进入第一版 MVP：
