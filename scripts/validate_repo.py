@@ -239,6 +239,8 @@ def expect_local_readonly_context_pack_failure(context_pack_path: Path, task_spe
         for item in tampered["contextItems"]
         if item.get("kind") != "log_excerpt"
     ]
+    tampered["budget"]["actualLogExcerptItems"] = 0
+    tampered["budget"]["actualLogExcerptLines"] = 0
     write_json(tampered_pack_path, tampered)
 
     command = [
