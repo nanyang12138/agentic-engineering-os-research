@@ -2891,7 +2891,12 @@ python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_pass
 验证结果：
 
 ```text
-待本 PR 本地验证后填写。
+- `python3 scripts/validate_repo.py`：通过，覆盖 Phase 1a fixture/schema/verifier gate、Phase 1b local read-only smoke gate、Phase 2 TaskSpec builder/malformed spec gate，以及本轮 TaskSpec intake/mismatched inputLogPath forced-failure gate。
+- `python3 -m py_compile scripts/fixture_runner.py scripts/validate_repo.py scripts/local_readonly_runner.py scripts/task_spec.py`：通过。
+- `python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/phase2-task-spec-intake.json`：通过，生成 `/tmp/phase2-task-spec-intake.json`。
+- `python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --task-spec-path /tmp/phase2-task-spec-intake.json --out-dir /tmp/phase2-task-spec-intake-smoke`：通过，生成 `/tmp/phase2-task-spec-intake-smoke/all_passed` artifact packet，并使用预生成 TaskSpec。
+- `git diff --check`：通过。
+- `python scripts/validate_repo.py`：本地环境缺少 `python` 命令，返回 command not found；GitHub Actions 的 `actions/setup-python` 环境预期提供 `python`。
 ```
 
 剩余风险：
