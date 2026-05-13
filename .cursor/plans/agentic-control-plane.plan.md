@@ -628,6 +628,13 @@ schema validation
 
 成功标准：不用依赖 IDE，也不用修改任何代码，就能证明“结论来自哪里、是否被验证、交付物引用了哪些证据”。
 
+Phase 1 的边界：
+
+- Regression workflow 只是 bootstrap MVP 场景，用来验证 OS 抽象是否成立，不是产品边界。
+- 核心对象必须保持通用：`TaskSpec`、`Run`、`Step`、`Capability`、`Observation`、`Evidence`、`Artifact`、`Verifier`、`Policy`、`Delivery`。
+- Regression fixture 可以实例化这些通用 contract，但不能把整个系统硬编码成 regression verifier。
+- 所有 regression-specific 逻辑都应该放在 adapter、fixture、parser 或 artifact subtype 后面，核心 schema 和接口要能复用于 CI 诊断、代码修改、测试执行、文档生成、ticket/report delivery 等工程任务。
+
 ### Phase 2：Intent-to-Spec 和任务规格化
 
 先不要让 agent 直接行动。每个自然语言任务先生成 `TaskSpec`：
@@ -951,6 +958,8 @@ MVP verifier 只做三类检查：
 ```
 
 这个 demo 能证明系统不是聊天壳，而是一个可追踪的工程 workflow。
+
+注意：这个 demo 是最小可验证入口，不是最终任务范围。后续 phase 必须把 regression 场景抽象出的 `TaskSpec`、capability contract、context pack、evidence list、verifier rule 和 artifact contract 推广为通用工程任务 OS 原语，而不是继续扩大一个只会处理 regression log 的专用工具。
 
 ### 13.1 MVP Verification Contract
 
@@ -1828,6 +1837,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-13 05:20 UTC：Phase 3 Rule Verifier Capability Boundary Gate 已实现；决定把现有 `step-verify` 的 `rule_verifier` 纳入同一最小 capability envelope，以保证当前 run 的每个 step 都有 `capabilityRef`。这不等于进入完整 Phase 5 Verifier Runtime；可插拔 verifier、review agent、human verifier 和 policy engine 继续后移。
 - 2026-05-13 05:40 UTC：Phase 3 Capability Catalogue Artifact Gate 已实现；决定将当前 read-only regression MVP 的 capability envelope 导出为 committed `capability-catalog-v1` artifact，并由 `scripts/validate_repo.py` 比对 deterministic builder 输出。动态 registry、provider discovery、adapter lifecycle 和 policy backend 继续后移；Phase 4 可从独立 catalogue 引用 capability provenance。
 - 2026-05-13 06:03 UTC：Phase 4 ContextPackV1 Static Provenance Gate 已实现；决定先自研 deterministic `context-pack-v1` artifact，把 TaskSpec、regression log excerpts、capability catalogue 和 run artifact refs 统一成带 POSIX relative path 与 contentHash 的 context provenance。动态 retrieval、symbol/docs/issues/CI adapters、embedding store 和 ContextPack runtime injection 后移。
+- 2026-05-13：明确 regression workflow 只是 bootstrap MVP 场景，不是产品边界；核心 schema 和接口必须保持可复用于多类工程任务。
 
 ## 20. Open Questions
 
@@ -3299,6 +3309,23 @@ git diff --check
 ```text
 继续 Phase 4 Context Broker：
 让 local read-only runner 在执行前生成或加载 ContextPackV1，并验证 evidence extraction 只能使用 ContextPack 声明的 source refs / log excerpts；同时加入一个负例证明未声明 source 的 evidence 会被拒绝。
+```
+
+### 2026-05-13: Bootstrap Scenario Boundary Clarification
+
+本轮目标：避免后续 automation 把 `Read-only Regression Evidence Demo` 误解成最终产品边界。
+
+完成内容：
+
+- 在 Phase 1 中补充 bootstrap 场景边界，明确 regression workflow 只是第一版验证入口。
+- 明确 `TaskSpec`、`Run`、`Step`、`Capability`、`Observation`、`Evidence`、`Artifact`、`Verifier`、`Policy`、`Delivery` 必须保持通用工程任务抽象。
+- 要求 regression-specific 逻辑隔离在 adapter、fixture、parser 或 artifact subtype 后面，避免核心系统退化成专用 regression verifier。
+- 在 Decision Log 中记录该产品边界决策。
+
+下一轮建议：
+
+```text
+继续当前实现序列时，检查 Phase 3/Phase 4 之后的代码是否把 regression 细节泄漏到核心 contract；如果泄漏，应在进入更后续 phase 前抽象为 task type、capability metadata 或 adapter contract。
 ```
 
 ## 22. Parking Lot
