@@ -988,7 +988,7 @@ Build vs Integrate：
 - `run.json#runControl.stateHistory` 必须由 `events.jsonl` deterministic 推导，覆盖 `created -> planning -> waiting_context -> running -> verifying -> completed|failed` 的当前 read-only regression MVP 状态流。
 - `run.json#runControl.permissionPolicy` 必须镜像 capability envelope：`read_log`、`extract_regression_result`、`rule_verifier` 为 read/no side effect；`write_artifact` 只能在 `local_artifact_output_only` 边界内写入本地 artifact；`send_email`、dangerous capability 和 external side effect 必须保留为 approval-required/forbidden。
 - `run.json#runControl.stepAttempts[]` 必须记录每个 step 的 capabilityRef、permission、inputRef、outputRef、timeoutMs、attempt、maxRetries 和 lastError，使失败位置可审计。
-- `run.json#runControl.recoverySnapshot` 必须指向最后 event、当前 terminal state 和可重放 artifact refs；当前 MVP 的 completed terminal run 使用 `terminal_replay_only`，后续非 terminal run 才进入 durable resume。
+- `run.json#runControl.recoverySnapshot` 必须指向最后 event、当前 state 和可重放 artifact refs；completed/failed terminal run 使用 `terminal_replay_only`，interrupted non-terminal run 使用 `from_last_event` 并声明下一步 resume action。
 - `scripts/validate_repo.py` 运行 RunControlV1 CLI，并包含 illegal state history、external side effects allowed、broken recovery last event 的 forced-failure cases。
 
 Build vs Integrate：
@@ -996,7 +996,24 @@ Build vs Integrate：
 - Build：最小 RunControlV1 schema、state history validation、permission policy validation、recovery snapshot validation、runner embedding 和 deterministic repository gate。
 - Integrate later：SQLite/Temporal/LangGraph durable state backend、checkpoint storage、approval service、retry scheduler、distributed worker lease、real resume executor、CUA/IDE/browser adapter runtime。
 
-当前 Phase 6 已启动但未完成：本 gate 让现有 read-only regression artifacts 能证明状态、权限和 terminal replay snapshot；下一步应增加可恢复的非 terminal failure fixture 或 interrupted-run fixture，证明 runner 能在中断点生成 recovery snapshot，而不是只对已完成 run 做事后审计。
+#### Phase 6 Interrupted Recovery Snapshot Gate
+
+2026-05-13 13:00 UTC 自动化实现结论：Phase 6 的第二步不是引入 durable daemon、SQLite/Temporal checkpoint、retry scheduler 或外部 approval backend，而是在当前 file-based control plane 中补一个 deterministic interrupted run artifact，证明非终态 run 可以在最后事件处形成可恢复快照。
+
+本切片完成后：
+
+- `artifacts/recovery/interrupted_after_read_log/run.json` 和 `events.jsonl` 记录一个停在 `waiting_context` 的 interrupted run：`run.created -> task_spec.generated -> capability.read_log.completed`。
+- `run.status="running"`，`runControl.currentState="waiting_context"`，`recoverySnapshot.resumeMode="from_last_event"`，`nextAction="resume_extract_regression_result"`。
+- `recoverySnapshot.artifactBasePath` 使用 POSIX relative path `artifacts/recovery/interrupted_after_read_log`，`replayArtifactRefs` 只引用中断点已存在的 `run.json` 和 `events.jsonl`。
+- `scripts/run_control.py --build-interrupted` 可从 committed `all_passed` run/events deterministic 生成同一 interrupted recovery artifact。
+- `scripts/validate_repo.py` 校验 committed interrupted artifact 与 deterministic builder / CLI 输出完全一致，并用 forced-failure case 证明错误 `nextAction` 会被拒绝。
+
+Build vs Integrate：
+
+- Build：file-based non-terminal RunControlV1 snapshot、resume mode / next action contract、deterministic interrupted fixture 和 validation gate。
+- Integrate later：durable checkpoint store、real resume executor、retry scheduler、approval backend、distributed worker lease、Temporal/LangGraph backend、CUA/IDE/browser adapter runtime。
+
+当前 Phase 6 regression MVP gate 已满足：read-only demo 现在同时覆盖 terminal replay snapshot、permission policy、step attempts，以及 non-terminal interrupted recovery snapshot。下一步可进入 Phase 7 Computer Runtime / CUA Adapter 的 contract-only gate，但仍不实际执行 GUI、desktop、browser 或 sandbox side effects。
 
 ### Phase 7：Computer Runtime 和 CUA Adapter
 
@@ -1664,6 +1681,7 @@ Add forced-failure verifier checks so that python3 scripts/validate_repo.py prov
 11. Evidence Packet Stop Rule：已由 2026-05-12 14:39 UTC artifact packet 解锁；后续修改必须基于 committed `artifacts/runs/*`、`verifier_report.json` failure、email grounding failure、真实脱敏日志差异或 Build vs Integrate 运行证据，不再无证据扩写 adapter mapping 或正式设计章节。
 12. Phase 1a Verifier Hardening：已实现 deterministic negative validation，`scripts/validate_repo.py` 会验证 malformed schema、missing evidence refs、failure-marker-to-passed tamper 和 pass-style email injection 均被拒绝或生成 failed verifier report。
 13. RunControlV1 State / Permission / Recovery：已启动 Phase 6 regression MVP gate：`scripts/run_control.py` 提供 `RunControlV1` validator / CLI，`run.json#runControl` 使用 `run-control-v1`、`permission-policy-v1` 和 `recovery-snapshot-v1` 记录 stateHistory、permissionPolicy、stepAttempts 和 recoverySnapshot；`scripts/validate_repo.py` 会拒绝 state history 漂移、允许 external side effects 或 recovery last event 损坏的契约。
+14. Interrupted Recovery Snapshot：Phase 6 regression MVP gate 已补齐 non-terminal interrupted run evidence；`artifacts/recovery/interrupted_after_read_log/*` 证明 `running` run 可停在 `waiting_context`，使用 `from_last_event` 和 `resume_extract_regression_result` 声明恢复点，并由 deterministic builder、CLI smoke 和 forced-failure validation 验证。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -1954,6 +1972,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-13 07:20 UTC：Phase 4 ContextPackV1 Budget / Source Selection Gate 已实现；决定在 `context-pack-v1` 中自研最小 `budget` 字段，先用 `sourceSelection=evidence_items_only_v1`、`maxLogExcerptItems` 和 `maxLogExcerptLines` 约束 read-only regression context。token estimator、semantic ranking 和动态 broker service 继续后移；Phase 5 可从已受限的 ContextPack 输入继续推进 Evidence/Verifier Runtime。
 - 2026-05-13 07:45 UTC：Phase 5 VerifierRuntimeV1 Rule Catalog / Replay Gate 已实现；决定将当前规则验证自研为 `verifier-runtime-v1` / `verifier-rule-catalog-v1`、committed `artifacts/verifier/phase5_verifier_rule_catalog.json` 和 deterministic replay gate。外部 review agent、human verifier backend、policy engine 和完整 Evidence Graph 继续后移。
 - 2026-05-13 08:00 UTC：Phase 5 EvidenceListV1 Provenance / Backlink Gate 已实现；决定将 `evidence.json` 固化为独立 `EvidenceListV1` contract，由 `scripts/evidence_list.py` 校验 sourcePath、lineRange、excerptHash、ContextPack provenance 和 artifact backlinks。数据库 Evidence Graph、跨任务 evidence store、review agent 和 human verifier backend 继续后移；下一轮进入 Phase 6 state, permission, and recovery。
+- 2026-05-13 13:00 UTC：Phase 6 Interrupted Recovery Snapshot Gate 已实现；决定先用 file-based interrupted run artifact 证明 non-terminal `RunControlV1` 可恢复性：`running` run 停在 `waiting_context`，`RecoverySnapshotV1.resumeMode="from_last_event"`，`nextAction="resume_extract_regression_result"`。durable checkpoint store、real resume executor、retry scheduler、approval backend、Temporal/LangGraph 和 CUA/IDE/browser runtime 继续后移。
 
 ## 20. Open Questions
 
@@ -3783,6 +3802,80 @@ git diff --check
 ```text
 继续 Phase 6：
 新增 interrupted-run 或 non-terminal failure fixture，使 runner 能产出 waiting_context/running/verifying 中断状态和 recovery snapshot，并用 validate_repo 证明可以从最后 event/artifacts 判断下一步 resume action。
+```
+
+### 2026-05-13 13:00 UTC Automation Implementation Log - Phase 6 Interrupted Recovery Snapshot Gate
+
+Active phase：
+
+```text
+Phase 6: state, permission, and recovery
+```
+
+Selected slice：
+
+```text
+Add an interrupted RunControlV1 recovery fixture so that python3 scripts/validate_repo.py proves non-terminal recovery snapshots can resume from the last event.
+```
+
+为什么这是下一步：Phase 6 已经有 terminal `completed|failed` run control snapshot，但主计划仍要求证明中断点可恢复，而不是只做事后审计。最小可验证切片是在不引入 daemon、SQLite、Temporal、retry scheduler、approval backend、CUA 或 IDE adapter 的前提下，提交一个 deterministic interrupted run artifact，并让仓库 validation 校验其 `resumeMode`、`nextAction` 和 replay refs。
+
+实现摘要：
+
+- 扩展 `scripts/run_control.py`，支持 `run.status="running"` 的 non-terminal current state validation。
+- 新增 `RecoverySnapshotV1` 的状态到恢复动作映射：`waiting_context -> resume_extract_regression_result`，terminal completed/failed 仍分别保持 `none_terminal` / `inspect_verifier_report`。
+- 新增 `scripts/run_control.py --build-interrupted`，可从 committed `all_passed` run/events 生成 deterministic interrupted fixture。
+- 新增 committed artifact：`artifacts/recovery/interrupted_after_read_log/run.json` 和 `events.jsonl`，停在 `capability.read_log.completed` 后的 `waiting_context`。
+- `scripts/validate_repo.py` 现在校验 interrupted fixture、deterministic builder/CLI 输出一致性，并用错误 `nextAction` forced-failure 证明恢复动作不会被静默接受。
+
+验收标准：
+
+- Interrupted run 使用 `status="running"` 且 `runControl.currentState="waiting_context"`：通过。
+- Recovery snapshot 使用 `resumeMode="from_last_event"`、`resumeFromEventId` 指向最后事件，并声明 `nextAction="resume_extract_regression_result"`：通过。
+- Replay refs 使用 POSIX relative path，且只引用中断点已存在的 `run.json` / `events.jsonl`：通过。
+- Deterministic builder 和 CLI 可重生成 committed interrupted artifact：通过。
+- 篡改 interrupted `nextAction` 会被 `scripts/validate_repo.py` 拒绝：通过。
+
+验证命令：
+
+```text
+python3 -m py_compile scripts/*.py
+python3 scripts/run_control.py --build-interrupted --source-run artifacts/runs/all_passed/run.json --source-events artifacts/runs/all_passed/events.jsonl --out-dir artifacts/recovery/interrupted_after_read_log
+python3 scripts/validate_repo.py
+python3 scripts/run_control.py --run artifacts/recovery/interrupted_after_read_log/run.json --events artifacts/recovery/interrupted_after_read_log/events.jsonl
+python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/agentic-os-fixture-smoke
+python3 scripts/task_spec.py --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --input-log-path fixtures/regression/all_passed/input.log --out /tmp/agentic-os-task-spec.json
+python3 scripts/local_readonly_runner.py --log-path fixtures/regression/all_passed/input.log --goal "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email." --out-dir /tmp/agentic-os-local-smoke --task-spec-path /tmp/agentic-os-task-spec.json --context-pack-path artifacts/context/all_passed/context_pack.json
+git diff --check
+```
+
+验证结果：
+
+```text
+- Python executable resolved for this run: python3.
+- `python3 -m py_compile scripts/*.py`：通过。
+- `python3 scripts/run_control.py --build-interrupted ...`：通过，生成并校验 interrupted recovery artifact。
+- `python3 scripts/validate_repo.py`：通过，覆盖 Phase 1a/1b/2/3/4/5 gates，以及 Phase 6 terminal / non-terminal RunControlV1 validation。
+- `python3 scripts/run_control.py --run artifacts/recovery/interrupted_after_read_log/run.json --events artifacts/recovery/interrupted_after_read_log/events.jsonl`：通过。
+- `python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/agentic-os-fixture-smoke`：通过。
+- `python3 scripts/task_spec.py ... --out /tmp/agentic-os-task-spec.json`：通过。
+- `python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json ...`：通过。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- Interrupted recovery 目前证明的是 file-based snapshot 和 resume action contract，不是真实 durable resume executor。
+- `waiting_context` 中断已覆盖；`running` / `verifying` 中断点可在后续需要时用同一 builder 扩展，但不阻塞 Phase 7 contract-only gate。
+- Permission approval 仍是 policy artifact，不是外部 approval backend。
+- `maxRetries=0` 仍是 MVP 不重试策略；retry scheduler 后移。
+- 基础设施风险：`.github/workflows/auto-merge-cursor-pr.yml` 存在且 active，但最近 workflow_run 失败，日志显示当前作者 `app/cursor` 被 allowlist 拒绝；本产品切片不修复该 workflow。
+
+下一轮建议：
+
+```text
+进入 Phase 7：
+新增 Computer Runtime / CUA Adapter 的 contract-only capability catalogue 和 trajectory observation schema，使系统能表达 computer.screenshot / computer.click / computer.type / computer.run_shell / trajectory.record 的输入输出、权限和 evidence 边界，但不实际执行 GUI、desktop、browser 或 sandbox side effects。
 ```
 
 ## 22. Parking Lot
