@@ -49,8 +49,11 @@ from ide_adapter import (
     validate_workspace_observation,
 )
 from multi_agent_delivery import (
+    DELIVERY_REPORT_ARTIFACT_PATH,
     MANIFEST_ARTIFACT_PATH as MULTI_AGENT_DELIVERY_MANIFEST_ARTIFACT_PATH,
+    build_delivery_report,
     build_multi_agent_delivery_manifest,
+    validate_delivery_report,
     validate_multi_agent_delivery_manifest,
 )
 from run_control import validate_run_control
@@ -80,6 +83,7 @@ IDE_ADAPTER_CONTRACT_PATH = ROOT / IDE_CONTRACT_ARTIFACT_PATH
 IDE_WORKSPACE_OBSERVATION_PATH = ROOT / IDE_OBSERVATION_ARTIFACT_PATH
 IDE_APPROVAL_HANDOFF_MANIFEST_PATH = ROOT / IDE_APPROVAL_HANDOFF_ARTIFACT_PATH
 MULTI_AGENT_DELIVERY_MANIFEST_PATH = ROOT / MULTI_AGENT_DELIVERY_MANIFEST_ARTIFACT_PATH
+DELIVERY_REPORT_PATH = ROOT / DELIVERY_REPORT_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -147,6 +151,7 @@ REQUIRED_FILES = [
     "artifacts/ide_adapter/phase8_workspace_observation.json",
     "artifacts/ide_adapter/phase8_ide_approval_handoff_manifest.json",
     "artifacts/delivery/phase9_multi_agent_delivery_manifest.json",
+    "artifacts/delivery/phase9_delivery_report.json",
 ]
 
 PLAN_REQUIRED_MARKERS = [
@@ -193,6 +198,9 @@ PLAN_REQUIRED_MARKERS = [
     "multi-agent-delivery-manifest-v1",
     "agent-handoff-v1",
     "phase9_multi_agent_delivery_manifest.json",
+    "DeliveryReportV1",
+    "delivery-report-v1",
+    "phase9_delivery_report.json",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -1572,6 +1580,108 @@ def run_multi_agent_delivery_builder(manifest_out: Path) -> None:
         )
 
 
+def expect_delivery_report_validation_failure(
+    label: str,
+    report: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_delivery_report(report, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"DeliveryReportV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"DeliveryReportV1 forced-failure case {label} unexpectedly passed validation")
+
+
+def validate_committed_delivery_report_artifact() -> None:
+    report = load_json(DELIVERY_REPORT_PATH)
+    try:
+        validate_delivery_report(report, ROOT)
+    except ValueError as exc:
+        raise AssertionError(f"Committed DeliveryReportV1 artifact failed validation: {exc}") from exc
+
+    expected_report = build_delivery_report(
+        MULTI_AGENT_DELIVERY_MANIFEST_PATH,
+        ARTIFACT_DIR / "all_passed/run.json",
+        ARTIFACT_DIR / "all_passed/verifier_report.json",
+        ARTIFACT_DIR / "all_passed/email_draft.md",
+        IDE_APPROVAL_HANDOFF_MANIFEST_PATH,
+        ROOT,
+    )
+    if report != expected_report:
+        raise AssertionError("Committed DeliveryReportV1 artifact differs from deterministic builder output")
+
+    tampered_report = json.loads(json.dumps(report))
+    tampered_report["readiness"]["readyForExternalDelivery"] = True
+    expect_delivery_report_validation_failure(
+        "external_delivery_ready_without_approval",
+        tampered_report,
+        "must not mark external delivery ready without human approval",
+    )
+
+    tampered_report = json.loads(json.dumps(report))
+    tampered_report["approvalBinding"]["humanApprovalSatisfied"] = True
+    expect_delivery_report_validation_failure(
+        "human_approval_synthesized",
+        tampered_report,
+        "must not synthesize human approval",
+    )
+
+    tampered_report = json.loads(json.dumps(report))
+    tampered_report["blockers"] = [
+        blocker
+        for blocker in tampered_report["blockers"]
+        if blocker.get("id") != "human_approval_missing"
+    ]
+    expect_delivery_report_validation_failure(
+        "missing_human_approval_blocker",
+        tampered_report,
+        "blockers must include human_approval_missing",
+    )
+
+    tampered_report = json.loads(json.dumps(report))
+    tampered_report["readiness"]["sendEmailAllowed"] = True
+    expect_delivery_report_validation_failure(
+        "send_email_allowed",
+        tampered_report,
+        "must not allow sending email",
+    )
+
+    tampered_report = json.loads(json.dumps(report))
+    for source in tampered_report["sourceArtifacts"]:
+        if source.get("role") == "email_draft":
+            source["contentHash"] = "0" * 64
+            break
+    expect_delivery_report_validation_failure(
+        "email_draft_hash_mismatch",
+        tampered_report,
+        "source hash mismatch",
+    )
+
+
+def run_delivery_report_builder(report_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/multi_agent_delivery.py"),
+        "--delivery-report-out",
+        str(report_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "DeliveryReportV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def compare_artifact_packets(expected_dir: Path, actual_dir: Path) -> None:
     for fixture_id in FIXTURE_IDS:
         for filename in ARTIFACT_FILES:
@@ -1850,6 +1960,7 @@ def main() -> None:
     validate_committed_computer_runtime_artifacts()
     validate_committed_ide_adapter_artifacts()
     validate_committed_multi_agent_delivery_artifact()
+    validate_committed_delivery_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_root = Path(temp_dir)
@@ -1910,6 +2021,10 @@ def main() -> None:
         run_multi_agent_delivery_builder(generated_multi_agent_delivery_manifest)
         if load_json(generated_multi_agent_delivery_manifest) != load_json(MULTI_AGENT_DELIVERY_MANIFEST_PATH):
             raise AssertionError("Committed MultiAgentDeliveryManifestV1 artifact differs from deterministic CLI output")
+        generated_delivery_report = temp_root / "phase9_delivery_report.json"
+        run_delivery_report_builder(generated_delivery_report)
+        if load_json(generated_delivery_report) != load_json(DELIVERY_REPORT_PATH):
+            raise AssertionError("Committed DeliveryReportV1 artifact differs from deterministic CLI output")
 
     print("Repository validation passed.")
 
