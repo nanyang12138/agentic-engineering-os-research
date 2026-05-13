@@ -4,32 +4,29 @@ from copy import deepcopy
 from typing import Any
 
 
-CAPABILITY_ENVELOPE_SCHEMA_VERSION = "capability-envelope-v1"
 CAPABILITY_METADATA_SCHEMA_VERSION = "capability-metadata-v1"
-CAPABILITY_NAMES = ["read_log", "extract_regression_result", "write_artifact"]
-CAPABILITY_PERMISSIONS = {"read", "write", "dangerous"}
+CAPABILITY_ENVELOPE_SCHEMA_VERSION = "capability-envelope-v1"
+CAPABILITY_URI_PREFIX = "capability://phase3/"
 
-_CAPABILITY_METADATA: dict[str, dict[str, Any]] = {
+PERMISSIONS = {"read", "write", "dangerous"}
+PHASE3_CAPABILITY_NAMES = ["read_log", "extract_regression_result", "write_artifact"]
+
+CAPABILITY_DEFINITIONS: dict[str, dict[str, Any]] = {
     "read_log": {
         "schemaVersion": CAPABILITY_METADATA_SCHEMA_VERSION,
         "name": "read_log",
         "permission": "read",
         "sideEffect": False,
         "timeoutMs": 1000,
-        "inputSchema": {
-            "type": "object",
-            "required": ["logPath"],
-            "properties": {
-                "logPath": "string",
-            },
+        "inputContract": {
+            "schema": "ReadLogInputV1",
+            "required": ["sourcePath"],
+            "properties": {"sourcePath": "string:path"},
         },
-        "outputSchema": {
-            "type": "object",
-            "required": ["logTextRef", "sourcePath"],
-            "properties": {
-                "logTextRef": "string",
-                "sourcePath": "string",
-            },
+        "outputContract": {
+            "schema": "ReadLogOutputV1",
+            "produces": ["logTextRef"],
+            "properties": {"logTextRef": "string:memory-ref"},
         },
     },
     "extract_regression_result": {
@@ -38,20 +35,20 @@ _CAPABILITY_METADATA: dict[str, dict[str, Any]] = {
         "permission": "read",
         "sideEffect": False,
         "timeoutMs": 1000,
-        "inputSchema": {
-            "type": "object",
+        "inputContract": {
+            "schema": "ExtractRegressionResultInputV1",
             "required": ["logTextRef", "taskSpecRef"],
             "properties": {
-                "logTextRef": "string",
-                "taskSpecRef": "string",
+                "logTextRef": "string:memory-ref",
+                "taskSpecRef": "string:run-json-pointer",
             },
         },
-        "outputSchema": {
-            "type": "object",
-            "required": ["evidenceArtifact", "regressionResultArtifact"],
+        "outputContract": {
+            "schema": "ExtractRegressionResultOutputV1",
+            "produces": ["evidenceItems", "regressionResultCandidate"],
             "properties": {
-                "evidenceArtifact": "evidence.json",
-                "regressionResultArtifact": "regression_result.json",
+                "evidenceItems": "LogEvidenceV1[]",
+                "regressionResultCandidate": "RegressionResultArtifactV1",
             },
         },
     },
@@ -61,101 +58,98 @@ _CAPABILITY_METADATA: dict[str, dict[str, Any]] = {
         "permission": "write",
         "sideEffect": False,
         "timeoutMs": 1000,
-        "inputSchema": {
-            "type": "object",
-            "required": ["artifactPayloads", "outDir"],
+        "inputContract": {
+            "schema": "WriteArtifactInputV1",
+            "required": ["runRef", "evidenceRef", "regressionResultRef", "emailDraftRef"],
             "properties": {
-                "artifactPayloads": "object",
-                "outDir": "string",
+                "runRef": "string:run-json-pointer",
+                "evidenceRef": "string:artifact-ref",
+                "regressionResultRef": "string:artifact-ref",
+                "emailDraftRef": "string:artifact-ref",
             },
         },
-        "outputSchema": {
-            "type": "object",
-            "required": ["artifactPaths"],
-            "properties": {
-                "artifactPaths": "string[]",
-            },
+        "outputContract": {
+            "schema": "WriteArtifactOutputV1",
+            "produces": ["artifactPaths"],
+            "properties": {"artifactPaths": "string:path[]"},
+            "effectBoundary": "local_artifact_output_only",
         },
     },
 }
 
 
-class CapabilityContractError(ValueError):
-    pass
+def capability_ref(name: str) -> str:
+    return f"{CAPABILITY_URI_PREFIX}{name}"
 
 
-def build_capability_envelope() -> dict[str, Any]:
+def capability_metadata(name: str) -> dict[str, Any]:
+    if name not in CAPABILITY_DEFINITIONS:
+        raise ValueError(f"Unknown Phase 3 capability: {name}")
+    metadata = deepcopy(CAPABILITY_DEFINITIONS[name])
+    metadata["ref"] = capability_ref(name)
+    return metadata
+
+
+def build_capability_envelope(names: list[str] | tuple[str, ...]) -> dict[str, Any]:
     return {
         "schemaVersion": CAPABILITY_ENVELOPE_SCHEMA_VERSION,
-        "capabilities": [deepcopy(_CAPABILITY_METADATA[name]) for name in CAPABILITY_NAMES],
+        "items": [capability_metadata(name) for name in names],
     }
 
 
-def capability_ref(name: str) -> str:
-    if name not in _CAPABILITY_METADATA:
-        raise CapabilityContractError(f"Unknown capability: {name}")
-    return f"{CAPABILITY_ENVELOPE_SCHEMA_VERSION}#{name}"
-
-
-def capability_refs_by_name() -> dict[str, str]:
-    return {name: capability_ref(name) for name in CAPABILITY_NAMES}
-
-
 def validate_capability_metadata(metadata: dict[str, Any]) -> None:
-    required = [
+    required_fields = [
         "schemaVersion",
         "name",
+        "ref",
         "permission",
         "sideEffect",
         "timeoutMs",
-        "inputSchema",
-        "outputSchema",
+        "inputContract",
+        "outputContract",
     ]
-    missing = [field for field in required if field not in metadata]
+    missing = [field for field in required_fields if field not in metadata]
     if missing:
-        raise CapabilityContractError(f"Capability metadata is missing required fields: {missing}")
+        raise ValueError(f"Capability metadata is missing required fields: {missing}")
+
+    name = metadata["name"]
+    if name not in CAPABILITY_DEFINITIONS:
+        raise ValueError(f"Capability metadata has unknown name: {name}")
     if metadata["schemaVersion"] != CAPABILITY_METADATA_SCHEMA_VERSION:
-        raise CapabilityContractError(f"Capability metadata schemaVersion must be {CAPABILITY_METADATA_SCHEMA_VERSION}")
-    if metadata["name"] not in CAPABILITY_NAMES:
-        raise CapabilityContractError(f"Unknown capability metadata name: {metadata['name']}")
-    if metadata["permission"] not in CAPABILITY_PERMISSIONS:
-        raise CapabilityContractError(f"Capability {metadata['name']} has invalid permission: {metadata['permission']}")
+        raise ValueError(f"Capability {name} schemaVersion must be {CAPABILITY_METADATA_SCHEMA_VERSION}")
+    if metadata["ref"] != capability_ref(name):
+        raise ValueError(f"Capability {name} ref must be {capability_ref(name)}")
+    if metadata["permission"] not in PERMISSIONS:
+        raise ValueError(f"Capability {name} permission must be one of {sorted(PERMISSIONS)}")
+    if metadata["permission"] != CAPABILITY_DEFINITIONS[name]["permission"]:
+        raise ValueError(f"Capability {name} permission must be {CAPABILITY_DEFINITIONS[name]['permission']}")
     if not isinstance(metadata["sideEffect"], bool):
-        raise CapabilityContractError(f"Capability {metadata['name']} sideEffect must be boolean")
+        raise ValueError(f"Capability {name} sideEffect must be boolean")
     if metadata["sideEffect"]:
-        raise CapabilityContractError(f"Capability {metadata['name']} must not declare external side effects in Phase 3 MVP")
+        raise ValueError(f"Capability {name} must not declare external side effects in the read-only MVP")
     if not isinstance(metadata["timeoutMs"], int) or metadata["timeoutMs"] <= 0:
-        raise CapabilityContractError(f"Capability {metadata['name']} timeoutMs must be a positive integer")
-    for schema_field in ["inputSchema", "outputSchema"]:
-        value = metadata[schema_field]
-        if not isinstance(value, dict) or not value:
-            raise CapabilityContractError(f"Capability {metadata['name']} {schema_field} must be a non-empty object")
+        raise ValueError(f"Capability {name} timeoutMs must be a positive integer")
+
+    for field in ["inputContract", "outputContract"]:
+        contract = metadata[field]
+        if not isinstance(contract, dict) or not contract:
+            raise ValueError(f"Capability {name} {field} must be a non-empty object")
+        if "schema" not in contract or "required" not in contract and field == "inputContract":
+            raise ValueError(f"Capability {name} {field} is missing schema or required fields")
 
 
-def validate_capability_envelope(envelope: dict[str, Any]) -> None:
+def validate_capability_envelope(envelope: dict[str, Any], expected_names: list[str] | tuple[str, ...]) -> None:
     if envelope.get("schemaVersion") != CAPABILITY_ENVELOPE_SCHEMA_VERSION:
-        raise CapabilityContractError(f"Capability envelope schemaVersion must be {CAPABILITY_ENVELOPE_SCHEMA_VERSION}")
-    capabilities = envelope.get("capabilities")
-    if not isinstance(capabilities, list) or not capabilities:
-        raise CapabilityContractError("Capability envelope capabilities must be a non-empty list")
+        raise ValueError(f"Capability envelope schemaVersion must be {CAPABILITY_ENVELOPE_SCHEMA_VERSION}")
+    items = envelope.get("items")
+    if not isinstance(items, list) or not items:
+        raise ValueError("Capability envelope items must be a non-empty list")
 
-    by_name: dict[str, dict[str, Any]] = {}
-    for metadata in capabilities:
-        if not isinstance(metadata, dict):
-            raise CapabilityContractError("Capability envelope entries must be objects")
-        validate_capability_metadata(metadata)
-        name = metadata["name"]
-        if name in by_name:
-            raise CapabilityContractError(f"Duplicate capability metadata: {name}")
-        by_name[name] = metadata
+    names = [item.get("name") for item in items if isinstance(item, dict)]
+    if names != list(expected_names):
+        raise ValueError(f"Capability envelope names must equal {list(expected_names)}")
 
-    expected = set(CAPABILITY_NAMES)
-    actual = set(by_name)
-    if actual != expected:
-        raise CapabilityContractError(f"Capability envelope names must be {sorted(expected)}, got {sorted(actual)}")
-
-    for name, expected_metadata in _CAPABILITY_METADATA.items():
-        actual_metadata = by_name[name]
-        for field in ["permission", "sideEffect", "timeoutMs", "inputSchema", "outputSchema"]:
-            if actual_metadata[field] != expected_metadata[field]:
-                raise CapabilityContractError(f"Capability {name} {field} must equal the Phase 3 contract")
+    for item in items:
+        if not isinstance(item, dict):
+            raise ValueError("Capability envelope items must be objects")
+        validate_capability_metadata(item)

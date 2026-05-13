@@ -372,18 +372,36 @@ def verify_artifacts(
     }
 
 
+def capability_step(step_id: str, capability: str, status: str) -> dict:
+    return {
+        "id": step_id,
+        "capability": capability,
+        "capabilityRef": capability_ref(capability),
+        "status": status,
+    }
+
+
+def build_run_steps(report_status: str) -> list[dict]:
+    return [
+        capability_step("step-read-log", "read_log", "completed"),
+        capability_step("step-extract-regression-result", "extract_regression_result", "completed"),
+        capability_step("step-write-artifact", "write_artifact", "completed"),
+        {"id": "step-verify", "capability": "rule_verifier", "status": report_status},
+    ]
+
+
 def build_events(fixture: Fixture, run_id: str, evidence_ids: list[str], verifier_status: str) -> list[dict]:
     event_specs = [
-        ("run.created", "completed", None, "run.json", []),
-        ("task_spec.generated", "completed", "fixture.json", "run.json#taskSpec", []),
-        ("capability.read_log.completed", "completed", display_path(fixture.log_path), "log_text", []),
-        ("capability.extract_regression_result.completed", "completed", "log_text", "regression_result.json", evidence_ids),
-        ("artifact.write.completed", "completed", "regression_result.json", "evidence.json,email_draft.md,run.json", evidence_ids),
-        ("verifier.completed", verifier_status, "evidence.json,regression_result.json,email_draft.md", "verifier_report.json", evidence_ids),
-        ("run.completed" if verifier_status == "completed" else "run.failed", verifier_status, "verifier_report.json", "run.json", evidence_ids),
+        ("run.created", "completed", None, "run.json", [], None),
+        ("task_spec.generated", "completed", "fixture.json", "run.json#taskSpec", [], None),
+        ("capability.read_log.completed", "completed", display_path(fixture.log_path), "log_text", [], "read_log"),
+        ("capability.extract_regression_result.completed", "completed", "log_text", "regression_result.json", evidence_ids, "extract_regression_result"),
+        ("artifact.write.completed", "completed", "regression_result.json", "evidence.json,email_draft.md,run.json", evidence_ids, "write_artifact"),
+        ("verifier.completed", verifier_status, "evidence.json,regression_result.json,email_draft.md", "verifier_report.json", evidence_ids, None),
+        ("run.completed" if verifier_status == "completed" else "run.failed", verifier_status, "verifier_report.json", "run.json", evidence_ids, None),
     ]
     events: list[dict] = []
-    for index, (event_type, status, input_ref, output_ref, ids) in enumerate(event_specs, start=1):
+    for index, (event_type, status, input_ref, output_ref, ids, capability) in enumerate(event_specs, start=1):
         event = {
             "id": f"event-{fixture.id}-{index:03d}",
             "runId": run_id,
@@ -399,10 +417,9 @@ def build_events(fixture: Fixture, run_id: str, evidence_ids: list[str], verifie
             event["outputRef"] = output_ref
         if ids:
             event["evidenceIds"] = ids
-        if event_type.startswith("capability."):
-            capability_name = event_type.removeprefix("capability.").removesuffix(".completed")
-            event["capability"] = capability_name
-            event["capabilityRef"] = capability_ref(capability_name)
+        if capability:
+            event["capability"] = capability
+            event["capabilityRef"] = capability_ref(capability)
         events.append(event)
     return events
 
@@ -439,28 +456,8 @@ def run_fixture(fixture: Fixture, out_dir: Path) -> dict:
         "fixtureId": fixture.id,
         "task": fixture.goal,
         "taskSpec": task_spec,
-        "capabilityEnvelope": build_capability_envelope(),
-        "steps": [
-            {
-                "id": "step-read-log",
-                "capability": "read_log",
-                "capabilityRef": capability_ref("read_log"),
-                "status": "completed",
-            },
-            {
-                "id": "step-extract-regression-result",
-                "capability": "extract_regression_result",
-                "capabilityRef": capability_ref("extract_regression_result"),
-                "status": "completed",
-            },
-            {
-                "id": "step-write-artifact",
-                "capability": "write_artifact",
-                "capabilityRef": capability_ref("write_artifact"),
-                "status": "completed",
-            },
-            {"id": "step-verify", "capability": "rule_verifier", "status": report_status},
-        ],
+        "capabilityEnvelope": build_capability_envelope(task_spec["allowedActions"]),
+        "steps": build_run_steps(report_status),
         "events": [event["id"] for event in events],
         "artifacts": EXPECTED_ARTIFACTS + ["run.json", "events.jsonl", "verifier_report.json"],
         "status": "completed" if report_status == "passed" else "failed",

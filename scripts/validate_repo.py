@@ -10,8 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from capability_contract import (
-    CAPABILITY_NAMES,
-    build_capability_envelope,
+    PHASE3_CAPABILITY_NAMES,
     capability_ref,
     validate_capability_envelope,
 )
@@ -78,10 +77,10 @@ REQUIRED_FILES = [
     ".cursor/plans/agentic-control-plane.plan.md",
     "docs/automation/cloud-automation-prompt.md",
     ".github/workflows/validate.yml",
-    "scripts/capability_contract.py",
     "scripts/fixture_runner.py",
     "scripts/local_readonly_runner.py",
     "scripts/task_spec.py",
+    "scripts/capability_contract.py",
 ]
 
 PLAN_REQUIRED_MARKERS = [
@@ -89,6 +88,8 @@ PLAN_REQUIRED_MARKERS = [
     "fixture-runner --fixture-dir <fixtures/regression> --out-dir <artifacts/runs>",
     "RegressionTaskSpecV1",
     "regression-task-spec-v1",
+    "capability-metadata-v1",
+    "capability-envelope-v1",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -98,8 +99,6 @@ PLAN_REQUIRED_MARKERS = [
     "incomplete_jobs",
     "passed_with_warning_or_waiver",
     "ambiguous_summary",
-    "capability-envelope-v1",
-    "capability-metadata-v1",
 ]
 
 AUTOMATION_REQUIRED_MARKERS = [
@@ -144,28 +143,6 @@ def require_fields(label: str, payload: dict, fields: list[str]) -> None:
 def require_enum(label: str, value: str, allowed: set[str]) -> None:
     if value not in allowed:
         raise AssertionError(f"{label} has invalid value {value!r}; expected one of {sorted(allowed)}")
-
-
-def validate_capability_contract_for_run(fixture_id: str, run: dict, events: list[dict]) -> None:
-    try:
-        validate_capability_envelope(run["capabilityEnvelope"])
-    except ValueError as exc:
-        raise AssertionError(f"Fixture {fixture_id} capabilityEnvelope failed validation: {exc}") from exc
-
-    expected_refs = {name: capability_ref(name) for name in CAPABILITY_NAMES}
-    for step in run["steps"]:
-        capability_name = step["capability"]
-        if capability_name in expected_refs:
-            if step.get("capabilityRef") != expected_refs[capability_name]:
-                raise AssertionError(f"Fixture {fixture_id} step {step['id']} has invalid capabilityRef")
-
-    for event in events:
-        if event["type"].startswith("capability."):
-            capability_name = event["type"].removeprefix("capability.").removesuffix(".completed")
-            if event.get("capability") != capability_name:
-                raise AssertionError(f"Fixture {fixture_id} event {event['id']} capability mismatch")
-            if event.get("capabilityRef") != expected_refs[capability_name]:
-                raise AssertionError(f"Fixture {fixture_id} event {event['id']} has invalid capabilityRef")
 
 
 def require_fixture_layout() -> None:
@@ -367,13 +344,19 @@ def validate_schema_structure(
         validate_regression_task_spec(task_spec)
     except ValueError as exc:
         raise AssertionError(f"Fixture {fixture_id} taskSpec failed validation: {exc}") from exc
+    try:
+        validate_capability_envelope(run["capabilityEnvelope"], PHASE3_CAPABILITY_NAMES)
+    except ValueError as exc:
+        raise AssertionError(f"Fixture {fixture_id} capabilityEnvelope failed validation: {exc}") from exc
     if not isinstance(run["steps"], list) or not run["steps"]:
         raise AssertionError(f"Fixture {fixture_id} run.steps must be a non-empty list")
     for step in run["steps"]:
         require_fields(f"{fixture_id} step", step, ["id", "capability", "status"])
         require_enum(f"{fixture_id} step.status", step["status"], STEP_STATUSES)
-        if step["capability"] in CAPABILITY_NAMES and "capabilityRef" not in step:
-            raise AssertionError(f"Fixture {fixture_id} step {step['id']} must include capabilityRef")
+        if step["capability"] in PHASE3_CAPABILITY_NAMES:
+            require_fields(f"{fixture_id} step {step['id']}", step, ["capabilityRef"])
+            if step["capabilityRef"] != capability_ref(step["capability"]):
+                raise AssertionError(f"Fixture {fixture_id} step {step['id']} capabilityRef mismatch")
 
     require_fields(f"{fixture_id} evidence.json", evidence, ["schemaVersion", "fixtureId", "items"])
     if evidence["schemaVersion"] != "evidence-list-v1":
@@ -455,14 +438,23 @@ def validate_schema_structure(
             raise AssertionError(f"{event_label}.fixtureId mismatch")
         require_enum(f"{event_label}.type", event["type"], EVENT_TYPES)
         require_enum(f"{event_label}.status", event["status"], EVENT_STATUSES)
-        if event["type"].startswith("capability."):
-            require_fields(event_label, event, ["capability", "capabilityRef"])
         if not isinstance(event["causalRefs"], list):
             raise AssertionError(f"{event_label}.causalRefs must be a list")
         if "evidenceIds" in event and not isinstance(event["evidenceIds"], list):
             raise AssertionError(f"{event_label}.evidenceIds must be a list")
-
-    validate_capability_contract_for_run(fixture_id, run, events)
+        expected_capability = None
+        if event["type"] == "capability.read_log.completed":
+            expected_capability = "read_log"
+        elif event["type"] == "capability.extract_regression_result.completed":
+            expected_capability = "extract_regression_result"
+        elif event["type"] == "artifact.write.completed":
+            expected_capability = "write_artifact"
+        if expected_capability:
+            require_fields(event_label, event, ["capability", "capabilityRef"])
+            if event["capability"] != expected_capability:
+                raise AssertionError(f"{event_label}.capability must be {expected_capability}")
+            if event["capabilityRef"] != capability_ref(expected_capability):
+                raise AssertionError(f"{event_label}.capabilityRef mismatch")
 
 
 def validate_artifact_packet(base_dir: Path) -> None:
@@ -563,19 +555,19 @@ def remove_required_report_rule(tampered_dir: Path) -> None:
     write_json(report_path, report)
 
 
-def remove_capability_permission(tampered_dir: Path) -> None:
+def remove_capability_metadata_field(tampered_dir: Path) -> None:
     run_path = tampered_dir / "all_passed/run.json"
     run = load_json(run_path)
-    del run["capabilityEnvelope"]["capabilities"][0]["permission"]
+    del run["capabilityEnvelope"]["items"][0]["permission"]
     write_json(run_path, run)
 
 
-def add_capability_external_side_effect(tampered_dir: Path) -> None:
+def add_external_capability_side_effect(tampered_dir: Path) -> None:
     run_path = tampered_dir / "all_passed/run.json"
     run = load_json(run_path)
-    for capability in run["capabilityEnvelope"]["capabilities"]:
-        if capability["name"] == "read_log":
-            capability["sideEffect"] = True
+    for item in run["capabilityEnvelope"]["items"]:
+        if item["name"] == "write_artifact":
+            item["sideEffect"] = True
             break
     write_json(run_path, run)
 
@@ -607,14 +599,14 @@ def validate_forced_failure_cases(source_dir: Path, scratch_root: Path) -> None:
         "missing_capability_permission",
         source_dir,
         scratch_root,
-        remove_capability_permission,
-        "Capability metadata is missing required fields",
+        remove_capability_metadata_field,
+        "capabilityEnvelope failed validation",
     )
     expect_artifact_validation_failure(
-        "capability_external_side_effect",
+        "external_capability_side_effect",
         source_dir,
         scratch_root,
-        add_capability_external_side_effect,
+        add_external_capability_side_effect,
         "must not declare external side effects",
     )
 
@@ -692,7 +684,6 @@ def main() -> None:
     require_markers("plan", plan, PLAN_REQUIRED_MARKERS)
     require_markers("automation prompt", automation_prompt, AUTOMATION_REQUIRED_MARKERS)
     require_fixture_layout()
-    validate_capability_envelope(build_capability_envelope())
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_root = Path(temp_dir)

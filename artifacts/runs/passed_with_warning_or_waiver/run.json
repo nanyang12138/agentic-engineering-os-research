@@ -8,86 +8,92 @@
     "verifier_report.json"
   ],
   "capabilityEnvelope": {
-    "capabilities": [
+    "items": [
       {
-        "inputSchema": {
+        "inputContract": {
           "properties": {
-            "logPath": "string"
+            "sourcePath": "string:path"
           },
           "required": [
-            "logPath"
-          ],
-          "type": "object"
-        },
-        "name": "read_log",
-        "outputSchema": {
-          "properties": {
-            "logTextRef": "string",
-            "sourcePath": "string"
-          },
-          "required": [
-            "logTextRef",
             "sourcePath"
           ],
-          "type": "object"
+          "schema": "ReadLogInputV1"
+        },
+        "name": "read_log",
+        "outputContract": {
+          "produces": [
+            "logTextRef"
+          ],
+          "properties": {
+            "logTextRef": "string:memory-ref"
+          },
+          "schema": "ReadLogOutputV1"
         },
         "permission": "read",
+        "ref": "capability://phase3/read_log",
         "schemaVersion": "capability-metadata-v1",
         "sideEffect": false,
         "timeoutMs": 1000
       },
       {
-        "inputSchema": {
+        "inputContract": {
           "properties": {
-            "logTextRef": "string",
-            "taskSpecRef": "string"
+            "logTextRef": "string:memory-ref",
+            "taskSpecRef": "string:run-json-pointer"
           },
           "required": [
             "logTextRef",
             "taskSpecRef"
           ],
-          "type": "object"
+          "schema": "ExtractRegressionResultInputV1"
         },
         "name": "extract_regression_result",
-        "outputSchema": {
-          "properties": {
-            "evidenceArtifact": "evidence.json",
-            "regressionResultArtifact": "regression_result.json"
-          },
-          "required": [
-            "evidenceArtifact",
-            "regressionResultArtifact"
+        "outputContract": {
+          "produces": [
+            "evidenceItems",
+            "regressionResultCandidate"
           ],
-          "type": "object"
+          "properties": {
+            "evidenceItems": "LogEvidenceV1[]",
+            "regressionResultCandidate": "RegressionResultArtifactV1"
+          },
+          "schema": "ExtractRegressionResultOutputV1"
         },
         "permission": "read",
+        "ref": "capability://phase3/extract_regression_result",
         "schemaVersion": "capability-metadata-v1",
         "sideEffect": false,
         "timeoutMs": 1000
       },
       {
-        "inputSchema": {
+        "inputContract": {
           "properties": {
-            "artifactPayloads": "object",
-            "outDir": "string"
+            "emailDraftRef": "string:artifact-ref",
+            "evidenceRef": "string:artifact-ref",
+            "regressionResultRef": "string:artifact-ref",
+            "runRef": "string:run-json-pointer"
           },
           "required": [
-            "artifactPayloads",
-            "outDir"
+            "runRef",
+            "evidenceRef",
+            "regressionResultRef",
+            "emailDraftRef"
           ],
-          "type": "object"
+          "schema": "WriteArtifactInputV1"
         },
         "name": "write_artifact",
-        "outputSchema": {
-          "properties": {
-            "artifactPaths": "string[]"
-          },
-          "required": [
+        "outputContract": {
+          "effectBoundary": "local_artifact_output_only",
+          "produces": [
             "artifactPaths"
           ],
-          "type": "object"
+          "properties": {
+            "artifactPaths": "string:path[]"
+          },
+          "schema": "WriteArtifactOutputV1"
         },
         "permission": "write",
+        "ref": "capability://phase3/write_artifact",
         "schemaVersion": "capability-metadata-v1",
         "sideEffect": false,
         "timeoutMs": 1000
@@ -112,19 +118,19 @@
   "steps": [
     {
       "capability": "read_log",
-      "capabilityRef": "capability-envelope-v1#read_log",
+      "capabilityRef": "capability://phase3/read_log",
       "id": "step-read-log",
       "status": "completed"
     },
     {
       "capability": "extract_regression_result",
-      "capabilityRef": "capability-envelope-v1#extract_regression_result",
+      "capabilityRef": "capability://phase3/extract_regression_result",
       "id": "step-extract-regression-result",
       "status": "completed"
     },
     {
       "capability": "write_artifact",
-      "capabilityRef": "capability-envelope-v1#write_artifact",
+      "capabilityRef": "capability://phase3/write_artifact",
       "id": "step-write-artifact",
       "status": "completed"
     },

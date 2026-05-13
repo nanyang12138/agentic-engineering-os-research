@@ -6,13 +6,14 @@ import re
 import shutil
 from pathlib import Path
 
-from capability_contract import build_capability_envelope, capability_ref
+from capability_contract import build_capability_envelope
 from fixture_runner import (
     EXPECTED_ARTIFACTS,
     GENERATED_AT,
     Fixture,
     build_email,
     build_events,
+    build_run_steps,
     classify,
     extract_evidence,
     stable_hash,
@@ -88,28 +89,8 @@ def write_local_run(log_path: Path, goal: str, out_dir: Path, task_spec_path: Pa
         "fixtureId": case_id,
         "task": goal,
         "taskSpec": task_spec,
-        "capabilityEnvelope": build_capability_envelope(),
-        "steps": [
-            {
-                "id": "step-read-log",
-                "capability": "read_log",
-                "capabilityRef": capability_ref("read_log"),
-                "status": "completed",
-            },
-            {
-                "id": "step-extract-regression-result",
-                "capability": "extract_regression_result",
-                "capabilityRef": capability_ref("extract_regression_result"),
-                "status": "completed",
-            },
-            {
-                "id": "step-write-artifact",
-                "capability": "write_artifact",
-                "capabilityRef": capability_ref("write_artifact"),
-                "status": "completed",
-            },
-            {"id": "step-verify", "capability": "rule_verifier", "status": report_status},
-        ],
+        "capabilityEnvelope": build_capability_envelope(task_spec["allowedActions"]),
+        "steps": build_run_steps(report_status),
         "events": [event["id"] for event in events],
         "artifacts": EXPECTED_ARTIFACTS + ["run.json", "events.jsonl", "verifier_report.json"],
         "status": "completed" if report_status == "passed" else "failed",
