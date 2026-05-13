@@ -1,0 +1,265 @@
+{
+  "artifactRefs": [
+    {
+      "contentHash": "6c38b856ceacf2024d2a0144291a76e705f472eef0c004580f78644b607665b6",
+      "path": "artifacts/runs/passed_with_warning_or_waiver/run.json",
+      "type": "run"
+    },
+    {
+      "contentHash": "d5f0812e4852e9c6eda19b48120f8ec33fcb692afa3f036f553a0ea798982b89",
+      "path": "artifacts/runs/passed_with_warning_or_waiver/events.jsonl",
+      "type": "events"
+    },
+    {
+      "contentHash": "687523ac565492388ca3ab77f157456aa698fcdaa07e16f48458a28f6cb8ea41",
+      "path": "artifacts/runs/passed_with_warning_or_waiver/evidence.json",
+      "type": "evidence"
+    },
+    {
+      "contentHash": "938e45c8532854b22b355e2da024236cc5cae2c532d3532b240d5fe3d38ffb1c",
+      "path": "artifacts/runs/passed_with_warning_or_waiver/regression_result.json",
+      "type": "regression_result"
+    },
+    {
+      "contentHash": "00c2690b1ccce693316b3ac439e7916bf2a64bca2e07a820c96e8add393f30ca",
+      "path": "artifacts/runs/passed_with_warning_or_waiver/email_draft.md",
+      "type": "email_draft"
+    },
+    {
+      "contentHash": "16e3655d3e554802b8550766485fe00e9cde60448da13dd445893a97943e9cb8",
+      "path": "artifacts/runs/passed_with_warning_or_waiver/verifier_report.json",
+      "type": "verifier_report"
+    }
+  ],
+  "capabilityCatalogRef": "artifacts/capabilities/phase3_capability_catalog.json",
+  "contextItems": [
+    {
+      "id": "ctx-task-goal",
+      "kind": "task_goal",
+      "sourceId": "source-task-spec",
+      "text": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email."
+    },
+    {
+      "allowedActions": [
+        "read_log",
+        "extract_regression_result",
+        "write_artifact"
+      ],
+      "approvalPoints": [
+        "send_email_requires_human_approval"
+      ],
+      "forbiddenActions": [
+        "modify_repo_or_log",
+        "execute_external_side_effect",
+        "send_email",
+        "call_gui_desktop_cua_or_browser_capability",
+        "claim_all_passed_without_sufficient_evidence"
+      ],
+      "id": "ctx-task-boundaries",
+      "kind": "task_boundaries",
+      "sourceId": "source-task-spec"
+    },
+    {
+      "capabilityRefs": [
+        "capability://phase3/read_log",
+        "capability://phase3/extract_regression_result",
+        "capability://phase3/write_artifact",
+        "capability://phase3/rule_verifier"
+      ],
+      "id": "ctx-capability-refs",
+      "kind": "capability_refs",
+      "sourceId": "source-capability-catalog"
+    },
+    {
+      "classification": "warning_marker",
+      "confidence": "medium",
+      "evidenceId": "ev-passed_with_warning_or_waiver-001",
+      "id": "ctx-log-evidence-001",
+      "kind": "log_excerpt",
+      "lineRange": [
+        2,
+        2
+      ],
+      "sourceId": "source-regression-log",
+      "text": "RUN_ID: synth-warning-waiver-001"
+    },
+    {
+      "classification": "waiver_marker",
+      "confidence": "medium",
+      "evidenceId": "ev-passed_with_warning_or_waiver-002",
+      "id": "ctx-log-evidence-002",
+      "kind": "log_excerpt",
+      "lineRange": [
+        2,
+        2
+      ],
+      "sourceId": "source-regression-log",
+      "text": "RUN_ID: synth-warning-waiver-001"
+    },
+    {
+      "classification": "all_passed_marker",
+      "confidence": "high",
+      "evidenceId": "ev-passed_with_warning_or_waiver-003",
+      "id": "ctx-log-evidence-003",
+      "kind": "log_excerpt",
+      "lineRange": [
+        4,
+        4
+      ],
+      "sourceId": "source-regression-log",
+      "text": "STATUS: PASSED"
+    },
+    {
+      "classification": "all_passed_marker",
+      "confidence": "high",
+      "evidenceId": "ev-passed_with_warning_or_waiver-004",
+      "id": "ctx-log-evidence-004",
+      "kind": "log_excerpt",
+      "lineRange": [
+        6,
+        6
+      ],
+      "sourceId": "source-regression-log",
+      "text": "failed_tests: 0"
+    },
+    {
+      "classification": "all_passed_marker",
+      "confidence": "high",
+      "evidenceId": "ev-passed_with_warning_or_waiver-005",
+      "id": "ctx-log-evidence-005",
+      "kind": "log_excerpt",
+      "lineRange": [
+        7,
+        7
+      ],
+      "sourceId": "source-regression-log",
+      "text": "incomplete_jobs: 0"
+    },
+    {
+      "classification": "warning_marker",
+      "confidence": "medium",
+      "evidenceId": "ev-passed_with_warning_or_waiver-006",
+      "id": "ctx-log-evidence-006",
+      "kind": "log_excerpt",
+      "lineRange": [
+        8,
+        8
+      ],
+      "sourceId": "source-regression-log",
+      "text": "WARNING: compare job m2b_lec_case_077 used a timing waiver"
+    },
+    {
+      "classification": "waiver_marker",
+      "confidence": "medium",
+      "evidenceId": "ev-passed_with_warning_or_waiver-007",
+      "id": "ctx-log-evidence-007",
+      "kind": "log_excerpt",
+      "lineRange": [
+        8,
+        8
+      ],
+      "sourceId": "source-regression-log",
+      "text": "WARNING: compare job m2b_lec_case_077 used a timing waiver"
+    },
+    {
+      "classification": "waiver_marker",
+      "confidence": "medium",
+      "evidenceId": "ev-passed_with_warning_or_waiver-008",
+      "id": "ctx-log-evidence-008",
+      "kind": "log_excerpt",
+      "lineRange": [
+        9,
+        9
+      ],
+      "sourceId": "source-regression-log",
+      "text": "waived_errors: 1"
+    },
+    {
+      "evidenceIds": [
+        "ev-passed_with_warning_or_waiver-001",
+        "ev-passed_with_warning_or_waiver-006",
+        "ev-passed_with_warning_or_waiver-002",
+        "ev-passed_with_warning_or_waiver-007",
+        "ev-passed_with_warning_or_waiver-008"
+      ],
+      "id": "ctx-regression-verdict",
+      "kind": "regression_verdict",
+      "sourceId": "source-regression-result-json",
+      "summary": "Warning or waiver markers were found and require review before a clean pass can be claimed.",
+      "verdict": "warning_or_waiver"
+    }
+  ],
+  "fixtureId": "passed_with_warning_or_waiver",
+  "id": "context-pack-passed_with_warning_or_waiver",
+  "purpose": "Bounded regression context for evidence extraction and verification.",
+  "runRef": "artifacts/runs/passed_with_warning_or_waiver/run.json",
+  "schemaVersion": "context-pack-v1",
+  "sources": [
+    {
+      "contentHash": "23d8273378499d9583db5ec8784c8c7442dddebc661da191386da740a4e3c3a6",
+      "id": "source-task-spec",
+      "jsonPointer": "/taskSpec",
+      "path": "artifacts/runs/passed_with_warning_or_waiver/run.json",
+      "role": "task_spec",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "0de329676233070161098b788de6be8b1333ecaaf2583c225dbfb95d0653b900",
+      "id": "source-regression-log",
+      "lineCount": 10,
+      "path": "fixtures/regression/passed_with_warning_or_waiver/input.log",
+      "role": "regression_log",
+      "type": "log"
+    },
+    {
+      "contentHash": "531bbbbb30b4793d94effe78c4e1ce37d79ceb0f53b5c3da9d652f7ecf465d1a",
+      "id": "source-capability-catalog",
+      "path": "artifacts/capabilities/phase3_capability_catalog.json",
+      "role": "capability_catalog",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "6c38b856ceacf2024d2a0144291a76e705f472eef0c004580f78644b607665b6",
+      "id": "source-run-json",
+      "path": "artifacts/runs/passed_with_warning_or_waiver/run.json",
+      "role": "run_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "d5f0812e4852e9c6eda19b48120f8ec33fcb692afa3f036f553a0ea798982b89",
+      "id": "source-events-jsonl",
+      "path": "artifacts/runs/passed_with_warning_or_waiver/events.jsonl",
+      "role": "events_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "687523ac565492388ca3ab77f157456aa698fcdaa07e16f48458a28f6cb8ea41",
+      "id": "source-evidence-json",
+      "path": "artifacts/runs/passed_with_warning_or_waiver/evidence.json",
+      "role": "evidence_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "938e45c8532854b22b355e2da024236cc5cae2c532d3532b240d5fe3d38ffb1c",
+      "id": "source-regression-result-json",
+      "path": "artifacts/runs/passed_with_warning_or_waiver/regression_result.json",
+      "role": "regression_result_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "00c2690b1ccce693316b3ac439e7916bf2a64bca2e07a820c96e8add393f30ca",
+      "id": "source-email-draft-md",
+      "path": "artifacts/runs/passed_with_warning_or_waiver/email_draft.md",
+      "role": "email_draft_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "16e3655d3e554802b8550766485fe00e9cde60448da13dd445893a97943e9cb8",
+      "id": "source-verifier-report-json",
+      "path": "artifacts/runs/passed_with_warning_or_waiver/verifier_report.json",
+      "role": "verifier_report_artifact",
+      "type": "artifact"
+    }
+  ],
+  "taskSpecRef": "artifacts/runs/passed_with_warning_or_waiver/run.json#/taskSpec"
+}

@@ -1,0 +1,212 @@
+{
+  "artifactRefs": [
+    {
+      "contentHash": "f98c079fc602c5ee6f18c2d3f716a7bda3e24eb994e54f284316f78304d5acb0",
+      "path": "artifacts/runs/failed_tests/run.json",
+      "type": "run"
+    },
+    {
+      "contentHash": "f2b39181e83f6cf84abb032a478bcedceec8c035df095fc114e9445c06a700a7",
+      "path": "artifacts/runs/failed_tests/events.jsonl",
+      "type": "events"
+    },
+    {
+      "contentHash": "63fa0e87bcb915defc3aa10cfb204357834792797e39c4dd51d3e8f64ed127db",
+      "path": "artifacts/runs/failed_tests/evidence.json",
+      "type": "evidence"
+    },
+    {
+      "contentHash": "6c8c8344cab08b77baa68987099ca55b98d2da7ecef12e121cb7989f39a07f2c",
+      "path": "artifacts/runs/failed_tests/regression_result.json",
+      "type": "regression_result"
+    },
+    {
+      "contentHash": "f06dcc9e21e9742388edaa0b38966037257335cf8db0818b9b4f27ca7a182f33",
+      "path": "artifacts/runs/failed_tests/email_draft.md",
+      "type": "email_draft"
+    },
+    {
+      "contentHash": "421503cba0fc12ab216c09d1a7228fc35db2932f1036a88ba7a39f436fbac9cd",
+      "path": "artifacts/runs/failed_tests/verifier_report.json",
+      "type": "verifier_report"
+    }
+  ],
+  "capabilityCatalogRef": "artifacts/capabilities/phase3_capability_catalog.json",
+  "contextItems": [
+    {
+      "id": "ctx-task-goal",
+      "kind": "task_goal",
+      "sourceId": "source-task-spec",
+      "text": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email."
+    },
+    {
+      "allowedActions": [
+        "read_log",
+        "extract_regression_result",
+        "write_artifact"
+      ],
+      "approvalPoints": [
+        "send_email_requires_human_approval"
+      ],
+      "forbiddenActions": [
+        "modify_repo_or_log",
+        "execute_external_side_effect",
+        "send_email",
+        "call_gui_desktop_cua_or_browser_capability",
+        "claim_all_passed_without_sufficient_evidence"
+      ],
+      "id": "ctx-task-boundaries",
+      "kind": "task_boundaries",
+      "sourceId": "source-task-spec"
+    },
+    {
+      "capabilityRefs": [
+        "capability://phase3/read_log",
+        "capability://phase3/extract_regression_result",
+        "capability://phase3/write_artifact",
+        "capability://phase3/rule_verifier"
+      ],
+      "id": "ctx-capability-refs",
+      "kind": "capability_refs",
+      "sourceId": "source-capability-catalog"
+    },
+    {
+      "classification": "failure_marker",
+      "confidence": "high",
+      "evidenceId": "ev-failed_tests-001",
+      "id": "ctx-log-evidence-001",
+      "kind": "log_excerpt",
+      "lineRange": [
+        4,
+        4
+      ],
+      "sourceId": "source-regression-log",
+      "text": "STATUS: FAILED"
+    },
+    {
+      "classification": "failure_marker",
+      "confidence": "high",
+      "evidenceId": "ev-failed_tests-002",
+      "id": "ctx-log-evidence-002",
+      "kind": "log_excerpt",
+      "lineRange": [
+        6,
+        6
+      ],
+      "sourceId": "source-regression-log",
+      "text": "failed_tests: 2"
+    },
+    {
+      "classification": "failure_marker",
+      "confidence": "high",
+      "evidenceId": "ev-failed_tests-003",
+      "id": "ctx-log-evidence-003",
+      "kind": "log_excerpt",
+      "lineRange": [
+        7,
+        7
+      ],
+      "sourceId": "source-regression-log",
+      "text": "ERROR: test m2b_lec_case_017 failed with compare mismatch"
+    },
+    {
+      "classification": "failure_marker",
+      "confidence": "high",
+      "evidenceId": "ev-failed_tests-004",
+      "id": "ctx-log-evidence-004",
+      "kind": "log_excerpt",
+      "lineRange": [
+        8,
+        8
+      ],
+      "sourceId": "source-regression-log",
+      "text": "ERROR: test m2b_lec_case_042 failed with unexpected X propagation"
+    },
+    {
+      "evidenceIds": [
+        "ev-failed_tests-001",
+        "ev-failed_tests-002",
+        "ev-failed_tests-003",
+        "ev-failed_tests-004"
+      ],
+      "id": "ctx-regression-verdict",
+      "kind": "regression_verdict",
+      "sourceId": "source-regression-result-json",
+      "summary": "Failure markers were found in the regression log.",
+      "verdict": "failed"
+    }
+  ],
+  "fixtureId": "failed_tests",
+  "id": "context-pack-failed_tests",
+  "purpose": "Bounded regression context for evidence extraction and verification.",
+  "runRef": "artifacts/runs/failed_tests/run.json",
+  "schemaVersion": "context-pack-v1",
+  "sources": [
+    {
+      "contentHash": "f6c4dccbd50bd3a02adf0d2ff663b4fdf98167b0be34ccaf6229a3227c22c6c8",
+      "id": "source-task-spec",
+      "jsonPointer": "/taskSpec",
+      "path": "artifacts/runs/failed_tests/run.json",
+      "role": "task_spec",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "df305e93fe9e9cc2342a26cd181e5c8a230351b92e22182b0f5aabb2d54a8ab1",
+      "id": "source-regression-log",
+      "lineCount": 9,
+      "path": "fixtures/regression/failed_tests/input.log",
+      "role": "regression_log",
+      "type": "log"
+    },
+    {
+      "contentHash": "531bbbbb30b4793d94effe78c4e1ce37d79ceb0f53b5c3da9d652f7ecf465d1a",
+      "id": "source-capability-catalog",
+      "path": "artifacts/capabilities/phase3_capability_catalog.json",
+      "role": "capability_catalog",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "f98c079fc602c5ee6f18c2d3f716a7bda3e24eb994e54f284316f78304d5acb0",
+      "id": "source-run-json",
+      "path": "artifacts/runs/failed_tests/run.json",
+      "role": "run_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "f2b39181e83f6cf84abb032a478bcedceec8c035df095fc114e9445c06a700a7",
+      "id": "source-events-jsonl",
+      "path": "artifacts/runs/failed_tests/events.jsonl",
+      "role": "events_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "63fa0e87bcb915defc3aa10cfb204357834792797e39c4dd51d3e8f64ed127db",
+      "id": "source-evidence-json",
+      "path": "artifacts/runs/failed_tests/evidence.json",
+      "role": "evidence_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "6c8c8344cab08b77baa68987099ca55b98d2da7ecef12e121cb7989f39a07f2c",
+      "id": "source-regression-result-json",
+      "path": "artifacts/runs/failed_tests/regression_result.json",
+      "role": "regression_result_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "f06dcc9e21e9742388edaa0b38966037257335cf8db0818b9b4f27ca7a182f33",
+      "id": "source-email-draft-md",
+      "path": "artifacts/runs/failed_tests/email_draft.md",
+      "role": "email_draft_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "421503cba0fc12ab216c09d1a7228fc35db2932f1036a88ba7a39f436fbac9cd",
+      "id": "source-verifier-report-json",
+      "path": "artifacts/runs/failed_tests/verifier_report.json",
+      "role": "verifier_report_artifact",
+      "type": "artifact"
+    }
+  ],
+  "taskSpecRef": "artifacts/runs/failed_tests/run.json#/taskSpec"
+}

@@ -16,6 +16,7 @@ from capability_contract import (
     validate_capability_catalog,
     validate_capability_envelope,
 )
+from context_pack import build_context_pack, validate_context_pack
 from fixture_runner import load_fixture, stable_hash, verify_artifacts
 from task_spec import TASK_SPEC_SCHEMA_VERSION, build_regression_task_spec, validate_regression_task_spec
 
@@ -24,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_DIR = ROOT / "fixtures/regression"
 ARTIFACT_DIR = ROOT / "artifacts/runs"
 CAPABILITY_CATALOG_PATH = ROOT / "artifacts/capabilities/phase3_capability_catalog.json"
+CONTEXT_PACK_DIR = ROOT / "artifacts/context"
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -84,6 +86,7 @@ REQUIRED_FILES = [
     "scripts/local_readonly_runner.py",
     "scripts/task_spec.py",
     "scripts/capability_contract.py",
+    "scripts/context_pack.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
 ]
 
@@ -95,6 +98,8 @@ PLAN_REQUIRED_MARKERS = [
     "capability-metadata-v1",
     "capability-envelope-v1",
     "phase3_capability_catalog.json",
+    "context-pack-v1",
+    "ContextPackV1",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -521,6 +526,87 @@ def validate_committed_capability_catalog() -> None:
         raise AssertionError("Capability catalog forced-failure unexpectedly accepted missing rule_verifier")
 
 
+def validate_committed_context_packs() -> None:
+    if not CONTEXT_PACK_DIR.is_dir():
+        raise AssertionError("Missing committed Phase 4 ContextPack directory: artifacts/context")
+    for fixture_id in FIXTURE_IDS:
+        context_pack_path = CONTEXT_PACK_DIR / fixture_id / "context_pack.json"
+        if not context_pack_path.is_file():
+            raise AssertionError(f"Missing committed ContextPack artifact: {context_pack_path.relative_to(ROOT)}")
+
+        committed = load_json(context_pack_path)
+        try:
+            validate_context_pack(committed, ROOT)
+        except ValueError as exc:
+            raise AssertionError(f"Committed ContextPack {fixture_id} failed validation: {exc}") from exc
+
+        expected = build_context_pack(ARTIFACT_DIR / fixture_id, FIXTURE_DIR / fixture_id, CAPABILITY_CATALOG_PATH)
+        if committed != expected:
+            raise AssertionError(f"Committed ContextPack {fixture_id} differs from deterministic builder output")
+
+    tampered = load_json(CONTEXT_PACK_DIR / "all_passed/context_pack.json")
+    tampered["sources"] = [
+        source
+        for source in tampered["sources"]
+        if source.get("role") != "capability_catalog"
+    ]
+    try:
+        validate_context_pack(tampered, ROOT)
+    except ValueError as exc:
+        if "missing required source roles" not in str(exc):
+            raise AssertionError(f"ContextPack missing-source forced-failure rejected for the wrong reason: {exc}") from exc
+    else:
+        raise AssertionError("ContextPack missing-source forced-failure unexpectedly passed validation")
+
+    tampered = load_json(CONTEXT_PACK_DIR / "all_passed/context_pack.json")
+    for source in tampered["sources"]:
+        if source.get("role") == "regression_log":
+            source["contentHash"] = "0" * 64
+            break
+    try:
+        validate_context_pack(tampered, ROOT)
+    except ValueError as exc:
+        if "source hash mismatch" not in str(exc):
+            raise AssertionError(f"ContextPack hash forced-failure rejected for the wrong reason: {exc}") from exc
+    else:
+        raise AssertionError("ContextPack hash forced-failure unexpectedly passed validation")
+
+
+def run_context_pack_builder(out_dir: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/context_pack.py"),
+        "--run-root",
+        str(ARTIFACT_DIR),
+        "--fixture-root",
+        str(FIXTURE_DIR),
+        "--capability-catalog",
+        str(CAPABILITY_CATALOG_PATH),
+        "--out-dir",
+        str(out_dir),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "ContextPack builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
+def compare_context_packs(expected_dir: Path, actual_dir: Path) -> None:
+    for fixture_id in FIXTURE_IDS:
+        expected = expected_dir / fixture_id / "context_pack.json"
+        actual = actual_dir / fixture_id / "context_pack.json"
+        if not actual.is_file():
+            raise AssertionError(f"ContextPack builder did not emit {actual.relative_to(actual_dir)}")
+        if not filecmp.cmp(expected, actual, shallow=False):
+            raise AssertionError(
+                f"Committed ContextPack {expected.relative_to(ROOT)} differs from deterministic CLI output"
+            )
+
+
 def compare_artifact_packets(expected_dir: Path, actual_dir: Path) -> None:
     for fixture_id in FIXTURE_IDS:
         for filename in ARTIFACT_FILES:
@@ -735,6 +821,7 @@ def main() -> None:
     require_markers("automation prompt", automation_prompt, AUTOMATION_REQUIRED_MARKERS)
     require_fixture_layout()
     validate_committed_capability_catalog()
+    validate_committed_context_packs()
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_root = Path(temp_dir)
@@ -750,6 +837,9 @@ def main() -> None:
         task_spec_path = Path(temp_dir) / "task-spec.json"
         validate_task_spec_gate(task_spec_path)
         validate_local_readonly_runner(Path(temp_dir) / "local-readonly", task_spec_path)
+        generated_context_packs = temp_root / "context"
+        run_context_pack_builder(generated_context_packs)
+        compare_context_packs(CONTEXT_PACK_DIR, generated_context_packs)
 
     print("Repository validation passed.")
 

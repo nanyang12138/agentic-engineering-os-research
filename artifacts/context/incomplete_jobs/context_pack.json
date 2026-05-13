@@ -1,0 +1,212 @@
+{
+  "artifactRefs": [
+    {
+      "contentHash": "63c3086dbbf5f0dc4daded37ea7ed3d950ff4ae8bd6565c12760283e75668e35",
+      "path": "artifacts/runs/incomplete_jobs/run.json",
+      "type": "run"
+    },
+    {
+      "contentHash": "4957dbd9afa456095203df8dd4fda7ae174c924bad3c7208f14574c862d3d40b",
+      "path": "artifacts/runs/incomplete_jobs/events.jsonl",
+      "type": "events"
+    },
+    {
+      "contentHash": "709996669ee37b71113fbe9d98e806123849535dc173fdda3c40c34e2cbbda9c",
+      "path": "artifacts/runs/incomplete_jobs/evidence.json",
+      "type": "evidence"
+    },
+    {
+      "contentHash": "b7fb88e2927f3c158a29e191dc3d86432a0456198a74d0f8b1896779c26d44b5",
+      "path": "artifacts/runs/incomplete_jobs/regression_result.json",
+      "type": "regression_result"
+    },
+    {
+      "contentHash": "13f35eac5eb68b5c7343f095bf82e73e49922f0a80ef855085ad65f15c1d907f",
+      "path": "artifacts/runs/incomplete_jobs/email_draft.md",
+      "type": "email_draft"
+    },
+    {
+      "contentHash": "86e0f10443e703e69e5ff98507e6de3a123fc3bdf31a8b9dd4243e9dd04401f9",
+      "path": "artifacts/runs/incomplete_jobs/verifier_report.json",
+      "type": "verifier_report"
+    }
+  ],
+  "capabilityCatalogRef": "artifacts/capabilities/phase3_capability_catalog.json",
+  "contextItems": [
+    {
+      "id": "ctx-task-goal",
+      "kind": "task_goal",
+      "sourceId": "source-task-spec",
+      "text": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email."
+    },
+    {
+      "allowedActions": [
+        "read_log",
+        "extract_regression_result",
+        "write_artifact"
+      ],
+      "approvalPoints": [
+        "send_email_requires_human_approval"
+      ],
+      "forbiddenActions": [
+        "modify_repo_or_log",
+        "execute_external_side_effect",
+        "send_email",
+        "call_gui_desktop_cua_or_browser_capability",
+        "claim_all_passed_without_sufficient_evidence"
+      ],
+      "id": "ctx-task-boundaries",
+      "kind": "task_boundaries",
+      "sourceId": "source-task-spec"
+    },
+    {
+      "capabilityRefs": [
+        "capability://phase3/read_log",
+        "capability://phase3/extract_regression_result",
+        "capability://phase3/write_artifact",
+        "capability://phase3/rule_verifier"
+      ],
+      "id": "ctx-capability-refs",
+      "kind": "capability_refs",
+      "sourceId": "source-capability-catalog"
+    },
+    {
+      "classification": "incomplete_marker",
+      "confidence": "high",
+      "evidenceId": "ev-incomplete_jobs-001",
+      "id": "ctx-log-evidence-001",
+      "kind": "log_excerpt",
+      "lineRange": [
+        4,
+        4
+      ],
+      "sourceId": "source-regression-log",
+      "text": "STATUS: INCOMPLETE"
+    },
+    {
+      "classification": "incomplete_marker",
+      "confidence": "high",
+      "evidenceId": "ev-incomplete_jobs-002",
+      "id": "ctx-log-evidence-002",
+      "kind": "log_excerpt",
+      "lineRange": [
+        7,
+        7
+      ],
+      "sourceId": "source-regression-log",
+      "text": "still_running: 9"
+    },
+    {
+      "classification": "incomplete_marker",
+      "confidence": "high",
+      "evidenceId": "ev-incomplete_jobs-003",
+      "id": "ctx-log-evidence-003",
+      "kind": "log_excerpt",
+      "lineRange": [
+        8,
+        8
+      ],
+      "sourceId": "source-regression-log",
+      "text": "incomplete_jobs: 9"
+    },
+    {
+      "classification": "incomplete_marker",
+      "confidence": "high",
+      "evidenceId": "ev-incomplete_jobs-004",
+      "id": "ctx-log-evidence-004",
+      "kind": "log_excerpt",
+      "lineRange": [
+        9,
+        9
+      ],
+      "sourceId": "source-regression-log",
+      "text": "missing final summary"
+    },
+    {
+      "evidenceIds": [
+        "ev-incomplete_jobs-001",
+        "ev-incomplete_jobs-002",
+        "ev-incomplete_jobs-003",
+        "ev-incomplete_jobs-004"
+      ],
+      "id": "ctx-regression-verdict",
+      "kind": "regression_verdict",
+      "sourceId": "source-regression-result-json",
+      "summary": "Incomplete or still-running markers were found in the regression log.",
+      "verdict": "incomplete"
+    }
+  ],
+  "fixtureId": "incomplete_jobs",
+  "id": "context-pack-incomplete_jobs",
+  "purpose": "Bounded regression context for evidence extraction and verification.",
+  "runRef": "artifacts/runs/incomplete_jobs/run.json",
+  "schemaVersion": "context-pack-v1",
+  "sources": [
+    {
+      "contentHash": "c38a1b6777269ddab11b63f140c54dff18e44a535a72cfc47036fd5333593d80",
+      "id": "source-task-spec",
+      "jsonPointer": "/taskSpec",
+      "path": "artifacts/runs/incomplete_jobs/run.json",
+      "role": "task_spec",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "d54d0b990d166fa1d6c6c7db2f8a46c89f48babb3adaecacf2b95598826c81bc",
+      "id": "source-regression-log",
+      "lineCount": 9,
+      "path": "fixtures/regression/incomplete_jobs/input.log",
+      "role": "regression_log",
+      "type": "log"
+    },
+    {
+      "contentHash": "531bbbbb30b4793d94effe78c4e1ce37d79ceb0f53b5c3da9d652f7ecf465d1a",
+      "id": "source-capability-catalog",
+      "path": "artifacts/capabilities/phase3_capability_catalog.json",
+      "role": "capability_catalog",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "63c3086dbbf5f0dc4daded37ea7ed3d950ff4ae8bd6565c12760283e75668e35",
+      "id": "source-run-json",
+      "path": "artifacts/runs/incomplete_jobs/run.json",
+      "role": "run_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "4957dbd9afa456095203df8dd4fda7ae174c924bad3c7208f14574c862d3d40b",
+      "id": "source-events-jsonl",
+      "path": "artifacts/runs/incomplete_jobs/events.jsonl",
+      "role": "events_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "709996669ee37b71113fbe9d98e806123849535dc173fdda3c40c34e2cbbda9c",
+      "id": "source-evidence-json",
+      "path": "artifacts/runs/incomplete_jobs/evidence.json",
+      "role": "evidence_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "b7fb88e2927f3c158a29e191dc3d86432a0456198a74d0f8b1896779c26d44b5",
+      "id": "source-regression-result-json",
+      "path": "artifacts/runs/incomplete_jobs/regression_result.json",
+      "role": "regression_result_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "13f35eac5eb68b5c7343f095bf82e73e49922f0a80ef855085ad65f15c1d907f",
+      "id": "source-email-draft-md",
+      "path": "artifacts/runs/incomplete_jobs/email_draft.md",
+      "role": "email_draft_artifact",
+      "type": "artifact"
+    },
+    {
+      "contentHash": "86e0f10443e703e69e5ff98507e6de3a123fc3bdf31a8b9dd4243e9dd04401f9",
+      "id": "source-verifier-report-json",
+      "path": "artifacts/runs/incomplete_jobs/verifier_report.json",
+      "role": "verifier_report_artifact",
+      "type": "artifact"
+    }
+  ],
+  "taskSpecRef": "artifacts/runs/incomplete_jobs/run.json#/taskSpec"
+}
