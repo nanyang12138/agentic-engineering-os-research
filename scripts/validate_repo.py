@@ -11,7 +11,9 @@ from typing import Any
 
 from capability_contract import (
     PHASE3_CAPABILITY_NAMES,
+    build_capability_catalog,
     capability_ref,
+    validate_capability_catalog,
     validate_capability_envelope,
 )
 from fixture_runner import load_fixture, stable_hash, verify_artifacts
@@ -21,6 +23,7 @@ from task_spec import TASK_SPEC_SCHEMA_VERSION, build_regression_task_spec, vali
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_DIR = ROOT / "fixtures/regression"
 ARTIFACT_DIR = ROOT / "artifacts/runs"
+CAPABILITY_CATALOG_PATH = ROOT / "artifacts/capabilities/phase3_capability_catalog.json"
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -81,6 +84,7 @@ REQUIRED_FILES = [
     "scripts/local_readonly_runner.py",
     "scripts/task_spec.py",
     "scripts/capability_contract.py",
+    "artifacts/capabilities/phase3_capability_catalog.json",
 ]
 
 PLAN_REQUIRED_MARKERS = [
@@ -90,6 +94,7 @@ PLAN_REQUIRED_MARKERS = [
     "regression-task-spec-v1",
     "capability-metadata-v1",
     "capability-envelope-v1",
+    "phase3_capability_catalog.json",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -489,6 +494,33 @@ def validate_artifact_packet(base_dir: Path) -> None:
                 f"Fixture {fixture_id} produced verdict {result['verdict']}, expected one of {sorted(allowed_verdicts)}"
             )
 
+
+def validate_committed_capability_catalog() -> None:
+    catalog = load_json(CAPABILITY_CATALOG_PATH)
+    try:
+        validate_capability_catalog(catalog, PHASE3_CAPABILITY_NAMES)
+    except ValueError as exc:
+        raise AssertionError(f"Committed Phase 3 capability catalog failed validation: {exc}") from exc
+
+    expected = build_capability_catalog()
+    if catalog != expected:
+        raise AssertionError("Committed Phase 3 capability catalog differs from deterministic generated catalog")
+
+    tampered = json.loads(json.dumps(catalog))
+    tampered["capabilityEnvelope"]["items"] = [
+        item
+        for item in tampered["capabilityEnvelope"]["items"]
+        if item.get("name") != "rule_verifier"
+    ]
+    try:
+        validate_capability_catalog(tampered, PHASE3_CAPABILITY_NAMES)
+    except ValueError as exc:
+        if "Capability envelope names must equal" not in str(exc):
+            raise AssertionError(f"Capability catalog forced-failure rejected for the wrong reason: {exc}") from exc
+    else:
+        raise AssertionError("Capability catalog forced-failure unexpectedly accepted missing rule_verifier")
+
+
 def compare_artifact_packets(expected_dir: Path, actual_dir: Path) -> None:
     for fixture_id in FIXTURE_IDS:
         for filename in ARTIFACT_FILES:
@@ -702,6 +734,7 @@ def main() -> None:
     require_markers("plan", plan, PLAN_REQUIRED_MARKERS)
     require_markers("automation prompt", automation_prompt, AUTOMATION_REQUIRED_MARKERS)
     require_fixture_layout()
+    validate_committed_capability_catalog()
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_root = Path(temp_dir)
