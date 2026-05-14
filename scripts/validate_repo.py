@@ -71,6 +71,11 @@ from policy_unlock_denial import (
     build_policy_unlock_request_denied,
     validate_policy_unlock_request_denied,
 )
+from coordination_contract import (
+    DELEGATION_MANIFEST_ARTIFACT_PATH,
+    build_delegation_manifest,
+    validate_delegation_manifest,
+)
 from human_approval import (
     DECISION_ARTIFACT_PATH as HUMAN_APPROVAL_DECISION_ARTIFACT_PATH,
     build_human_approval_decision,
@@ -132,6 +137,7 @@ IDENTITY_BOUND_APPROVAL_RECORD_PATH = ROOT / IDENTITY_BOUND_APPROVAL_RECORD_ARTI
 APPROVAL_AUDIT_QUERY_PATH = ROOT / APPROVAL_AUDIT_QUERY_ARTIFACT_PATH
 APPROVAL_REVOCATION_PATH = ROOT / APPROVAL_REVOCATION_ARTIFACT_PATH
 POLICY_UNLOCK_DENIAL_PATH = ROOT / POLICY_UNLOCK_DENIAL_ARTIFACT_PATH
+DELEGATION_MANIFEST_PATH = ROOT / DELEGATION_MANIFEST_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -194,6 +200,7 @@ REQUIRED_FILES = [
     "scripts/approval_audit_query.py",
     "scripts/approval_revocation.py",
     "scripts/policy_unlock_denial.py",
+    "scripts/coordination_contract.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
     "artifacts/recovery/interrupted_after_extract/run.json",
@@ -214,6 +221,7 @@ REQUIRED_FILES = [
     "artifacts/approval/post_mvp_approval_audit_query.json",
     "artifacts/approval/post_mvp_approval_revocation_or_expiry.json",
     "artifacts/approval/post_mvp_policy_unlock_request_denied.json",
+    "artifacts/coordination/post_mvp_delegation_manifest.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -288,6 +296,11 @@ PLAN_REQUIRED_MARKERS = [
     "PolicyUnlockRequestDeniedV1",
     "policy-unlock-request-denied-v1",
     "post_mvp_policy_unlock_request_denied.json",
+    "DelegationManifestV1",
+    "delegation-manifest-v1",
+    "CoordinationEventV1",
+    "coordination-event-v1",
+    "post_mvp_delegation_manifest.json",
     "Agentic Engineering OS Kernel",
     "workload-independent primitives",
     "first workload: Read-only Regression Evidence Demo",
@@ -2497,6 +2510,109 @@ def run_policy_unlock_denial_builder(denial_out: Path) -> None:
         )
 
 
+def expect_delegation_manifest_validation_failure(
+    label: str,
+    manifest: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_delegation_manifest(manifest, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"DelegationManifestV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"DelegationManifestV1 forced-failure case {label} unexpectedly passed validation")
+
+
+def validate_committed_delegation_manifest_artifact() -> None:
+    manifest = load_json(DELEGATION_MANIFEST_PATH)
+    try:
+        validate_delegation_manifest(manifest, ROOT)
+    except ValueError as exc:
+        raise AssertionError(f"Committed DelegationManifestV1 artifact failed validation: {exc}") from exc
+
+    expected_manifest = build_delegation_manifest(ROOT)
+    if manifest != expected_manifest:
+        raise AssertionError("Committed DelegationManifestV1 artifact differs from deterministic builder output")
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    tampered_manifest["creatorVerifierInvariant"]["verifierAgent"] = tampered_manifest["creatorVerifierInvariant"]["creatorAgent"]
+    tampered_manifest["delegations"][0]["verifierAgent"] = tampered_manifest["delegations"][0]["creatorAgent"]
+    expect_delegation_manifest_validation_failure(
+        "creator_self_verifies",
+        tampered_manifest,
+        "creator and verifier agents must be distinct",
+    )
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    tampered_manifest["delegations"][0]["requiredEvidence"] = ["source_bound_observation"]
+    expect_delegation_manifest_validation_failure(
+        "missing_required_evidence",
+        tampered_manifest,
+        "requiredEvidence must include",
+    )
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    tampered_manifest["policyBoundary"]["externalSideEffectsAllowed"] = True
+    expect_delegation_manifest_validation_failure(
+        "external_side_effect_allowed",
+        tampered_manifest,
+        "externalSideEffectsAllowed false",
+    )
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    tampered_manifest["delegations"][0]["expectedArtifacts"].append(
+        {
+            "artifactKind": "EmailDraftArtifactV1",
+            "artifactRef": "artifacts/runs/all_passed/email_draft.md",
+            "purpose": "regression_email_delivery",
+        }
+    )
+    expect_delegation_manifest_validation_failure(
+        "email_delivery_artifact_added",
+        tampered_manifest,
+        "workload-independent",
+    )
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    tampered_manifest["coordinationEvents"][2]["causalRefs"] = ["coord-event-missing"]
+    expect_delegation_manifest_validation_failure(
+        "coordination_event_causal_chain_broken",
+        tampered_manifest,
+        "causal chain",
+    )
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    tampered_manifest["nonRegressionReusePath"] = ["read_only_regression_evidence_demo"]
+    expect_delegation_manifest_validation_failure(
+        "missing_non_regression_reuse_path",
+        tampered_manifest,
+        "non-regression workload reuse paths",
+    )
+
+
+def run_delegation_manifest_builder(manifest_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/coordination_contract.py"),
+        "--delegation-out",
+        str(manifest_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "DelegationManifestV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -2894,6 +3010,7 @@ def main() -> None:
     validate_committed_approval_audit_query_artifact()
     validate_committed_approval_revocation_artifact()
     validate_committed_policy_unlock_denial_artifact()
+    validate_committed_delegation_manifest_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -2987,6 +3104,10 @@ def main() -> None:
         run_policy_unlock_denial_builder(generated_policy_unlock_denial)
         if load_json(generated_policy_unlock_denial) != load_json(POLICY_UNLOCK_DENIAL_PATH):
             raise AssertionError("Committed PolicyUnlockRequestDeniedV1 artifact differs from deterministic CLI output")
+        generated_delegation_manifest = temp_root / "post_mvp_delegation_manifest.json"
+        run_delegation_manifest_builder(generated_delegation_manifest)
+        if load_json(generated_delegation_manifest) != load_json(DELEGATION_MANIFEST_PATH):
+            raise AssertionError("Committed DelegationManifestV1 artifact differs from deterministic CLI output")
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)
         if load_json(generated_evaluation_report) != load_json(EVALUATION_REPORT_PATH):
