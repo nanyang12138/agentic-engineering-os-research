@@ -56,7 +56,7 @@
   "nextRecommendedSlice": {
     "mustRemainMachineVerifiable": true,
     "phase": "post_mvp",
-    "slice": "Add a policy unlock request denial fixture over ApprovalRevocationOrExpiryV1 while preserving the no-side-effect contract."
+    "slice": "Add a PolicyDecisionAuditTraceV1 fixture over PolicyUnlockRequestDeniedV1 while preserving the no-side-effect contract."
   },
   "outOfScope": [
     {
@@ -263,7 +263,7 @@
   "scope": "read_only_regression_evidence_demo_mvp_completion",
   "sourceArtifacts": [
     {
-      "contentHash": "345bbe5c15db9806bd866d8a5de9e2b1475d8520b3e5d78281840347c9fba917",
+      "contentHash": "e26bcaec35c1bea9acf2d3ded09f1ce0f43655d6a15558f6cc4e7dbf76bb48fa",
       "path": "scripts/validate_repo.py",
       "role": "validation_script"
     },
@@ -306,6 +306,11 @@
       "contentHash": "9de0cf343233ff4863c1a29b6584bbfd854f67ee0157b2556bd52a40936377cf",
       "path": "scripts/approval_revocation.py",
       "role": "post_mvp_approval_revocation_script"
+    },
+    {
+      "contentHash": "326570355fc1e8cf08c83948a46dad189b4d5c7aaf4b530d08611f3261d75f92",
+      "path": "scripts/policy_unlock_denial.py",
+      "role": "post_mvp_policy_unlock_denial_script"
     },
     {
       "contentHash": "531bbbbb30b4793d94effe78c4e1ce37d79ceb0f53b5c3da9d652f7ecf465d1a",
@@ -401,6 +406,11 @@
       "contentHash": "5132776f3f70fbc6f24ba7feb69b1478bc6d18624848f0ada6d0de44467f3dc5",
       "path": "artifacts/approval/post_mvp_approval_revocation_or_expiry.json",
       "role": "post_mvp_approval_revocation_or_expiry"
+    },
+    {
+      "contentHash": "805770958a81cb5674476ba275ca1ddcad192a6440a4c71c64e5e8e3205d8218",
+      "path": "artifacts/approval/post_mvp_policy_unlock_request_denied.json",
+      "role": "post_mvp_policy_unlock_request_denied"
     },
     {
       "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
