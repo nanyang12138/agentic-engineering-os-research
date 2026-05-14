@@ -5483,6 +5483,88 @@ Build vs Integrate：
 输入一个 generic TaskSpecV1 envelope，输出 planner -> creator delegation、acceptance criteria、required evidence、independent verifier binding 和 CoordinationEventV1；字段不得依赖 regression_result/email_draft/send_email。
 ```
 
+### 2026-05-14 03:03 UTC Automation Sprint：DelegationManifestV1 Coordination Kernel Contract Gate
+
+Active phase：post-MVP Kernel Generalization / Agent Coordination Runtime Contracts（Phase 1a-9 contract-only MVP 已满足，完整 Agentic Engineering OS 产品仍未完成）。
+
+Selected slice：
+
+```text
+Add DelegationManifestV1 contract artifact so that /usr/bin/python3 scripts/validate_repo.py verifies workload-independent planner-to-creator delegation, independent verifier binding, and CoordinationEventV1 causal chain.
+```
+
+为什么这是下一步：
+
+- `.github/workflows/validate.yml` 和 `.github/workflows/auto-merge-cursor-pr.yml` 均存在；本轮 baseline `/usr/bin/python3 scripts/validate_repo.py` 已通过。
+- 最新计划和 automation prompt 已明确禁止继续沿着 regression/email approval 链路深化；继续实现 `PolicyDecisionAuditTraceV1` 会弱化新的 post-MVP priority。
+- `DelegationManifestV1` 是 Agent Coordination Layer 的最小 OS-level contract，可把 Phase 9 的 handoff 记录升级为 workload-independent delegation primitive。
+
+OS kernel primitive advanced：
+
+- `Delegation`：把 parent TaskSpec、assignee、acceptance criteria、required evidence、expected ArtifactV1 / VerifierResultV1 和 PolicyV1 boundary 放进可验证 manifest。
+- `CoordinationEvent`：用 `coordination-event-v1` 串联 `delegation.created -> delegation.accepted -> verification.requested` causal refs。
+- `TaskSpecV1` envelope：以 generic envelope 包住现有 first-workload TaskSpec subtype，证明 regression spec 只是 workload subtype，不是唯一 TaskSpec。
+
+Non-regression workload reuse path：
+
+- `Test Execution / Failure Triage` 可以复用同一 delegation manifest，把测试执行委托给 creator，再由独立 verifier 检查 test log、exit code、flake policy 和 failure triage report。
+- `Code Patch / Review Loop` 可以复用 creator/verifier 分离：patch creator 产出 diff/artifact，reviewer/verifier 根据 tests、lint 和 review findings 验收。
+
+Coordination protocol / invariant clarified：
+
+- `DelegationManifestV1` / `delegation-manifest-v1` 明确 planner -> creator assignment。
+- `CoordinationEventV1` / `coordination-event-v1` 明确事件因果链。
+- creator 与 verifier 必须是不同 agent；creator output 不能自证完成，`VerifierResultV1` owner 仍是 `verifier-runtime-v1`。
+
+为什么这不是另一个 regression/email fixture：
+
+- 新 artifact 路径为 `artifacts/coordination/post_mvp_delegation_manifest.json`，scope 是 `agent_coordination_delegation_contract`，不是 regression result、email draft、approval lifecycle 或 delivery unlock。
+- `expectedArtifacts` 只允许 workload-independent `EvidenceListV1`、`ArtifactV1`、`VerifierResultV1` refs；validator 明确拒绝 `EmailDraftArtifactV1` / email delivery artifact。
+- manifest 记录 `nonRegressionReusePath`，必须包含 `test_execution_failure_triage`、`code_patch_review_loop` 和 `pr_review`。
+
+Acceptance criteria：
+
+- 新增 `scripts/coordination_contract.py` builder / validator / CLI。
+- 新增 committed `artifacts/coordination/post_mvp_delegation_manifest.json`，schemaVersion 为 `delegation-manifest-v1`，并包含 `coordination-event-v1` events。
+- `scripts/validate_repo.py` 验证 committed artifact、deterministic builder output，并拒绝 creator self-verification、缺 required evidence、external side effects、email delivery artifact、coordination event causal chain 断裂和缺 non-regression reuse path。
+- `EvaluationReportV1` 把 delegation manifest script/artifact 纳入 source hash 汇总，并把下一推荐切片推进为 `CreatorVerifierPairingV1`。
+
+实现摘要：
+
+- 新增 `scripts/coordination_contract.py`，提供 `DelegationManifestV1`、`DelegationV1`、`CoordinationEventV1` builder、validator 和 CLI。
+- 新增 committed `artifacts/coordination/post_mvp_delegation_manifest.json`。
+- 更新 `scripts/validate_repo.py` 的 required files/markers、artifact validation、deterministic CLI replay 和 forced-failure cases。
+- 更新 `scripts/evaluation_report.py` 与 `artifacts/evaluation/phase9_mvp_evaluation_report.json`，将 coordination artifact 纳入 source hash，并推荐下一步 `CreatorVerifierPairingV1`。
+
+验证计划 / 结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline `/usr/bin/python3 scripts/validate_repo.py` before edits：通过。
+- Initial post-edit `/usr/bin/python3 scripts/validate_repo.py`：按预期失败，原因是主计划缺少 `delegation-manifest-v1`、`coordination-event-v1` 和 `post_mvp_delegation_manifest.json` markers；已补主计划。
+- `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 DelegationManifestV1 committed artifact、deterministic builder output，以及 creator self-verification / missing required evidence / external side effect / email delivery artifact / broken CoordinationEventV1 causal chain / missing non-regression reuse path forced-failure cases。
+- `/usr/bin/python3 scripts/coordination_contract.py --validate-delegation artifacts/coordination/post_mvp_delegation_manifest.json`：通过。
+- `/usr/bin/python3 scripts/coordination_contract.py --delegation-out /tmp/post-mvp-delegation-checks/post_mvp_delegation_manifest.json`：通过，可 deterministic 生成 DelegationManifestV1 artifact。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/post-mvp-delegation-checks/fixture-smoke`：通过。
+- `/usr/bin/python3 scripts/task_spec.py --goal ... --input-log-path fixtures/regression/all_passed/input.log --out /tmp/post-mvp-delegation-checks/task-spec.json`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json`：通过。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- `DelegationManifestV1` 仍是 static contract artifact，不是 production multi-agent scheduler、message bus、blackboard database、LangGraph/AutoGen/CrewAI integration 或 durable coordination runtime。
+- 当前 artifact 仍以 first workload 的 existing TaskSpec / artifact refs 作为 source fixture；第二 workload 尚未实现。
+- Direct communication、negotiation 和 broadcast 仍需要后续 `AgentMessageV1`、`NegotiationRecordV1`、`BroadcastSubscriptionV1` contracts。
+
+下一轮建议：
+
+```text
+新增 workload-independent `CreatorVerifierPairingV1` contract artifact：
+基于 DelegationManifestV1 明确 creator output、verifier assignment、verifier independence strength、weak/self-verification prohibition、acceptance evidence 和 verifier result binding；字段不得依赖 regression_result/email_draft/send_email。
+```
+
 ## 22. Parking Lot
 
 以下内容仍然重要，但不进入第一版 MVP：

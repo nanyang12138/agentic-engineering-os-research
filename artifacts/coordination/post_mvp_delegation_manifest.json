@@ -1,0 +1,202 @@
+{
+  "agentBindings": [
+    {
+      "agentId": "planner_agent",
+      "mayCreateArtifacts": false,
+      "mayVerifyArtifacts": false,
+      "owns": [
+        "delegation_scope",
+        "acceptance_criteria",
+        "policy_boundary"
+      ],
+      "role": "planner"
+    },
+    {
+      "agentId": "creator_agent",
+      "mayCreateArtifacts": true,
+      "mayVerifyArtifacts": false,
+      "owns": [
+        "artifact_creation",
+        "evidence_backlink_collection"
+      ],
+      "role": "creator"
+    },
+    {
+      "agentId": "verifier_agent",
+      "mayCreateArtifacts": false,
+      "mayVerifyArtifacts": true,
+      "owns": [
+        "independent_verifier_result",
+        "policy_invariant_check"
+      ],
+      "role": "verifier"
+    }
+  ],
+  "coordinationEvents": [
+    {
+      "causalRefs": [
+        "artifacts/runs/all_passed/run.json#taskSpec"
+      ],
+      "delegationRef": "artifacts/coordination/post_mvp_delegation_manifest.json#delegations/delegation-workload-independent-artifact-creation",
+      "fromAgent": "planner_agent",
+      "id": "coord-event-delegation-created",
+      "message": "Planner created a source-bound artifact creation delegation with explicit verifier binding.",
+      "schemaVersion": "coordination-event-v1",
+      "toAgent": "creator_agent",
+      "type": "delegation.created"
+    },
+    {
+      "causalRefs": [
+        "coord-event-delegation-created"
+      ],
+      "delegationRef": "artifacts/coordination/post_mvp_delegation_manifest.json#delegations/delegation-workload-independent-artifact-creation",
+      "fromAgent": "creator_agent",
+      "id": "coord-event-delegation-accepted",
+      "message": "Creator accepted artifact production without verifier ownership.",
+      "schemaVersion": "coordination-event-v1",
+      "toAgent": "planner_agent",
+      "type": "delegation.accepted"
+    },
+    {
+      "causalRefs": [
+        "coord-event-delegation-accepted"
+      ],
+      "delegationRef": "artifacts/coordination/post_mvp_delegation_manifest.json#delegations/delegation-workload-independent-artifact-creation",
+      "fromAgent": "creator_agent",
+      "id": "coord-event-verification-requested",
+      "message": "Creator requested independent verifier review before acceptance.",
+      "schemaVersion": "coordination-event-v1",
+      "toAgent": "verifier_agent",
+      "type": "verification.requested"
+    }
+  ],
+  "coordinationProtocols": [
+    "delegation",
+    "creator_verifier"
+  ],
+  "creatorVerifierInvariant": {
+    "creatorAgent": "creator_agent",
+    "creatorCannotSelfVerify": true,
+    "independentVerifierRequired": true,
+    "verifierAgent": "verifier_agent",
+    "verifierResultOwner": "verifier-runtime-v1",
+    "weakSelfVerificationAllowed": false
+  },
+  "delegations": [
+    {
+      "acceptanceCriteria": [
+        "Every produced ArtifactV1 must reference source-bound Evidence.",
+        "Creator output cannot be accepted until an independent VerifierResultV1 is recorded.",
+        "Delegated work must stay inside the declared PolicyV1 side-effect boundary."
+      ],
+      "creatorAgent": "creator_agent",
+      "expectedArtifacts": [
+        {
+          "artifactKind": "EvidenceListV1",
+          "artifactRef": "artifacts/runs/all_passed/evidence.json",
+          "purpose": "source_bound_evidence"
+        },
+        {
+          "artifactKind": "ArtifactV1",
+          "artifactRef": "artifacts/runs/all_passed/regression_result.json",
+          "purpose": "structured_workload_result_instance"
+        },
+        {
+          "artifactKind": "VerifierResultV1",
+          "artifactRef": "artifacts/runs/all_passed/verifier_report.json",
+          "purpose": "independent_acceptance_verdict"
+        }
+      ],
+      "fromAgent": "planner_agent",
+      "id": "delegation-workload-independent-artifact-creation",
+      "parentRunRef": "artifacts/runs/all_passed/run.json",
+      "parentTaskSpecRef": "artifacts/runs/all_passed/run.json#taskSpec",
+      "policyBoundary": {
+        "creatorMaySelfVerify": false,
+        "deliverySendAllowed": false,
+        "externalSideEffectsAllowed": false,
+        "policySchemaVersion": "policy-v1",
+        "requiresIndependentVerifier": true,
+        "workspaceMutationAllowed": false
+      },
+      "requiredEvidence": [
+        "source_bound_observation",
+        "artifact_backlink",
+        "verifier_result"
+      ],
+      "runId": "run-all_passed-988940c2",
+      "schemaVersion": "delegation-v1",
+      "toAgent": "creator_agent",
+      "verifierAgent": "verifier_agent",
+      "workloadIndependentObjective": "Create source-bound engineering artifacts from a reviewed TaskSpec without owning the task verdict."
+    }
+  ],
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "post-mvp-delegation-manifest-kernel-contract",
+  "invariants": [
+    "DelegationManifestV1 is workload-independent: it binds TaskSpecV1, ArtifactV1, Evidence, VerifierResultV1, and PolicyV1 without adding regression/email behavior.",
+    "Creator and verifier agents must be distinct; creator output cannot self-certify acceptance.",
+    "CoordinationEventV1 entries must preserve causal refs from delegation creation to verification request.",
+    "The manifest is a static contract artifact and does not run a real multi-agent framework, send email, mutate a workspace, or execute providers."
+  ],
+  "kernelPrimitive": "Delegation",
+  "mode": "static_contract_only",
+  "nonRegressionReusePath": [
+    "test_execution_failure_triage",
+    "code_patch_review_loop",
+    "pr_review"
+  ],
+  "phase": "post_mvp",
+  "policyBoundary": {
+    "deliverySendAllowed": false,
+    "externalSideEffectsAllowed": false,
+    "policySchemaVersion": "policy-v1",
+    "providerExecutionAllowed": false,
+    "realMultiAgentRuntimeAllowed": false,
+    "workspaceMutationAllowed": false
+  },
+  "schemaVersion": "delegation-manifest-v1",
+  "scope": "agent_coordination_delegation_contract",
+  "sourceArtifacts": [
+    {
+      "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
+      "path": "artifacts/runs/all_passed/run.json",
+      "role": "task_run"
+    },
+    {
+      "contentHash": "531bbbbb30b4793d94effe78c4e1ce37d79ceb0f53b5c3da9d652f7ecf465d1a",
+      "path": "artifacts/capabilities/phase3_capability_catalog.json",
+      "role": "capability_catalog"
+    },
+    {
+      "contentHash": "2ca55171c437b28ffbeb1f1cd6101f32523b823d879afa1c97796f8849fd9f54",
+      "path": "artifacts/verifier/phase5_verifier_rule_catalog.json",
+      "role": "verifier_rule_catalog"
+    }
+  ],
+  "taskSpecEnvelope": {
+    "allowedCapabilityClasses": [
+      "observation_reader",
+      "structured_result_extractor",
+      "local_artifact_writer"
+    ],
+    "forbiddenEffectClasses": [
+      "external_side_effect",
+      "workspace_mutation",
+      "provider_execution",
+      "delivery_send"
+    ],
+    "goalHash": "f7e11c0ca6427932c09263b9c6d0fe368f4d9b0a6a2c3b7c019543868d8d52cc",
+    "kernelPrimitive": "TaskSpecV1",
+    "nonRegressionReusePath": [
+      "test_execution_failure_triage",
+      "code_patch_review_loop",
+      "pr_review"
+    ],
+    "schemaVersion": "task-spec-v1",
+    "sourceTaskSpecId": "task-spec-all_passed",
+    "sourceTaskSpecSchemaVersion": "regression-task-spec-v1",
+    "taskSpecRef": "artifacts/runs/all_passed/run.json#taskSpec",
+    "workloadType": "read_only_regression_evidence_demo"
+  }
+}

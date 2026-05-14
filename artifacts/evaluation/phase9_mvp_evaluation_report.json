@@ -56,7 +56,7 @@
   "nextRecommendedSlice": {
     "mustRemainMachineVerifiable": true,
     "phase": "post_mvp",
-    "slice": "Add a PolicyDecisionAuditTraceV1 fixture over PolicyUnlockRequestDeniedV1 while preserving the no-side-effect contract."
+    "slice": "Add a CreatorVerifierPairingV1 contract over DelegationManifestV1 so creator output and independent verifier acceptance are machine-verifiable."
   },
   "outOfScope": [
     {
@@ -263,7 +263,7 @@
   "scope": "read_only_regression_evidence_demo_mvp_completion",
   "sourceArtifacts": [
     {
-      "contentHash": "810b46b6f8f887239b14a6f8810899ea39bb3c68d0e05dbef7e357caaa6fa344",
+      "contentHash": "da64f4430afe1b303333f3c8228cd47646865f2c7b071271142d83f422e403d5",
       "path": "scripts/validate_repo.py",
       "role": "validation_script"
     },
@@ -411,6 +411,11 @@
       "contentHash": "805770958a81cb5674476ba275ca1ddcad192a6440a4c71c64e5e8e3205d8218",
       "path": "artifacts/approval/post_mvp_policy_unlock_request_denied.json",
       "role": "post_mvp_policy_unlock_request_denied"
+    },
+    {
+      "contentHash": "7779a468076194ccb7f88ffeb9e37727d479742ec0add917ac45777b748d5b8f",
+      "path": "artifacts/coordination/post_mvp_delegation_manifest.json",
+      "role": "post_mvp_delegation_manifest"
     },
     {
       "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
