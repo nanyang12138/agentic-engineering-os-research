@@ -1,0 +1,201 @@
+{
+  "artifactEnvelopeSchemaVersion": "artifact-v1",
+  "coordinationBinding": {
+    "agentMessageManifestRef": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+    "broadcastSubscriptionManifestRef": "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
+    "creatorVerifierPairingRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+    "delegationManifestRef": "artifacts/coordination/post_mvp_delegation_manifest.json",
+    "negotiationRecordRef": "artifacts/coordination/post_mvp_negotiation_record.json"
+  },
+  "creatorAgentMustNotOwnVerdict": true,
+  "failureTriageReportBinding": {
+    "failureTriageReportContentHash": "0d3e69dba8fbdcb98860c22adb3cd4832fe764d084c0cbabe146d15170207956",
+    "failureTriageReportEnvelopeSchemaVersion": "artifact-v1",
+    "failureTriageReportId": "post-mvp-failure-triage-report-kernel-contract",
+    "failureTriageReportRef": "artifacts/test_execution/post_mvp_failure_triage_report.json",
+    "failureTriageReportSchemaVersion": "failure-triage-report-v1"
+  },
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "post-mvp-verifier-result-test-execution-kernel-contract",
+  "invariants": [
+    "VerifierResultV1 is an ArtifactV1 subtype owned by verifier-runtime-v1, not by any creator agent.",
+    "VerifierResultV1 must bind TestExecutionResultV1, FailureTriageReportV1, and TestExecutionTaskSpecV1 envelopes plus all five coordination contracts by content hash.",
+    "VerifierResultV1 verdict belongs to a fixed domain and is derived from rule results via workload-independent precedence.",
+    "VerifierResultV1 ruleResults must reference evidence ids that exist in the bound TestExecutionResultV1.evidenceList.",
+    "VerifierResultV1 must keep external side effects, repository mutation, external communication, GUI/desktop access, and public access disabled.",
+    "VerifierResultV1 must declare creatorAgentMustNotOwnVerdict=true and must not be authored by creator_agent."
+  ],
+  "kind": "VerifierResultV1",
+  "nonRegressionReusePath": [
+    "test_execution_failure_triage",
+    "code_patch_review_loop",
+    "pr_review"
+  ],
+  "policyBoundary": {
+    "externalCommunicationAllowed": false,
+    "externalSideEffectsAllowed": false,
+    "guiOrBrowserOrDesktopCallAllowed": false,
+    "publicAccessAllowed": false,
+    "releaseOrDeploymentAllowed": false,
+    "repositoryMutationAllowed": false
+  },
+  "regressionWorkloadIsolation": {
+    "forbiddenFields": [
+      "regression_result",
+      "regression_result.json",
+      "email_draft",
+      "email_draft.md",
+      "send_email",
+      "regression-task-spec-v1",
+      "regression-result-artifact-v1"
+    ],
+    "reusesEmailDraftArtifact": false,
+    "reusesFailureTriageReportSchema": false,
+    "reusesRegressionResultArtifact": false,
+    "reusesRegressionVerifierReportArtifact": false,
+    "reusesTestExecutionResultArtifactSchema": false
+  },
+  "ruleResults": [
+    {
+      "blocking": true,
+      "description": "All upstream artifacts (TestExecutionTaskSpecV1, TestExecutionResultV1, FailureTriageReportV1) validate against their declared schemas.",
+      "id": "schema_validation",
+      "kind": "schema",
+      "rationale": "Each upstream artifact was re-validated by its own validator during VerifierResultV1 construction.",
+      "status": "passed",
+      "supportingEvidenceIds": []
+    },
+    {
+      "blocking": true,
+      "description": "Every triage finding's supportingEvidenceIds resolve to evidence records in the bound TestExecutionResultV1.evidenceList.",
+      "id": "evidence_provenance",
+      "kind": "evidence_link",
+      "rationale": "FailureTriageReportV1 finding ft-finding-001 references ev-case-002-outcome and ev-case-002-trace, both present in the bound TestExecutionResultV1.",
+      "status": "passed",
+      "supportingEvidenceIds": [
+        "ev-case-002-outcome",
+        "ev-case-002-trace"
+      ]
+    },
+    {
+      "blocking": true,
+      "description": "Every failed/error case in TestExecutionResultV1 has at least one matching FailureTriageReportV1 finding.",
+      "id": "case_coverage",
+      "kind": "case_coverage",
+      "rationale": "Failed/error cases ['case-002'] are triaged by findings covering ['case-002'].",
+      "status": "passed",
+      "supportingEvidenceIds": [
+        "ev-case-002-outcome"
+      ]
+    },
+    {
+      "blocking": true,
+      "description": "All upstream artifacts keep external side effects, repository mutation, external communication, GUI/desktop access, public access, and release/deployment disabled.",
+      "id": "policy_boundary",
+      "kind": "policy_boundary",
+      "rationale": "policyBoundary on TestExecutionResultV1 and FailureTriageReportV1 enforces zero side-effect classes.",
+      "status": "passed",
+      "supportingEvidenceIds": []
+    },
+    {
+      "blocking": true,
+      "description": "All five Agent Coordination Layer contracts are bound by content hash via coordinationBinding and sourceArtifacts.",
+      "id": "coordination_binding",
+      "kind": "coordination_binding",
+      "rationale": "DelegationManifestV1, CreatorVerifierPairingV1, AgentMessageManifestV1, NegotiationRecordV1, and BroadcastSubscriptionManifestV1 are all referenced by ref and by content hash.",
+      "status": "passed",
+      "supportingEvidenceIds": []
+    },
+    {
+      "blocking": true,
+      "description": "TestExecutionTaskSpecV1 envelope and TestExecutionResultV1 / FailureTriageReportV1 envelopes are pinned by content hash.",
+      "id": "upstream_contract_binding",
+      "kind": "upstream_contract_binding",
+      "rationale": "taskSpecBinding, testExecutionResultBinding, and failureTriageReportBinding each include schemaVersion, envelopeSchemaVersion, id, and contentHash.",
+      "status": "passed",
+      "supportingEvidenceIds": []
+    },
+    {
+      "blocking": true,
+      "description": "Verifier verdict follows workload-independent precedence: any blocking failed rule => failed; else failed/error cases => needs_human_check; else passed.",
+      "id": "classification_precedence",
+      "kind": "classification",
+      "rationale": "All rule statuses are passed; TestExecutionResultV1 contains a failed case, so the precedence selects needs_human_check.",
+      "status": "passed",
+      "supportingEvidenceIds": [
+        "ev-case-002-outcome",
+        "ev-case-002-trace"
+      ]
+    }
+  ],
+  "schemaVersion": "verifier-result-v1",
+  "scope": "test_execution_failure_triage_artifact_contract",
+  "sourceArtifacts": [
+    {
+      "contentHash": "e026fb8f8d78f3a54d0a1a3d846cd93d8289cd9a8fefb59ead112fb18e4552f2",
+      "path": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+      "role": "agent_message_manifest"
+    },
+    {
+      "contentHash": "4e622eafff1480cb2e109aad1230e0852d99c412470ff8f33b215898beeb90b6",
+      "path": "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
+      "role": "broadcast_subscription_manifest"
+    },
+    {
+      "contentHash": "834b3c6bfe4dc401a5c34f3ed20edb479c4352e85363ac629caab3a3af429932",
+      "path": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+      "role": "creator_verifier_pairing"
+    },
+    {
+      "contentHash": "7779a468076194ccb7f88ffeb9e37727d479742ec0add917ac45777b748d5b8f",
+      "path": "artifacts/coordination/post_mvp_delegation_manifest.json",
+      "role": "delegation_manifest"
+    },
+    {
+      "contentHash": "0d3e69dba8fbdcb98860c22adb3cd4832fe764d084c0cbabe146d15170207956",
+      "path": "artifacts/test_execution/post_mvp_failure_triage_report.json",
+      "role": "failure_triage_report"
+    },
+    {
+      "contentHash": "fbbcd49ad9e7cd229658b431ab15313829f3a58107d809ef288043236746698e",
+      "path": "artifacts/coordination/post_mvp_negotiation_record.json",
+      "role": "negotiation_record"
+    },
+    {
+      "contentHash": "10260acfded87f746bb8b86684e8b4c77bc5ffbc6a2e8f440ba8c5262fc7c56c",
+      "path": "artifacts/test_execution/post_mvp_test_execution_result.json",
+      "role": "test_execution_result"
+    },
+    {
+      "contentHash": "1b9bbb64c87879848276b77fe2be1a20f89df2bfed971a7a0ec5210a91f664ba",
+      "path": "artifacts/task_specs/post_mvp_test_execution_task_spec.json",
+      "role": "test_execution_task_spec"
+    }
+  ],
+  "taskSpecBinding": {
+    "taskSpecContentHash": "1b9bbb64c87879848276b77fe2be1a20f89df2bfed971a7a0ec5210a91f664ba",
+    "taskSpecEnvelopeSchemaVersion": "task-spec-v1",
+    "taskSpecId": "post-mvp-test-execution-failure-triage-task-spec",
+    "taskSpecRef": "artifacts/task_specs/post_mvp_test_execution_task_spec.json",
+    "taskSpecSchemaVersion": "test-execution-task-spec-v1"
+  },
+  "testExecutionResultBinding": {
+    "testExecutionResultContentHash": "10260acfded87f746bb8b86684e8b4c77bc5ffbc6a2e8f440ba8c5262fc7c56c",
+    "testExecutionResultEnvelopeSchemaVersion": "artifact-v1",
+    "testExecutionResultId": "post-mvp-test-execution-result-kernel-contract",
+    "testExecutionResultRef": "artifacts/test_execution/post_mvp_test_execution_result.json",
+    "testExecutionResultSchemaVersion": "test-execution-result-v1"
+  },
+  "verdict": "needs_human_check",
+  "verdictDomain": [
+    "passed",
+    "failed",
+    "incomplete",
+    "needs_human_check"
+  ],
+  "verdictRationale": "All workload-independent verifier rules passed. The bound TestExecutionResultV1 contains a failed test case (case-002) that FailureTriageReportV1 has triaged as a test-side assertion error; workload-level precedence therefore selects needs_human_check without crossing any policy boundary.",
+  "verifierAgent": "verifier-runtime-v1",
+  "verifierVerdictOwner": "verifier-runtime-v1",
+  "workloadCategory": "engineering_workload",
+  "workloadType": "test_execution_failure_triage"
+}

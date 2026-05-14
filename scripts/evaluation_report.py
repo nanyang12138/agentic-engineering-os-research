@@ -54,6 +54,10 @@ from failure_triage_report import (
     FAILURE_TRIAGE_REPORT_ARTIFACT_PATH,
     validate_failure_triage_report,
 )
+from verifier_result import (
+    VERIFIER_RESULT_ARTIFACT_PATH,
+    validate_verifier_result,
+)
 
 
 EVALUATION_REPORT_SCHEMA_VERSION = "mvp-evaluation-report-v1"
@@ -180,6 +184,7 @@ def _source_specs() -> list[tuple[str, str]]:
         ("post_mvp_test_execution_task_spec", TEST_EXECUTION_TASK_SPEC_ARTIFACT_PATH),
         ("post_mvp_test_execution_result", TEST_EXECUTION_RESULT_ARTIFACT_PATH),
         ("post_mvp_failure_triage_report", FAILURE_TRIAGE_REPORT_ARTIFACT_PATH),
+        ("post_mvp_verifier_result_test_execution", VERIFIER_RESULT_ARTIFACT_PATH),
     ]
     for fixture_id in FIXTURE_IDS:
         specs.append((f"phase1a_{fixture_id}_run", f"artifacts/runs/{fixture_id}/run.json"))
@@ -320,6 +325,8 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
     validate_test_execution_result(test_execution_result, root)
     failure_triage_report = _load_json(root / FAILURE_TRIAGE_REPORT_ARTIFACT_PATH)
     validate_failure_triage_report(failure_triage_report, root)
+    verifier_result = _load_json(root / VERIFIER_RESULT_ARTIFACT_PATH)
+    validate_verifier_result(verifier_result, root)
     delivery_readiness = delivery_report["readiness"]
     delivery_blocker_ids = [blocker["id"] for blocker in delivery_report["blockers"]]
     phase_coverage = _phase_coverage()
@@ -402,7 +409,7 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
         ],
         "nextRecommendedSlice": {
             "phase": "post_mvp",
-            "slice": "Add a workload-independent VerifierResultV1 ArtifactV1 subtype contract artifact for the Test Execution / Failure Triage workload, owned by verifier-runtime-v1 and bound to TestExecutionResultV1, FailureTriageReportV1, TestExecutionTaskSpecV1, and the five Agent Coordination Layer manifests, with regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 explicitly forbidden so the OS kernel gains a workload-independent VerifierResult primitive reusable by Code Patch / Review Loop and PR Review.",
+            "slice": "Add a workload-independent CapabilityManifestV1 (or ArtifactV1 subtype CapabilityV1) contract artifact that declares the Test Execution / Failure Triage workload's runtime capabilities (execute_tests, classify_failure, summarize_triage) with workload-independent permission, side-effect, timeout, input/output schema fields; bind it by content hash to TestExecutionTaskSpecV1 and the five Agent Coordination Layer manifests, with regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 explicitly forbidden, so the OS kernel gains a workload-independent CapabilityV1 primitive reusable by Code Patch / Review Loop, PR Review, and Documentation Update.",
             "mustRemainMachineVerifiable": True,
         },
         "invariants": [
