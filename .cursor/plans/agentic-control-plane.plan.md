@@ -1353,7 +1353,7 @@ Phase 9 的 runtime coordination primitives：
 |---|---|---|
 | Delegation | 把 TaskSpec 拆成可验收子任务 | `DelegationManifestV1` |
 | Creator-Verifier | 产物创建者和验证者分离 | `CreatorVerifierPairingV1` |
-| Direct Communication | agent 间点对点请求/交接 | `AgentMessageV1` |
+| Direct Communication | agent 间点对点请求/交接 | `AgentMessageV1` / `AgentMessageManifestV1` (`agent-message-v1` / `agent-message-manifest-v1`, `artifacts/coordination/post_mvp_agent_message_manifest.json`) |
 | Negotiation | scope/risk/policy/验收标准协商 | `NegotiationRecordV1` |
 | Broadcast | RunEvent / artifact / verifier / policy 事件广播 | `CoordinationEventV1` / `BroadcastSubscriptionV1` |
 
@@ -5647,6 +5647,90 @@ Acceptance criteria：
 ```text
 新增 workload-independent `AgentMessageV1` direct communication contract artifact：
 基于 DelegationManifestV1 和 CreatorVerifierPairingV1 明确 creator -> verifier verification request、verifier -> creator response、message causal refs、source hash binding 和 no-side-effect policy；字段不得依赖 regression_result/email_draft/send_email。
+```
+
+### 2026-05-14 07:20 UTC Automation Sprint：AgentMessageManifestV1 Direct Communication Contract Gate
+
+Active phase：post-MVP Kernel Generalization / Agent Coordination Runtime Contracts（Phase 1a-9 contract-only MVP 已满足，完整 Agentic Engineering OS 产品仍未完成）。
+
+Selected slice：
+
+```text
+Add AgentMessageManifestV1 contract artifact so that /usr/bin/python3 scripts/validate_repo.py verifies workload-independent creator -> verifier verification.request and verifier -> creator verification.response messages, request/response binding, payload artifact refs, and no-broadcast / no-side-effect / no-override policy over DelegationManifestV1 and CreatorVerifierPairingV1.
+```
+
+为什么这是下一步：
+
+- `.github/workflows/validate.yml` 和 `.github/workflows/auto-merge-cursor-pr.yml` 均存在；本轮 baseline `/usr/bin/python3 scripts/validate_repo.py` 已通过。
+- `DelegationManifestV1` 和 `CreatorVerifierPairingV1` 已 land；Agent Coordination Layer 的下一个最小 contract 就是 `AgentMessageV1` direct communication，避免继续深化 regression/email approval 链路。
+- Post-MVP slice priority #3（Agent Coordination Layer protocol）要求 `AgentMessageV1` 与 `DelegationManifestV1`、`CreatorVerifierPairingV1`、`NegotiationRecordV1`、`CoordinationEventV1`、`BroadcastSubscriptionV1` 并列；先证明 direct point-to-point 请求/响应的 OS-level contract，再进入 negotiation 与 broadcast。
+
+OS kernel primitive advanced：
+
+- `AgentMessage`：定义 schemaVersion `agent-message-v1`，绑定 channel、from/to agent、delegationRef、pairingRef、causalRefs、payloadRefs、requiresResponse、expectedResponseType、carriesSideEffects、mayOverrideVerifierResult。
+- `Message` / `Channel`：以 `agent-message-manifest-v1` 包住 channel 列表、消息列表和 messageTypeSequence，使 creator <-> verifier 直接通信成为 workload-independent contract，而不是 ad-hoc 调度器调用。
+- `CoordinationEvent`：继承 `DelegationManifestV1` 的 coordination event refs，把 verification.requested event 作为 verification.request 消息的 causal 起点。
+
+Non-regression workload reuse path：
+
+- `Test Execution / Failure Triage` 可复用：creator 把 test run/triage artifact 通过 verification.request 发给独立 verifier，verifier 通过 verification.response 返回 VerifierResultV1。
+- `Code Patch / Review Loop` 可复用：creator 把 patch artifact 与 evidence 作为 payload，verifier/reviewer 返回 review verdict；creator 不允许 override 或 broadcast。
+- `PR Review` 可复用：reviewer 与 patch creator 通过 direct message 通道沟通，避免 finding 自证或绕过 verifier 结果。
+
+Coordination protocol / invariant clarified：
+
+- `AgentMessageManifestV1` / `agent-message-manifest-v1` 明确 direct point-to-point 通道、causal ordering 和 broadcast 禁令。
+- `AgentMessageV1` / `agent-message-v1` 明确每条消息必须绑定 delegationRef、pairingRef、causalRefs、payloadRefs 和 inReplyToMessageId（response 必须绑定 request）。
+- `communicationInvariant` 要求 creator/verifier 必须不同；verifier 必须先返回 VerifierResultV1，才允许下游 acceptance；message 不能 override `verifier-runtime-v1` 的 verdict、不能携带 side effect、不能广播。
+
+为什么这不是另一个 regression/email fixture：
+
+- 新 artifact 路径为 `artifacts/coordination/post_mvp_agent_message_manifest.json`，scope 是 `agent_coordination_direct_communication_contract`，不是 regression result、email draft、approval lifecycle 或 delivery unlock。
+- payload 仅允许 workload-independent `ArtifactV1`、`EvidenceListV1`、`VerifierResultV1` refs；validator 明确拒绝 email/send_email/delivery_unlock 路径，并要求 payload refs 等于 `DelegationManifestV1` 的 ArtifactV1/EvidenceListV1/VerifierResultV1 paths。
+- manifest 记录 `nonRegressionReusePath`，必须包含 `test_execution_failure_triage`、`code_patch_review_loop` 和 `pr_review`。
+
+Acceptance criteria：
+
+- `scripts/coordination_contract.py` 提供 `AgentMessageManifestV1` builder / validator / CLI（`--agent-message-out` / `--validate-agent-message`）。
+- 新增 committed `artifacts/coordination/post_mvp_agent_message_manifest.json`，schemaVersion 为 `agent-message-manifest-v1`，内含两条 `agent-message-v1` 消息（verification.request、verification.response）。
+- `scripts/validate_repo.py` 验证 committed artifact、deterministic builder output，并拒绝 channel broadcast、response 未绑定 request、message 加入 email payload、缺失 verification.response、message 携带 side effect、message override verifier result、外部 side effect 被允许、缺 non-regression reuse path 和 source hash drift。
+- `EvaluationReportV1` 把 agent message manifest artifact 纳入 source hash 汇总，并把下一推荐切片推进为 `NegotiationRecordV1` 协商 contract。
+
+实现摘要：
+
+- 扩展 `scripts/coordination_contract.py`，在保留 `DelegationManifestV1` 和 `CreatorVerifierPairingV1` 的同时新增 `AgentMessageManifestV1` builder、validator 与 CLI 参数 `--agent-message-out` / `--validate-agent-message`。
+- 新增 committed `artifacts/coordination/post_mvp_agent_message_manifest.json`。
+- 更新 `scripts/validate_repo.py` 的 required files、PLAN markers、artifact validation、deterministic CLI replay 和 forced-failure cases。
+- 更新 `scripts/evaluation_report.py` 与 `artifacts/evaluation/phase9_mvp_evaluation_report.json`，将 agent message manifest artifact 纳入 source hash，并推荐下一步 `NegotiationRecordV1`。
+
+Build vs Integrate：
+
+- Build：`AgentMessageManifestV1` schema、deterministic builder/validator/CLI、committed artifact、forced-failure validation gate、EvaluationReportV1 source hash 集成。
+- Integrate later：真实 message bus、blackboard、agent inbox、LangGraph/AutoGen/CrewAI runtime、streaming reply、retry policy、message store、并发 reviewer。
+
+验证计划 / 结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline `/usr/bin/python3 scripts/validate_repo.py` before edits：通过。
+- `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- `/usr/bin/python3 scripts/coordination_contract.py --agent-message-out artifacts/coordination/post_mvp_agent_message_manifest.json`：通过。
+- `/usr/bin/python3 scripts/coordination_contract.py --validate-agent-message artifacts/coordination/post_mvp_agent_message_manifest.json`：通过。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 AgentMessageManifestV1 committed artifact、deterministic builder output、channel_broadcast_allowed / response_not_bound_to_request / email_delivery_payload_added / missing_verification_response / messages_carry_side_effects / messages_override_verifier_result / policy_external_side_effects_allowed / missing_non_regression_reuse_path / pairing_source_hash_mismatch forced-failure cases。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- `AgentMessageManifestV1` 仍是 static contract artifact，不是 production message bus、blackboard database、streaming inbox、LangGraph/AutoGen/CrewAI runtime 或 durable coordination runtime。
+- 当前 artifact 仍以 first workload 的 existing TaskSpec / artifact refs 作为 source fixture；第二 workload 尚未实现。
+- Negotiation 和 broadcast 仍需要后续 `NegotiationRecordV1` 和 `BroadcastSubscriptionV1` contracts。
+
+下一轮建议：
+
+```text
+新增 workload-independent `NegotiationRecordV1` contract artifact：
+基于 DelegationManifestV1、CreatorVerifierPairingV1、AgentMessageManifestV1 明确 creator/verifier 间 scope/risk/policy/acceptance-criteria 协商、proposal/counter-proposal/agreement 状态机、source hash binding 和 no-side-effect / no-override policy；字段不得依赖 regression_result/email_draft/send_email。
 ```
 
 ## 22. Parking Lot

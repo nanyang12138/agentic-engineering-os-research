@@ -1,0 +1,200 @@
+{
+  "agentBindings": [
+    {
+      "agentId": "creator_agent",
+      "mayBroadcast": false,
+      "mayOverrideVerifierResult": false,
+      "mayReturnVerifierResult": false,
+      "maySendVerificationRequest": true,
+      "owns": [
+        "verification_request_origination"
+      ],
+      "role": "creator"
+    },
+    {
+      "agentId": "verifier_agent",
+      "mayBroadcast": false,
+      "mayOverrideVerifierResult": false,
+      "mayReturnVerifierResult": true,
+      "maySendVerificationRequest": false,
+      "owns": [
+        "verification_response_origination",
+        "verifier_result_authoring"
+      ],
+      "role": "verifier"
+    }
+  ],
+  "channels": [
+    {
+      "broadcastAllowed": false,
+      "channelId": "creator-to-verifier-verification-request-channel",
+      "deliveryMode": "direct_point_to_point",
+      "externalSideEffectsAllowed": false,
+      "fromAgent": "creator_agent",
+      "ordering": "causal",
+      "purpose": "verification_request",
+      "toAgent": "verifier_agent"
+    },
+    {
+      "broadcastAllowed": false,
+      "channelId": "verifier-to-creator-verification-response-channel",
+      "deliveryMode": "direct_point_to_point",
+      "externalSideEffectsAllowed": false,
+      "fromAgent": "verifier_agent",
+      "ordering": "causal",
+      "purpose": "verification_response",
+      "toAgent": "creator_agent"
+    }
+  ],
+  "communicationInvariant": {
+    "broadcastAllowed": false,
+    "creatorAgent": "creator_agent",
+    "messagesMayCarrySideEffects": false,
+    "messagesMayOverrideVerifierResult": false,
+    "requestResponseMustBeBound": true,
+    "verifierAgent": "verifier_agent",
+    "verifierMustRespondBeforeAcceptance": true,
+    "verifierResultOwner": "verifier-runtime-v1"
+  },
+  "coordinationEventRefs": [
+    "artifacts/coordination/post_mvp_delegation_manifest.json#coordinationEvents/coord-event-delegation-created",
+    "artifacts/coordination/post_mvp_delegation_manifest.json#coordinationEvents/coord-event-delegation-accepted",
+    "artifacts/coordination/post_mvp_delegation_manifest.json#coordinationEvents/coord-event-verification-requested"
+  ],
+  "coordinationProtocols": [
+    "direct_communication",
+    "creator_verifier"
+  ],
+  "delegationBinding": {
+    "delegationManifestRef": "artifacts/coordination/post_mvp_delegation_manifest.json",
+    "delegationRef": "artifacts/coordination/post_mvp_delegation_manifest.json#delegations/delegation-workload-independent-artifact-creation",
+    "pairingManifestRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+    "pairingRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json#id/post-mvp-creator-verifier-pairing-kernel-contract",
+    "parentRunRef": "artifacts/runs/all_passed/run.json",
+    "parentTaskSpecRef": "artifacts/runs/all_passed/run.json#taskSpec",
+    "workloadIndependentObjective": "Create source-bound engineering artifacts from a reviewed TaskSpec without owning the task verdict."
+  },
+  "expectedPayloadArtifactRefs": {
+    "ArtifactV1": "artifacts/runs/all_passed/regression_result.json",
+    "EvidenceListV1": "artifacts/runs/all_passed/evidence.json",
+    "VerifierResultV1": "artifacts/runs/all_passed/verifier_report.json"
+  },
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "post-mvp-agent-message-manifest-kernel-contract",
+  "invariants": [
+    "AgentMessageManifestV1 is workload-independent: it binds direct creator<->verifier messages without adding regression/email behavior.",
+    "Every verification.request must be followed by exactly one verification.response that replies to it; the response carries the VerifierResultV1.",
+    "Messages must not carry external side effects, override verifier results, or broadcast to additional subscribers.",
+    "AgentMessageV1 payload refs must remain workload-independent ArtifactV1/EvidenceListV1/VerifierResultV1 paths bound to the delegation manifest.",
+    "The manifest is a static contract artifact and does not run a real multi-agent framework, send email, mutate a workspace, or execute providers."
+  ],
+  "kernelPrimitive": "AgentMessage",
+  "messageTypeSequence": [
+    "verification.request",
+    "verification.response"
+  ],
+  "messages": [
+    {
+      "body": "Creator agent requests independent verification of the source-bound ArtifactV1 and acceptance EvidenceListV1 without declaring acceptance.",
+      "carriesSideEffects": false,
+      "causalRefs": [
+        "artifacts/coordination/post_mvp_delegation_manifest.json#coordinationEvents/coord-event-verification-requested"
+      ],
+      "channelId": "creator-to-verifier-verification-request-channel",
+      "delegationRef": "artifacts/coordination/post_mvp_delegation_manifest.json#delegations/delegation-workload-independent-artifact-creation",
+      "expectedResponseType": "verification.response",
+      "fromAgent": "creator_agent",
+      "id": "agent-message-verification-request",
+      "inReplyToMessageId": null,
+      "mayOverrideVerifierResult": false,
+      "pairingRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json#id/post-mvp-creator-verifier-pairing-kernel-contract",
+      "payloadRefs": [
+        {
+          "artifactKind": "ArtifactV1",
+          "artifactRef": "artifacts/runs/all_passed/regression_result.json",
+          "role": "creator_output"
+        },
+        {
+          "artifactKind": "EvidenceListV1",
+          "artifactRef": "artifacts/runs/all_passed/evidence.json",
+          "role": "acceptance_evidence"
+        }
+      ],
+      "requiresResponse": true,
+      "schemaVersion": "agent-message-v1",
+      "toAgent": "verifier_agent",
+      "type": "verification.request"
+    },
+    {
+      "body": "Verifier agent returns the independent VerifierResultV1; creator must not override the verifier verdict.",
+      "carriesSideEffects": false,
+      "causalRefs": [
+        "agent-message-verification-request"
+      ],
+      "channelId": "verifier-to-creator-verification-response-channel",
+      "delegationRef": "artifacts/coordination/post_mvp_delegation_manifest.json#delegations/delegation-workload-independent-artifact-creation",
+      "expectedResponseType": null,
+      "fromAgent": "verifier_agent",
+      "id": "agent-message-verification-response",
+      "inReplyToMessageId": "agent-message-verification-request",
+      "mayOverrideVerifierResult": false,
+      "pairingRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json#id/post-mvp-creator-verifier-pairing-kernel-contract",
+      "payloadRefs": [
+        {
+          "artifactKind": "VerifierResultV1",
+          "artifactRef": "artifacts/runs/all_passed/verifier_report.json",
+          "role": "verifier_result"
+        }
+      ],
+      "requiresResponse": false,
+      "schemaVersion": "agent-message-v1",
+      "toAgent": "creator_agent",
+      "type": "verification.response"
+    }
+  ],
+  "mode": "static_contract_only",
+  "nonRegressionReusePath": [
+    "test_execution_failure_triage",
+    "code_patch_review_loop",
+    "pr_review"
+  ],
+  "phase": "post_mvp",
+  "policyBoundary": {
+    "broadcastAllowed": false,
+    "deliverySendAllowed": false,
+    "externalSideEffectsAllowed": false,
+    "policySchemaVersion": "policy-v1",
+    "providerExecutionAllowed": false,
+    "realMultiAgentRuntimeAllowed": false,
+    "workspaceMutationAllowed": false
+  },
+  "schemaVersion": "agent-message-manifest-v1",
+  "scope": "agent_coordination_direct_communication_contract",
+  "sourceArtifacts": [
+    {
+      "contentHash": "7779a468076194ccb7f88ffeb9e37727d479742ec0add917ac45777b748d5b8f",
+      "path": "artifacts/coordination/post_mvp_delegation_manifest.json",
+      "role": "delegation_manifest"
+    },
+    {
+      "contentHash": "834b3c6bfe4dc401a5c34f3ed20edb479c4352e85363ac629caab3a3af429932",
+      "path": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+      "role": "creator_verifier_pairing"
+    },
+    {
+      "contentHash": "787c47a02d5a6303113d757693a5d70f97f806e0f74dbb078d0f91f34c23d5e1",
+      "path": "artifacts/runs/all_passed/regression_result.json",
+      "role": "creator_output_artifact"
+    },
+    {
+      "contentHash": "0c0e9342e6e4442566e94a3ca639cde78ef2ff3c6581f75f3fe99e082132690c",
+      "path": "artifacts/runs/all_passed/evidence.json",
+      "role": "acceptance_evidence"
+    },
+    {
+      "contentHash": "f6ec06f8bcc35f325451778d8b3d4985b5e75242b2d7ac9cad20bde244676f66",
+      "path": "artifacts/runs/all_passed/verifier_report.json",
+      "role": "verifier_result"
+    }
+  ]
+}

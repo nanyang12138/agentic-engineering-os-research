@@ -14,6 +14,8 @@ DELEGATION_MANIFEST_SCHEMA_VERSION = "delegation-manifest-v1"
 DELEGATION_SCHEMA_VERSION = "delegation-v1"
 COORDINATION_EVENT_SCHEMA_VERSION = "coordination-event-v1"
 CREATOR_VERIFIER_PAIRING_SCHEMA_VERSION = "creator-verifier-pairing-v1"
+AGENT_MESSAGE_MANIFEST_SCHEMA_VERSION = "agent-message-manifest-v1"
+AGENT_MESSAGE_SCHEMA_VERSION = "agent-message-v1"
 TASK_SPEC_ENVELOPE_SCHEMA_VERSION = "task-spec-v1"
 GENERATED_AT = "2026-05-12T14:39:00Z"
 
@@ -21,6 +23,15 @@ DELEGATION_MANIFEST_ID = "post-mvp-delegation-manifest-kernel-contract"
 DELEGATION_MANIFEST_ARTIFACT_PATH = "artifacts/coordination/post_mvp_delegation_manifest.json"
 CREATOR_VERIFIER_PAIRING_ID = "post-mvp-creator-verifier-pairing-kernel-contract"
 CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH = "artifacts/coordination/post_mvp_creator_verifier_pairing.json"
+AGENT_MESSAGE_MANIFEST_ID = "post-mvp-agent-message-manifest-kernel-contract"
+AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH = "artifacts/coordination/post_mvp_agent_message_manifest.json"
+
+AGENT_MESSAGE_CHANNEL_REQUEST_ID = "creator-to-verifier-verification-request-channel"
+AGENT_MESSAGE_CHANNEL_RESPONSE_ID = "verifier-to-creator-verification-response-channel"
+AGENT_MESSAGE_REQUEST_ID = "agent-message-verification-request"
+AGENT_MESSAGE_RESPONSE_ID = "agent-message-verification-response"
+AGENT_MESSAGE_TYPE_SEQUENCE = ["verification.request", "verification.response"]
+AGENT_MESSAGE_PAYLOAD_KINDS = {"ArtifactV1", "EvidenceListV1", "VerifierResultV1"}
 
 DEFAULT_RUN_PATH = "artifacts/runs/all_passed/run.json"
 DEFAULT_CAPABILITY_CATALOG_PATH = "artifacts/capabilities/phase3_capability_catalog.json"
@@ -948,12 +959,634 @@ def validate_creator_verifier_pairing(pairing: dict[str, Any], root: Path) -> No
         raise ValueError("CreatorVerifierPairingV1 must include non-regression workload reuse paths")
 
 
+def _pairing_ref() -> str:
+    return f"{CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH}#id/{CREATOR_VERIFIER_PAIRING_ID}"
+
+
+def _build_agent_message_source_artifacts(
+    delegation_manifest: dict[str, Any],
+    pairing: dict[str, Any],
+    root: Path,
+) -> list[dict[str, Any]]:
+    paths_by_kind = _artifact_paths_by_kind(delegation_manifest["delegations"][0])
+    return [
+        _artifact_source("delegation_manifest", DELEGATION_MANIFEST_ARTIFACT_PATH, root),
+        _artifact_source("creator_verifier_pairing", CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH, root),
+        _artifact_source("creator_output_artifact", paths_by_kind["ArtifactV1"], root),
+        _artifact_source("acceptance_evidence", paths_by_kind["EvidenceListV1"], root),
+        _artifact_source("verifier_result", paths_by_kind["VerifierResultV1"], root),
+    ]
+
+
+def _expected_agent_message_source_paths(delegation_manifest: dict[str, Any]) -> dict[str, str]:
+    paths_by_kind = _artifact_paths_by_kind(delegation_manifest["delegations"][0])
+    return {
+        "delegation_manifest": DELEGATION_MANIFEST_ARTIFACT_PATH,
+        "creator_verifier_pairing": CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH,
+        "creator_output_artifact": paths_by_kind["ArtifactV1"],
+        "acceptance_evidence": paths_by_kind["EvidenceListV1"],
+        "verifier_result": paths_by_kind["VerifierResultV1"],
+    }
+
+
+def _build_agent_message_channels() -> list[dict[str, Any]]:
+    return [
+        {
+            "channelId": AGENT_MESSAGE_CHANNEL_REQUEST_ID,
+            "fromAgent": "creator_agent",
+            "toAgent": "verifier_agent",
+            "purpose": "verification_request",
+            "deliveryMode": "direct_point_to_point",
+            "ordering": "causal",
+            "broadcastAllowed": False,
+            "externalSideEffectsAllowed": False,
+        },
+        {
+            "channelId": AGENT_MESSAGE_CHANNEL_RESPONSE_ID,
+            "fromAgent": "verifier_agent",
+            "toAgent": "creator_agent",
+            "purpose": "verification_response",
+            "deliveryMode": "direct_point_to_point",
+            "ordering": "causal",
+            "broadcastAllowed": False,
+            "externalSideEffectsAllowed": False,
+        },
+    ]
+
+
+def _coord_event_ref(event_id: str) -> str:
+    return f"{DELEGATION_MANIFEST_ARTIFACT_PATH}#coordinationEvents/{event_id}"
+
+
+def _build_agent_messages(delegation_manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    delegation = delegation_manifest["delegations"][0]
+    paths_by_kind = _artifact_paths_by_kind(delegation)
+    delegation_ref = _delegation_ref(delegation["id"])
+    pairing_ref = _pairing_ref()
+    verification_requested_event_id = delegation_manifest["coordinationEvents"][-1]["id"]
+    return [
+        {
+            "schemaVersion": AGENT_MESSAGE_SCHEMA_VERSION,
+            "id": AGENT_MESSAGE_REQUEST_ID,
+            "type": "verification.request",
+            "channelId": AGENT_MESSAGE_CHANNEL_REQUEST_ID,
+            "fromAgent": delegation["creatorAgent"],
+            "toAgent": delegation["verifierAgent"],
+            "delegationRef": delegation_ref,
+            "pairingRef": pairing_ref,
+            "inReplyToMessageId": None,
+            "causalRefs": [_coord_event_ref(verification_requested_event_id)],
+            "payloadRefs": [
+                {
+                    "artifactKind": "ArtifactV1",
+                    "artifactRef": paths_by_kind["ArtifactV1"],
+                    "role": "creator_output",
+                },
+                {
+                    "artifactKind": "EvidenceListV1",
+                    "artifactRef": paths_by_kind["EvidenceListV1"],
+                    "role": "acceptance_evidence",
+                },
+            ],
+            "requiresResponse": True,
+            "expectedResponseType": "verification.response",
+            "carriesSideEffects": False,
+            "mayOverrideVerifierResult": False,
+            "body": "Creator agent requests independent verification of the source-bound ArtifactV1 and acceptance EvidenceListV1 without declaring acceptance.",
+        },
+        {
+            "schemaVersion": AGENT_MESSAGE_SCHEMA_VERSION,
+            "id": AGENT_MESSAGE_RESPONSE_ID,
+            "type": "verification.response",
+            "channelId": AGENT_MESSAGE_CHANNEL_RESPONSE_ID,
+            "fromAgent": delegation["verifierAgent"],
+            "toAgent": delegation["creatorAgent"],
+            "delegationRef": delegation_ref,
+            "pairingRef": pairing_ref,
+            "inReplyToMessageId": AGENT_MESSAGE_REQUEST_ID,
+            "causalRefs": [AGENT_MESSAGE_REQUEST_ID],
+            "payloadRefs": [
+                {
+                    "artifactKind": "VerifierResultV1",
+                    "artifactRef": paths_by_kind["VerifierResultV1"],
+                    "role": "verifier_result",
+                },
+            ],
+            "requiresResponse": False,
+            "expectedResponseType": None,
+            "carriesSideEffects": False,
+            "mayOverrideVerifierResult": False,
+            "body": "Verifier agent returns the independent VerifierResultV1; creator must not override the verifier verdict.",
+        },
+    ]
+
+
+def build_agent_message_manifest(root: Path) -> dict[str, Any]:
+    delegation_manifest = _load_json(root / DELEGATION_MANIFEST_ARTIFACT_PATH)
+    validate_delegation_manifest(delegation_manifest, root)
+    pairing = _load_json(root / CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH)
+    validate_creator_verifier_pairing(pairing, root)
+    delegation = delegation_manifest["delegations"][0]
+    paths_by_kind = _artifact_paths_by_kind(delegation)
+    delegation_ref = _delegation_ref(delegation["id"])
+
+    return {
+        "schemaVersion": AGENT_MESSAGE_MANIFEST_SCHEMA_VERSION,
+        "id": AGENT_MESSAGE_MANIFEST_ID,
+        "generatedAt": GENERATED_AT,
+        "phase": "post_mvp",
+        "scope": "agent_coordination_direct_communication_contract",
+        "mode": "static_contract_only",
+        "kernelPrimitive": "AgentMessage",
+        "coordinationProtocols": ["direct_communication", "creator_verifier"],
+        "sourceArtifacts": _build_agent_message_source_artifacts(delegation_manifest, pairing, root),
+        "delegationBinding": {
+            "delegationManifestRef": DELEGATION_MANIFEST_ARTIFACT_PATH,
+            "delegationRef": delegation_ref,
+            "pairingManifestRef": CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH,
+            "pairingRef": _pairing_ref(),
+            "parentTaskSpecRef": delegation["parentTaskSpecRef"],
+            "parentRunRef": delegation["parentRunRef"],
+            "workloadIndependentObjective": delegation["workloadIndependentObjective"],
+        },
+        "agentBindings": [
+            {
+                "agentId": delegation["creatorAgent"],
+                "role": "creator",
+                "owns": ["verification_request_origination"],
+                "maySendVerificationRequest": True,
+                "mayReturnVerifierResult": False,
+                "mayBroadcast": False,
+                "mayOverrideVerifierResult": False,
+            },
+            {
+                "agentId": delegation["verifierAgent"],
+                "role": "verifier",
+                "owns": ["verification_response_origination", "verifier_result_authoring"],
+                "maySendVerificationRequest": False,
+                "mayReturnVerifierResult": True,
+                "mayBroadcast": False,
+                "mayOverrideVerifierResult": False,
+            },
+        ],
+        "channels": _build_agent_message_channels(),
+        "messages": _build_agent_messages(delegation_manifest),
+        "messageTypeSequence": list(AGENT_MESSAGE_TYPE_SEQUENCE),
+        "communicationInvariant": {
+            "creatorAgent": delegation["creatorAgent"],
+            "verifierAgent": delegation["verifierAgent"],
+            "verifierResultOwner": "verifier-runtime-v1",
+            "messagesMayCarrySideEffects": False,
+            "messagesMayOverrideVerifierResult": False,
+            "verifierMustRespondBeforeAcceptance": True,
+            "requestResponseMustBeBound": True,
+            "broadcastAllowed": False,
+        },
+        "policyBoundary": {
+            "policySchemaVersion": "policy-v1",
+            "externalSideEffectsAllowed": False,
+            "workspaceMutationAllowed": False,
+            "deliverySendAllowed": False,
+            "realMultiAgentRuntimeAllowed": False,
+            "providerExecutionAllowed": False,
+            "broadcastAllowed": False,
+        },
+        "coordinationEventRefs": [
+            _coord_event_ref(event["id"])
+            for event in delegation_manifest["coordinationEvents"]
+        ],
+        "expectedPayloadArtifactRefs": {
+            "ArtifactV1": paths_by_kind["ArtifactV1"],
+            "EvidenceListV1": paths_by_kind["EvidenceListV1"],
+            "VerifierResultV1": paths_by_kind["VerifierResultV1"],
+        },
+        "nonRegressionReusePath": list(NON_REGRESSION_REUSE_PATHS),
+        "invariants": [
+            "AgentMessageManifestV1 is workload-independent: it binds direct creator<->verifier messages without adding regression/email behavior.",
+            "Every verification.request must be followed by exactly one verification.response that replies to it; the response carries the VerifierResultV1.",
+            "Messages must not carry external side effects, override verifier results, or broadcast to additional subscribers.",
+            "AgentMessageV1 payload refs must remain workload-independent ArtifactV1/EvidenceListV1/VerifierResultV1 paths bound to the delegation manifest.",
+            "The manifest is a static contract artifact and does not run a real multi-agent framework, send email, mutate a workspace, or execute providers.",
+        ],
+    }
+
+
+def _validate_agent_message_source_artifacts(
+    source_artifacts: list[Any],
+    delegation_manifest: dict[str, Any],
+    root: Path,
+) -> dict[str, dict[str, Any]]:
+    if not isinstance(source_artifacts, list) or not source_artifacts:
+        raise ValueError("AgentMessageManifestV1 sourceArtifacts must be a non-empty list")
+    expected_paths = _expected_agent_message_source_paths(delegation_manifest)
+    sources_by_role: dict[str, dict[str, Any]] = {}
+    for source in source_artifacts:
+        if not isinstance(source, dict):
+            raise ValueError("AgentMessageManifestV1 sourceArtifacts must be objects")
+        _require_fields("AgentMessageManifestV1 source artifact", source, ["role", "path", "contentHash"])
+        role = source["role"]
+        path = source["path"]
+        _validate_relative_posix_path(path)
+        if role not in expected_paths:
+            raise ValueError(f"Unexpected AgentMessageManifestV1 source role: {role}")
+        if path != expected_paths[role]:
+            raise ValueError(f"AgentMessageManifestV1 source role {role} must point to {expected_paths[role]}")
+        source_path = root / path
+        if not source_path.is_file():
+            raise ValueError(f"AgentMessageManifestV1 source artifact does not exist: {path}")
+        if _stable_file_hash(source_path) != source["contentHash"]:
+            raise ValueError(f"AgentMessageManifestV1 source hash mismatch for {path}")
+        sources_by_role[role] = source
+    if set(sources_by_role) != set(expected_paths):
+        raise ValueError(f"AgentMessageManifestV1 source roles must equal {sorted(expected_paths)}")
+    return sources_by_role
+
+
+def _validate_agent_message_channel(channel: dict[str, Any]) -> None:
+    _require_fields(
+        "AgentMessageManifestV1 channel",
+        channel,
+        [
+            "channelId",
+            "fromAgent",
+            "toAgent",
+            "purpose",
+            "deliveryMode",
+            "ordering",
+            "broadcastAllowed",
+            "externalSideEffectsAllowed",
+        ],
+    )
+    if channel["fromAgent"] == channel["toAgent"]:
+        raise ValueError("AgentMessageManifestV1 channel fromAgent and toAgent must be distinct")
+    if channel["deliveryMode"] != "direct_point_to_point":
+        raise ValueError("AgentMessageManifestV1 channel deliveryMode must be direct_point_to_point")
+    if channel["ordering"] != "causal":
+        raise ValueError("AgentMessageManifestV1 channel ordering must be causal")
+    if channel["broadcastAllowed"] is not False:
+        raise ValueError("AgentMessageManifestV1 channel broadcast must be disallowed")
+    if channel["externalSideEffectsAllowed"] is not False:
+        raise ValueError("AgentMessageManifestV1 channel must keep externalSideEffectsAllowed false")
+
+
+def _validate_agent_message_payload(
+    label: str,
+    payload_refs: list[Any],
+    expected_payload_paths: dict[str, str],
+    expected_kinds: set[str],
+) -> None:
+    if not isinstance(payload_refs, list) or not payload_refs:
+        raise ValueError(f"{label} payloadRefs must be a non-empty list")
+    seen_kinds: set[str] = set()
+    for payload in payload_refs:
+        if not isinstance(payload, dict):
+            raise ValueError(f"{label} payloadRefs must be objects")
+        _require_fields(label + " payloadRefs", payload, ["artifactKind", "artifactRef", "role"])
+        kind = payload["artifactKind"]
+        if kind not in AGENT_MESSAGE_PAYLOAD_KINDS:
+            raise ValueError(
+                f"{label} payloadRefs must remain workload-independent ArtifactV1/EvidenceListV1/VerifierResultV1 refs"
+            )
+        if kind not in expected_kinds:
+            raise ValueError(f"{label} payloadRefs must not include unexpected artifactKind {kind}")
+        _reject_regression_email_delivery_ref(label + " payloadRefs", payload["artifactRef"])
+        if payload["artifactRef"] != expected_payload_paths[kind]:
+            raise ValueError(
+                f"{label} payloadRefs must bind delegation manifest path for {kind}: expected {expected_payload_paths[kind]}"
+            )
+        seen_kinds.add(kind)
+    if seen_kinds != expected_kinds:
+        raise ValueError(f"{label} payloadRefs must cover {sorted(expected_kinds)}")
+
+
+def _validate_agent_messages(
+    messages: list[Any],
+    delegation_manifest: dict[str, Any],
+    channels_by_id: dict[str, dict[str, Any]],
+    delegation_ref: str,
+    pairing_ref: str,
+    expected_payload_paths: dict[str, str],
+) -> None:
+    if not isinstance(messages, list) or [msg.get("type") for msg in messages if isinstance(msg, dict)] != AGENT_MESSAGE_TYPE_SEQUENCE:
+        raise ValueError(
+            f"AgentMessageManifestV1 messages must follow messageTypeSequence {AGENT_MESSAGE_TYPE_SEQUENCE}"
+        )
+    delegation = delegation_manifest["delegations"][0]
+    verification_requested_event_id = delegation_manifest["coordinationEvents"][-1]["id"]
+    expected_request_causal = _coord_event_ref(verification_requested_event_id)
+    message_ids: set[str] = set()
+    request_message: dict[str, Any] | None = None
+    response_message: dict[str, Any] | None = None
+    for message in messages:
+        if not isinstance(message, dict):
+            raise ValueError("AgentMessageManifestV1 messages must be objects")
+        _require_fields(
+            "AgentMessageManifestV1 message",
+            message,
+            [
+                "schemaVersion",
+                "id",
+                "type",
+                "channelId",
+                "fromAgent",
+                "toAgent",
+                "delegationRef",
+                "pairingRef",
+                "inReplyToMessageId",
+                "causalRefs",
+                "payloadRefs",
+                "requiresResponse",
+                "expectedResponseType",
+                "carriesSideEffects",
+                "mayOverrideVerifierResult",
+                "body",
+            ],
+        )
+        if message["schemaVersion"] != AGENT_MESSAGE_SCHEMA_VERSION:
+            raise ValueError(f"AgentMessageManifestV1 message schemaVersion must be {AGENT_MESSAGE_SCHEMA_VERSION}")
+        if message["channelId"] not in channels_by_id:
+            raise ValueError("AgentMessageManifestV1 message must reference a declared channel")
+        channel = channels_by_id[message["channelId"]]
+        if message["fromAgent"] != channel["fromAgent"] or message["toAgent"] != channel["toAgent"]:
+            raise ValueError("AgentMessageManifestV1 message agents must match channel binding")
+        if message["fromAgent"] == message["toAgent"]:
+            raise ValueError("AgentMessageManifestV1 message fromAgent and toAgent must be distinct")
+        if message["delegationRef"] != delegation_ref:
+            raise ValueError("AgentMessageManifestV1 message must bind DelegationManifestV1 delegation")
+        if message["pairingRef"] != pairing_ref:
+            raise ValueError("AgentMessageManifestV1 message must bind CreatorVerifierPairingV1")
+        if message["carriesSideEffects"] is not False:
+            raise ValueError("AgentMessageManifestV1 messages must not carry side effects")
+        if message["mayOverrideVerifierResult"] is not False:
+            raise ValueError("AgentMessageManifestV1 messages must not override verifier results")
+        message_ids.add(message["id"])
+        if message["type"] == "verification.request":
+            request_message = message
+            if message["fromAgent"] != delegation["creatorAgent"] or message["toAgent"] != delegation["verifierAgent"]:
+                raise ValueError("AgentMessageManifestV1 verification.request must flow creator -> verifier")
+            if message["inReplyToMessageId"] is not None:
+                raise ValueError("AgentMessageManifestV1 verification.request must not reply to another message")
+            if message["requiresResponse"] is not True:
+                raise ValueError("AgentMessageManifestV1 verification.request must require a response")
+            if message["expectedResponseType"] != "verification.response":
+                raise ValueError("AgentMessageManifestV1 verification.request expectedResponseType must be verification.response")
+            if expected_request_causal not in message["causalRefs"]:
+                raise ValueError(
+                    "AgentMessageManifestV1 verification.request causalRefs must reference DelegationManifestV1 verification.requested event"
+                )
+            _validate_agent_message_payload(
+                "AgentMessageManifestV1 verification.request",
+                message["payloadRefs"],
+                expected_payload_paths,
+                {"ArtifactV1", "EvidenceListV1"},
+            )
+        elif message["type"] == "verification.response":
+            response_message = message
+            if message["fromAgent"] != delegation["verifierAgent"] or message["toAgent"] != delegation["creatorAgent"]:
+                raise ValueError("AgentMessageManifestV1 verification.response must flow verifier -> creator")
+            if message["inReplyToMessageId"] != AGENT_MESSAGE_REQUEST_ID:
+                raise ValueError("AgentMessageManifestV1 verification.response must reply to verification.request via inReplyToMessageId")
+            if message["requiresResponse"] is not False:
+                raise ValueError("AgentMessageManifestV1 verification.response must not require a response")
+            if message["expectedResponseType"] is not None:
+                raise ValueError("AgentMessageManifestV1 verification.response must not declare expectedResponseType")
+            if AGENT_MESSAGE_REQUEST_ID not in message["causalRefs"]:
+                raise ValueError("AgentMessageManifestV1 verification.response causalRefs must include the verification.request id")
+            _validate_agent_message_payload(
+                "AgentMessageManifestV1 verification.response",
+                message["payloadRefs"],
+                expected_payload_paths,
+                {"VerifierResultV1"},
+            )
+        else:
+            raise ValueError(f"AgentMessageManifestV1 unsupported message type: {message['type']}")
+    if len(message_ids) != len(messages):
+        raise ValueError("AgentMessageManifestV1 message ids must be unique")
+    if request_message is None or response_message is None:
+        raise ValueError("AgentMessageManifestV1 must contain both verification.request and verification.response messages")
+
+
+def validate_agent_message_manifest(manifest: dict[str, Any], root: Path) -> None:
+    _require_fields(
+        "AgentMessageManifestV1",
+        manifest,
+        [
+            "schemaVersion",
+            "id",
+            "generatedAt",
+            "phase",
+            "scope",
+            "mode",
+            "kernelPrimitive",
+            "coordinationProtocols",
+            "sourceArtifacts",
+            "delegationBinding",
+            "agentBindings",
+            "channels",
+            "messages",
+            "messageTypeSequence",
+            "communicationInvariant",
+            "policyBoundary",
+            "coordinationEventRefs",
+            "expectedPayloadArtifactRefs",
+            "nonRegressionReusePath",
+            "invariants",
+        ],
+    )
+    if manifest["schemaVersion"] != AGENT_MESSAGE_MANIFEST_SCHEMA_VERSION:
+        raise ValueError(f"AgentMessageManifestV1 schemaVersion must be {AGENT_MESSAGE_MANIFEST_SCHEMA_VERSION}")
+    if manifest["id"] != AGENT_MESSAGE_MANIFEST_ID:
+        raise ValueError(f"AgentMessageManifestV1 id must be {AGENT_MESSAGE_MANIFEST_ID}")
+    if manifest["phase"] != "post_mvp":
+        raise ValueError("AgentMessageManifestV1 phase must be post_mvp")
+    if manifest["scope"] != "agent_coordination_direct_communication_contract":
+        raise ValueError("AgentMessageManifestV1 scope must be agent_coordination_direct_communication_contract")
+    if manifest["mode"] != "static_contract_only":
+        raise ValueError("AgentMessageManifestV1 mode must be static_contract_only")
+    if manifest["kernelPrimitive"] != "AgentMessage":
+        raise ValueError("AgentMessageManifestV1 kernelPrimitive must be AgentMessage")
+    if "direct_communication" not in manifest["coordinationProtocols"]:
+        raise ValueError("AgentMessageManifestV1 coordinationProtocols must include direct_communication")
+    if manifest["messageTypeSequence"] != AGENT_MESSAGE_TYPE_SEQUENCE:
+        raise ValueError(
+            f"AgentMessageManifestV1 messageTypeSequence must equal {AGENT_MESSAGE_TYPE_SEQUENCE}"
+        )
+
+    delegation_manifest = _load_json(root / DELEGATION_MANIFEST_ARTIFACT_PATH)
+    validate_delegation_manifest(delegation_manifest, root)
+    pairing = _load_json(root / CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH)
+    validate_creator_verifier_pairing(pairing, root)
+    delegation = delegation_manifest["delegations"][0]
+    paths_by_kind = _artifact_paths_by_kind(delegation)
+    delegation_ref = _delegation_ref(delegation["id"])
+    pairing_ref = _pairing_ref()
+
+    _validate_agent_message_source_artifacts(manifest["sourceArtifacts"], delegation_manifest, root)
+
+    binding = manifest["delegationBinding"]
+    _require_fields(
+        "AgentMessageManifestV1 delegationBinding",
+        binding,
+        [
+            "delegationManifestRef",
+            "delegationRef",
+            "pairingManifestRef",
+            "pairingRef",
+            "parentTaskSpecRef",
+            "parentRunRef",
+            "workloadIndependentObjective",
+        ],
+    )
+    if binding["delegationManifestRef"] != DELEGATION_MANIFEST_ARTIFACT_PATH or binding["delegationRef"] != delegation_ref:
+        raise ValueError("AgentMessageManifestV1 delegationBinding must reference DelegationManifestV1")
+    if binding["pairingManifestRef"] != CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH or binding["pairingRef"] != pairing_ref:
+        raise ValueError("AgentMessageManifestV1 delegationBinding must reference CreatorVerifierPairingV1")
+    if binding["parentTaskSpecRef"] != delegation["parentTaskSpecRef"] or binding["parentRunRef"] != delegation["parentRunRef"]:
+        raise ValueError("AgentMessageManifestV1 delegationBinding must inherit parent TaskSpec and Run refs")
+
+    agent_bindings = manifest["agentBindings"]
+    if not isinstance(agent_bindings, list) or len(agent_bindings) != 2:
+        raise ValueError("AgentMessageManifestV1 agentBindings must contain creator and verifier")
+    agents_by_role: dict[str, dict[str, Any]] = {}
+    for agent in agent_bindings:
+        if not isinstance(agent, dict):
+            raise ValueError("AgentMessageManifestV1 agentBindings must be objects")
+        _require_fields(
+            "AgentMessageManifestV1 agent binding",
+            agent,
+            [
+                "agentId",
+                "role",
+                "owns",
+                "maySendVerificationRequest",
+                "mayReturnVerifierResult",
+                "mayBroadcast",
+                "mayOverrideVerifierResult",
+            ],
+        )
+        if agent["mayBroadcast"] is not False:
+            raise ValueError("AgentMessageManifestV1 agentBindings must keep mayBroadcast false")
+        if agent["mayOverrideVerifierResult"] is not False:
+            raise ValueError("AgentMessageManifestV1 agentBindings must keep mayOverrideVerifierResult false")
+        agents_by_role[agent["role"]] = agent
+    if set(agents_by_role) != {"creator", "verifier"}:
+        raise ValueError("AgentMessageManifestV1 agentBindings must cover creator and verifier roles")
+    creator_agent = agents_by_role["creator"]
+    verifier_agent = agents_by_role["verifier"]
+    if creator_agent["agentId"] != delegation["creatorAgent"] or verifier_agent["agentId"] != delegation["verifierAgent"]:
+        raise ValueError("AgentMessageManifestV1 agentBindings must match DelegationManifestV1 creator and verifier agents")
+    if creator_agent["agentId"] == verifier_agent["agentId"]:
+        raise ValueError("AgentMessageManifestV1 creator and verifier agents must be distinct")
+    if creator_agent["maySendVerificationRequest"] is not True or creator_agent["mayReturnVerifierResult"] is not False:
+        raise ValueError("AgentMessageManifestV1 creator must originate requests without returning verifier results")
+    if verifier_agent["maySendVerificationRequest"] is not False or verifier_agent["mayReturnVerifierResult"] is not True:
+        raise ValueError("AgentMessageManifestV1 verifier must return verifier results without originating requests")
+
+    channels = manifest["channels"]
+    if not isinstance(channels, list) or len(channels) != 2:
+        raise ValueError("AgentMessageManifestV1 channels must declare request and response channels")
+    channels_by_id: dict[str, dict[str, Any]] = {}
+    expected_channel_ids = {AGENT_MESSAGE_CHANNEL_REQUEST_ID, AGENT_MESSAGE_CHANNEL_RESPONSE_ID}
+    for channel in channels:
+        if not isinstance(channel, dict):
+            raise ValueError("AgentMessageManifestV1 channels must be objects")
+        _validate_agent_message_channel(channel)
+        channels_by_id[channel["channelId"]] = channel
+    if set(channels_by_id) != expected_channel_ids:
+        raise ValueError(f"AgentMessageManifestV1 channels must equal {sorted(expected_channel_ids)}")
+
+    expected_payload_paths = {
+        "ArtifactV1": paths_by_kind["ArtifactV1"],
+        "EvidenceListV1": paths_by_kind["EvidenceListV1"],
+        "VerifierResultV1": paths_by_kind["VerifierResultV1"],
+    }
+    if manifest["expectedPayloadArtifactRefs"] != expected_payload_paths:
+        raise ValueError("AgentMessageManifestV1 expectedPayloadArtifactRefs must bind DelegationManifestV1 artifact paths")
+
+    _validate_agent_messages(
+        manifest["messages"],
+        delegation_manifest,
+        channels_by_id,
+        delegation_ref,
+        pairing_ref,
+        expected_payload_paths,
+    )
+
+    invariant = manifest["communicationInvariant"]
+    _require_fields(
+        "AgentMessageManifestV1 communicationInvariant",
+        invariant,
+        [
+            "creatorAgent",
+            "verifierAgent",
+            "verifierResultOwner",
+            "messagesMayCarrySideEffects",
+            "messagesMayOverrideVerifierResult",
+            "verifierMustRespondBeforeAcceptance",
+            "requestResponseMustBeBound",
+            "broadcastAllowed",
+        ],
+    )
+    if invariant["creatorAgent"] == invariant["verifierAgent"]:
+        raise ValueError("AgentMessageManifestV1 communicationInvariant agents must be distinct")
+    if invariant["verifierResultOwner"] != "verifier-runtime-v1":
+        raise ValueError("AgentMessageManifestV1 communicationInvariant verifierResultOwner must be verifier-runtime-v1")
+    if invariant["messagesMayCarrySideEffects"] is not False:
+        raise ValueError("AgentMessageManifestV1 communicationInvariant must keep messagesMayCarrySideEffects false")
+    if invariant["messagesMayOverrideVerifierResult"] is not False:
+        raise ValueError("AgentMessageManifestV1 communicationInvariant must keep messagesMayOverrideVerifierResult false")
+    if invariant["verifierMustRespondBeforeAcceptance"] is not True:
+        raise ValueError("AgentMessageManifestV1 communicationInvariant must require verifier response before acceptance")
+    if invariant["requestResponseMustBeBound"] is not True:
+        raise ValueError("AgentMessageManifestV1 communicationInvariant must bind request and response")
+    if invariant["broadcastAllowed"] is not False:
+        raise ValueError("AgentMessageManifestV1 communicationInvariant must keep broadcastAllowed false")
+
+    policy = manifest["policyBoundary"]
+    _require_fields(
+        "AgentMessageManifestV1 policyBoundary",
+        policy,
+        [
+            "policySchemaVersion",
+            "externalSideEffectsAllowed",
+            "workspaceMutationAllowed",
+            "deliverySendAllowed",
+            "realMultiAgentRuntimeAllowed",
+            "providerExecutionAllowed",
+            "broadcastAllowed",
+        ],
+    )
+    if policy["policySchemaVersion"] != "policy-v1":
+        raise ValueError("AgentMessageManifestV1 policyBoundary must use policy-v1")
+    for field in [
+        "externalSideEffectsAllowed",
+        "workspaceMutationAllowed",
+        "deliverySendAllowed",
+        "realMultiAgentRuntimeAllowed",
+        "providerExecutionAllowed",
+        "broadcastAllowed",
+    ]:
+        if policy[field] is not False:
+            raise ValueError(f"AgentMessageManifestV1 policyBoundary must keep {field} false")
+
+    expected_event_refs = [
+        _coord_event_ref(event["id"])
+        for event in delegation_manifest["coordinationEvents"]
+    ]
+    if manifest["coordinationEventRefs"] != expected_event_refs:
+        raise ValueError("AgentMessageManifestV1 coordinationEventRefs must bind DelegationManifestV1 coordination events")
+    if not set(NON_REGRESSION_REUSE_PATHS).issubset(set(manifest["nonRegressionReusePath"])):
+        raise ValueError("AgentMessageManifestV1 must include non-regression workload reuse paths")
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="coordination-contract")
     parser.add_argument("--delegation-out", type=Path)
     parser.add_argument("--validate-delegation", type=Path)
     parser.add_argument("--pairing-out", type=Path)
     parser.add_argument("--validate-pairing", type=Path)
+    parser.add_argument("--agent-message-out", type=Path)
+    parser.add_argument("--validate-agent-message", type=Path)
     return parser.parse_args(argv)
 
 
@@ -965,6 +1598,8 @@ def main(argv: list[str] | None = None) -> int:
         and args.validate_delegation is None
         and args.pairing_out is None
         and args.validate_pairing is None
+        and args.agent_message_out is None
+        and args.validate_agent_message is None
     ):
         raise ValueError("No action requested")
     if args.delegation_out is not None:
@@ -985,6 +1620,15 @@ def main(argv: list[str] | None = None) -> int:
         pairing = _load_json(args.validate_pairing)
         validate_creator_verifier_pairing(pairing, root)
         print(f"Validated CreatorVerifierPairingV1 artifact {args.validate_pairing}.")
+    if args.agent_message_out is not None:
+        manifest = build_agent_message_manifest(root)
+        validate_agent_message_manifest(manifest, root)
+        _write_json(args.agent_message_out, manifest)
+        print(f"Wrote AgentMessageManifestV1 artifact to {args.agent_message_out}.")
+    if args.validate_agent_message is not None:
+        manifest = _load_json(args.validate_agent_message)
+        validate_agent_message_manifest(manifest, root)
+        print(f"Validated AgentMessageManifestV1 artifact {args.validate_agent_message}.")
     return 0
 
 

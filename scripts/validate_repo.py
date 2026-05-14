@@ -72,10 +72,13 @@ from policy_unlock_denial import (
     validate_policy_unlock_request_denied,
 )
 from coordination_contract import (
+    AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH,
     CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH,
     DELEGATION_MANIFEST_ARTIFACT_PATH,
+    build_agent_message_manifest,
     build_creator_verifier_pairing,
     build_delegation_manifest,
+    validate_agent_message_manifest,
     validate_creator_verifier_pairing,
     validate_delegation_manifest,
 )
@@ -142,6 +145,7 @@ APPROVAL_REVOCATION_PATH = ROOT / APPROVAL_REVOCATION_ARTIFACT_PATH
 POLICY_UNLOCK_DENIAL_PATH = ROOT / POLICY_UNLOCK_DENIAL_ARTIFACT_PATH
 DELEGATION_MANIFEST_PATH = ROOT / DELEGATION_MANIFEST_ARTIFACT_PATH
 CREATOR_VERIFIER_PAIRING_PATH = ROOT / CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH
+AGENT_MESSAGE_MANIFEST_PATH = ROOT / AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -227,6 +231,7 @@ REQUIRED_FILES = [
     "artifacts/approval/post_mvp_policy_unlock_request_denied.json",
     "artifacts/coordination/post_mvp_delegation_manifest.json",
     "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+    "artifacts/coordination/post_mvp_agent_message_manifest.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -309,6 +314,10 @@ PLAN_REQUIRED_MARKERS = [
     "CreatorVerifierPairingV1",
     "creator-verifier-pairing-v1",
     "post_mvp_creator_verifier_pairing.json",
+    "AgentMessageManifestV1",
+    "agent-message-manifest-v1",
+    "agent-message-v1",
+    "post_mvp_agent_message_manifest.json",
     "Agentic Engineering OS Kernel",
     "workload-independent primitives",
     "first workload: Read-only Regression Evidence Demo",
@@ -2732,6 +2741,146 @@ def run_creator_verifier_pairing_builder(pairing_out: Path) -> None:
         )
 
 
+def expect_agent_message_manifest_validation_failure(
+    label: str,
+    manifest: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_agent_message_manifest(manifest, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"AgentMessageManifestV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"AgentMessageManifestV1 forced-failure case {label} unexpectedly passed validation")
+
+
+def validate_committed_agent_message_manifest_artifact() -> None:
+    manifest = load_json(AGENT_MESSAGE_MANIFEST_PATH)
+    try:
+        validate_agent_message_manifest(manifest, ROOT)
+    except ValueError as exc:
+        raise AssertionError(f"Committed AgentMessageManifestV1 artifact failed validation: {exc}") from exc
+
+    expected_manifest = build_agent_message_manifest(ROOT)
+    if manifest != expected_manifest:
+        raise AssertionError("Committed AgentMessageManifestV1 artifact differs from deterministic builder output")
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    for channel in tampered_manifest["channels"]:
+        channel["broadcastAllowed"] = True
+    expect_agent_message_manifest_validation_failure(
+        "channel_broadcast_allowed",
+        tampered_manifest,
+        "channel broadcast must be disallowed",
+    )
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    for message in tampered_manifest["messages"]:
+        if message["type"] == "verification.response":
+            message["inReplyToMessageId"] = None
+            break
+    expect_agent_message_manifest_validation_failure(
+        "response_not_bound_to_request",
+        tampered_manifest,
+        "verification.response must reply to verification.request",
+    )
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    for message in tampered_manifest["messages"]:
+        if message["type"] == "verification.request":
+            message["payloadRefs"].append(
+                {
+                    "artifactKind": "ArtifactV1",
+                    "artifactRef": "artifacts/runs/all_passed/email_draft.md",
+                    "role": "regression_email_delivery",
+                }
+            )
+            break
+    expect_agent_message_manifest_validation_failure(
+        "email_delivery_payload_added",
+        tampered_manifest,
+        "must not add regression/email delivery artifacts",
+    )
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    tampered_manifest["messages"] = [
+        message for message in tampered_manifest["messages"] if message["type"] != "verification.response"
+    ]
+    expect_agent_message_manifest_validation_failure(
+        "missing_verification_response",
+        tampered_manifest,
+        "messageTypeSequence",
+    )
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    for message in tampered_manifest["messages"]:
+        message["carriesSideEffects"] = True
+    expect_agent_message_manifest_validation_failure(
+        "messages_carry_side_effects",
+        tampered_manifest,
+        "must not carry side effects",
+    )
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    for message in tampered_manifest["messages"]:
+        message["mayOverrideVerifierResult"] = True
+    expect_agent_message_manifest_validation_failure(
+        "messages_override_verifier_result",
+        tampered_manifest,
+        "must not override verifier results",
+    )
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    tampered_manifest["policyBoundary"]["externalSideEffectsAllowed"] = True
+    expect_agent_message_manifest_validation_failure(
+        "policy_external_side_effects_allowed",
+        tampered_manifest,
+        "externalSideEffectsAllowed false",
+    )
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    tampered_manifest["nonRegressionReusePath"] = ["read_only_regression_evidence_demo"]
+    expect_agent_message_manifest_validation_failure(
+        "missing_non_regression_reuse_path",
+        tampered_manifest,
+        "non-regression workload reuse paths",
+    )
+
+    tampered_manifest = json.loads(json.dumps(manifest))
+    for source in tampered_manifest["sourceArtifacts"]:
+        if source.get("role") == "creator_verifier_pairing":
+            source["contentHash"] = "0" * 64
+            break
+    expect_agent_message_manifest_validation_failure(
+        "pairing_source_hash_mismatch",
+        tampered_manifest,
+        "source hash mismatch",
+    )
+
+
+def run_agent_message_manifest_builder(manifest_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/coordination_contract.py"),
+        "--agent-message-out",
+        str(manifest_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "AgentMessageManifestV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -3131,6 +3280,7 @@ def main() -> None:
     validate_committed_policy_unlock_denial_artifact()
     validate_committed_delegation_manifest_artifact()
     validate_committed_creator_verifier_pairing_artifact()
+    validate_committed_agent_message_manifest_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -3232,6 +3382,10 @@ def main() -> None:
         run_creator_verifier_pairing_builder(generated_creator_verifier_pairing)
         if load_json(generated_creator_verifier_pairing) != load_json(CREATOR_VERIFIER_PAIRING_PATH):
             raise AssertionError("Committed CreatorVerifierPairingV1 artifact differs from deterministic CLI output")
+        generated_agent_message_manifest = temp_root / "post_mvp_agent_message_manifest.json"
+        run_agent_message_manifest_builder(generated_agent_message_manifest)
+        if load_json(generated_agent_message_manifest) != load_json(AGENT_MESSAGE_MANIFEST_PATH):
+            raise AssertionError("Committed AgentMessageManifestV1 artifact differs from deterministic CLI output")
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)
         if load_json(generated_evaluation_report) != load_json(EVALUATION_REPORT_PATH):

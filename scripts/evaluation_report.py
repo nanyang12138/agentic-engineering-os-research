@@ -31,8 +31,10 @@ from policy_unlock_denial import (
     validate_policy_unlock_request_denied,
 )
 from coordination_contract import (
+    AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH,
     CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH,
     DELEGATION_MANIFEST_ARTIFACT_PATH,
+    validate_agent_message_manifest,
     validate_creator_verifier_pairing,
     validate_delegation_manifest,
 )
@@ -156,6 +158,7 @@ def _source_specs() -> list[tuple[str, str]]:
         ("post_mvp_policy_unlock_request_denied", POLICY_UNLOCK_DENIAL_ARTIFACT_PATH),
         ("post_mvp_delegation_manifest", DELEGATION_MANIFEST_ARTIFACT_PATH),
         ("post_mvp_creator_verifier_pairing", CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH),
+        ("post_mvp_agent_message_manifest", AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH),
     ]
     for fixture_id in FIXTURE_IDS:
         specs.append((f"phase1a_{fixture_id}_run", f"artifacts/runs/{fixture_id}/run.json"))
@@ -284,6 +287,8 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
     validate_delegation_manifest(delegation_manifest, root)
     creator_verifier_pairing = _load_json(root / CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH)
     validate_creator_verifier_pairing(creator_verifier_pairing, root)
+    agent_message_manifest = _load_json(root / AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH)
+    validate_agent_message_manifest(agent_message_manifest, root)
     delivery_readiness = delivery_report["readiness"]
     delivery_blocker_ids = [blocker["id"] for blocker in delivery_report["blockers"]]
     phase_coverage = _phase_coverage()
@@ -366,7 +371,7 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
         ],
         "nextRecommendedSlice": {
             "phase": "post_mvp",
-            "slice": "Add an AgentMessageV1 direct communication contract so creator-to-verifier requests and verifier responses are machine-verifiable.",
+            "slice": "Add a NegotiationRecordV1 contract artifact so scope/risk/policy/acceptance-criteria negotiation between creator and verifier is machine-verifiable.",
             "mustRemainMachineVerifiable": True,
         },
         "invariants": [

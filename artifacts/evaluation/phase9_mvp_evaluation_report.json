@@ -56,7 +56,7 @@
   "nextRecommendedSlice": {
     "mustRemainMachineVerifiable": true,
     "phase": "post_mvp",
-    "slice": "Add an AgentMessageV1 direct communication contract so creator-to-verifier requests and verifier responses are machine-verifiable."
+    "slice": "Add a NegotiationRecordV1 contract artifact so scope/risk/policy/acceptance-criteria negotiation between creator and verifier is machine-verifiable."
   },
   "outOfScope": [
     {
@@ -263,7 +263,7 @@
   "scope": "read_only_regression_evidence_demo_mvp_completion",
   "sourceArtifacts": [
     {
-      "contentHash": "d931216caff3304e9c64719002a17404738c1090bd51c40a2428f0d4c7cff904",
+      "contentHash": "916481d13b477261807e936849db9f2593037f3d7e99fac1d66b3861020a0987",
       "path": "scripts/validate_repo.py",
       "role": "validation_script"
     },
@@ -421,6 +421,11 @@
       "contentHash": "834b3c6bfe4dc401a5c34f3ed20edb479c4352e85363ac629caab3a3af429932",
       "path": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
       "role": "post_mvp_creator_verifier_pairing"
+    },
+    {
+      "contentHash": "e026fb8f8d78f3a54d0a1a3d846cd93d8289cd9a8fefb59ead112fb18e4552f2",
+      "path": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+      "role": "post_mvp_agent_message_manifest"
     },
     {
       "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
