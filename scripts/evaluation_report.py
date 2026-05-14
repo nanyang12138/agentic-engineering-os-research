@@ -86,6 +86,10 @@ from run_artifact import (
     RUN_ARTIFACT_PATH as POST_MVP_RUN_ARTIFACT_PATH,
     validate_run_artifact,
 )
+from step_list_artifact import (
+    STEP_LIST_ARTIFACT_PATH as POST_MVP_STEP_LIST_ARTIFACT_PATH,
+    validate_step_list_artifact,
+)
 
 
 EVALUATION_REPORT_SCHEMA_VERSION = "mvp-evaluation-report-v1"
@@ -220,6 +224,7 @@ def _source_specs() -> list[tuple[str, str]]:
         ("post_mvp_test_execution_evidence_list", POST_MVP_EVIDENCE_LIST_ARTIFACT_PATH),
         ("post_mvp_test_execution_observation_list", POST_MVP_OBSERVATION_LIST_ARTIFACT_PATH),
         ("post_mvp_test_execution_run", POST_MVP_RUN_ARTIFACT_PATH),
+        ("post_mvp_test_execution_step_list", POST_MVP_STEP_LIST_ARTIFACT_PATH),
     ]
     for fixture_id in FIXTURE_IDS:
         specs.append((f"phase1a_{fixture_id}_run", f"artifacts/runs/{fixture_id}/run.json"))
@@ -376,6 +381,8 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
     validate_observation_list_artifact(observation_list_artifact, root)
     run_artifact = _load_json(root / POST_MVP_RUN_ARTIFACT_PATH)
     validate_run_artifact(run_artifact, root)
+    step_list_artifact = _load_json(root / POST_MVP_STEP_LIST_ARTIFACT_PATH)
+    validate_step_list_artifact(step_list_artifact, root)
     delivery_readiness = delivery_report["readiness"]
     delivery_blocker_ids = [blocker["id"] for blocker in delivery_report["blockers"]]
     phase_coverage = _phase_coverage()
@@ -458,7 +465,7 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
         ],
         "nextRecommendedSlice": {
             "phase": "post_mvp",
-            "slice": "Add a workload-independent StepListV1 / StepV1 ArtifactV1 subtype contract artifact that defines the canonical OS-kernel Step primitive for any workload: each step must declare stepId / stepKind / status / capabilityRef / sourceAgent / startedAt / completedAt / inputContract / outputContract / runEventLogRefs[] / observationRefs[] / evidenceRefs[] using only workload-independent kinds (capability_invocation_step / artifact_write_step / verifier_step / run_state_transition_step), every step's runEventLogRefs must resolve into RunEventLogV1.events by eventId, every step's observationRefs must resolve into ObservationListV1.observationItems, every step's evidenceRefs must resolve into EvidenceListV1.evidenceItems, the StepListV1 envelope must bind RunV1 / TestExecutionTaskSpecV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 by content hash plus the five Agent Coordination Layer manifests, declare verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true, force the six workload-independent permission flags to false, require StepListV1.stepCount and step ordering to match RunEventLogV1 capability invocation pairs, and forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1.",
+            "slice": "Add a workload-independent ToolCallV1 / ToolCallListV1 ArtifactV1 subtype contract artifact at artifacts/tool_calls/post_mvp_test_execution_tool_call_list.json that defines the canonical OS-kernel ToolCall primitive for any workload: each tool call must declare toolCallId / capabilityRef / sourceAgent / status / startedAt / completedAt / inputSchemaRef / outputSchemaRef / inputPayloadHash / outputPayloadHash / runEventLogRefs[] / observationRefs[] / stepRef / sideEffectClass using only workload-independent vocabulary; every tool call's runEventLogRefs must resolve into RunEventLogV1.events by eventId pair (capability.invoked + capability.completed / artifact.written / verifier.completed); every tool call's observationRefs must resolve into ObservationListV1.observationItems; every tool call's stepRef must resolve into StepListV1.stepItems by stepId; ToolCallListV1 envelope must bind StepListV1 / RunV1 / TestExecutionTaskSpecV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 by content hash plus the five Agent Coordination Layer manifests; toolCallCount must equal the number of capability_invocation_step / artifact_write_step / verifier_step entries in StepListV1; declare verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true; force the six workload-independent permission flags to false; require every ToolCallV1.sideEffectClass to be one of [read_only, evidence_writer, artifact_writer, verifier_check] with sideEffectClass!=external; forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 / reusesRegressionRunStepArray=false.",
             "mustRemainMachineVerifiable": True,
         },
         "invariants": [

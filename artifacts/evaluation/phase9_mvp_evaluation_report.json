@@ -56,7 +56,7 @@
   "nextRecommendedSlice": {
     "mustRemainMachineVerifiable": true,
     "phase": "post_mvp",
-    "slice": "Add a workload-independent StepListV1 / StepV1 ArtifactV1 subtype contract artifact that defines the canonical OS-kernel Step primitive for any workload: each step must declare stepId / stepKind / status / capabilityRef / sourceAgent / startedAt / completedAt / inputContract / outputContract / runEventLogRefs[] / observationRefs[] / evidenceRefs[] using only workload-independent kinds (capability_invocation_step / artifact_write_step / verifier_step / run_state_transition_step), every step's runEventLogRefs must resolve into RunEventLogV1.events by eventId, every step's observationRefs must resolve into ObservationListV1.observationItems, every step's evidenceRefs must resolve into EvidenceListV1.evidenceItems, the StepListV1 envelope must bind RunV1 / TestExecutionTaskSpecV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 by content hash plus the five Agent Coordination Layer manifests, declare verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true, force the six workload-independent permission flags to false, require StepListV1.stepCount and step ordering to match RunEventLogV1 capability invocation pairs, and forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1."
+    "slice": "Add a workload-independent ToolCallV1 / ToolCallListV1 ArtifactV1 subtype contract artifact at artifacts/tool_calls/post_mvp_test_execution_tool_call_list.json that defines the canonical OS-kernel ToolCall primitive for any workload: each tool call must declare toolCallId / capabilityRef / sourceAgent / status / startedAt / completedAt / inputSchemaRef / outputSchemaRef / inputPayloadHash / outputPayloadHash / runEventLogRefs[] / observationRefs[] / stepRef / sideEffectClass using only workload-independent vocabulary; every tool call's runEventLogRefs must resolve into RunEventLogV1.events by eventId pair (capability.invoked + capability.completed / artifact.written / verifier.completed); every tool call's observationRefs must resolve into ObservationListV1.observationItems; every tool call's stepRef must resolve into StepListV1.stepItems by stepId; ToolCallListV1 envelope must bind StepListV1 / RunV1 / TestExecutionTaskSpecV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 by content hash plus the five Agent Coordination Layer manifests; toolCallCount must equal the number of capability_invocation_step / artifact_write_step / verifier_step entries in StepListV1; declare verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true; force the six workload-independent permission flags to false; require every ToolCallV1.sideEffectClass to be one of [read_only, evidence_writer, artifact_writer, verifier_check] with sideEffectClass!=external; forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 / reusesRegressionRunStepArray=false."
   },
   "outOfScope": [
     {
@@ -263,7 +263,7 @@
   "scope": "read_only_regression_evidence_demo_mvp_completion",
   "sourceArtifacts": [
     {
-      "contentHash": "73b13e235ab56ffdcf2d3352bef118bd577acf2d2c63d9ddfe2458171d2ce9d5",
+      "contentHash": "1d56d745649ce072d6aa30dc830ae46df7ff5c344d7fd367f4991b002ee6a684",
       "path": "scripts/validate_repo.py",
       "role": "validation_script"
     },
@@ -491,6 +491,11 @@
       "contentHash": "b835da5eed98e282f078995850e702a7f17d7d0b63a43af8b86debfd2cb0977e",
       "path": "artifacts/runs/post_mvp_test_execution_run.json",
       "role": "post_mvp_test_execution_run"
+    },
+    {
+      "contentHash": "4f13dd3e7cc80dccca59dda7839e33346028595f1be0949ec2515f7193e63a78",
+      "path": "artifacts/steps/post_mvp_test_execution_step_list.json",
+      "role": "post_mvp_test_execution_step_list"
     },
     {
       "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
