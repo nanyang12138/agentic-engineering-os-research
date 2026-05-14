@@ -56,7 +56,7 @@
   "nextRecommendedSlice": {
     "mustRemainMachineVerifiable": true,
     "phase": "post_mvp",
-    "slice": "Add a BroadcastSubscriptionV1 coordination contract artifact so workload-independent event broadcast subscriptions, no-side-effect/no-override invariants, and CoordinationEventV1 fan-out are machine-verifiable on top of DelegationManifestV1, CreatorVerifierPairingV1, AgentMessageManifestV1, and NegotiationRecordV1."
+    "slice": "Open the second workload by adding a workload-independent TestExecutionTaskSpecV1 envelope so the Agentic Engineering OS kernel can host Test Execution / Failure Triage without reusing regression/email TaskSpec fields, while keeping DelegationManifestV1, CreatorVerifierPairingV1, AgentMessageManifestV1, NegotiationRecordV1, and BroadcastSubscriptionManifestV1 reusable."
   },
   "outOfScope": [
     {
@@ -263,7 +263,7 @@
   "scope": "read_only_regression_evidence_demo_mvp_completion",
   "sourceArtifacts": [
     {
-      "contentHash": "567c9f05a20e5e533cb759248d7d552b6a74e2b4e1d3131a33f09803968f7461",
+      "contentHash": "1253bd0e294fc0eba796bf07b23516e4bebb5a3217328d11ce7a90b164b64b9f",
       "path": "scripts/validate_repo.py",
       "role": "validation_script"
     },
@@ -431,6 +431,11 @@
       "contentHash": "fbbcd49ad9e7cd229658b431ab15313829f3a58107d809ef288043236746698e",
       "path": "artifacts/coordination/post_mvp_negotiation_record.json",
       "role": "post_mvp_negotiation_record"
+    },
+    {
+      "contentHash": "4e622eafff1480cb2e109aad1230e0852d99c412470ff8f33b215898beeb90b6",
+      "path": "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
+      "role": "post_mvp_broadcast_subscription_manifest"
     },
     {
       "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",

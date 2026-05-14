@@ -5819,6 +5819,93 @@ Build vs Integrate：
 基于 DelegationManifestV1、CreatorVerifierPairingV1、AgentMessageManifestV1、NegotiationRecordV1 明确事件广播订阅、subscriber white-list、no-side-effect / no-override policy、CoordinationEventV1 fan-out 与 broadcast topic 分类；字段不得依赖 regression_result/email_draft/send_email。
 ```
 
+### 2026-05-14 08:05 UTC Automation Sprint：BroadcastSubscriptionManifestV1 Coordination Kernel Contract Gate
+
+Active phase：post-MVP Kernel Generalization / Agent Coordination Runtime Contracts（Phase 1a-9 contract-only MVP 已满足，完整 Agentic Engineering OS 产品仍未完成）。
+
+Selected slice：
+
+```text
+Add BroadcastSubscriptionManifestV1 contract artifact so /usr/bin/python3 scripts/validate_repo.py verifies workload-independent broadcast topics, subscriber allow-lists, CoordinationEventV1 / NegotiationRecordV1 fan-out events, no-side-effect / no-override / no-public-access policy, and binding to DelegationManifestV1, CreatorVerifierPairingV1, AgentMessageManifestV1, and NegotiationRecordV1.
+```
+
+为什么这是下一步：
+
+- `.github/workflows/validate.yml` 和 `.github/workflows/auto-merge-cursor-pr.yml` 均存在；本轮 baseline `/usr/bin/python3 scripts/validate_repo.py` 已通过。
+- `DelegationManifestV1`、`CreatorVerifierPairingV1`、`AgentMessageManifestV1`、`NegotiationRecordV1` 已 land；Agent Coordination Layer 五件套（delegation / creator-verifier / direct communication / negotiation / broadcast）只差 broadcast。
+- Post-MVP slice priority #3（Agent Coordination Layer protocol）要求 `BroadcastSubscriptionV1` 与其它四件套并列；这是最后一个未覆盖的 coordination primitive，先完成它再进入第二 workload 或 verifier/evidence/policy 强化。
+
+OS kernel primitive advanced：
+
+- `BroadcastSubscription` / `broadcast-subscription-manifest-v1` 包住 broadcast topic、subscription、fan-out event 三层 schema 与 broadcast invariant、policy boundary。
+- `BroadcastTopic` / `broadcast-topic-v1` 明确 read-only fan-out、subscriber allow-list、no-side-effect / no-override / no-public-access topic 策略，并把 `CoordinationEventV1` 与 `NegotiationRecordV1` 的允许事件类型枚举为 workload-independent topic。
+- `BroadcastSubscription` / `broadcast-subscription-v1` 把 (subscriber, topic) 绑定为可验证 subscription，强制 read-only fan-out、causal ordering 和 mayBroadcastDownstream=false。
+- `BroadcastFanOutEvent` / `broadcast-fan-out-v1` 通过 causal refs 把每个 fan-out 串到 `DelegationManifestV1#coordinationEvents` 与 `NegotiationRecordV1#proposals/agreement` 的源事件，证明 broadcast 不是新的副作用通道，而是既有 OS 事件的只读扇出。
+
+Non-regression workload reuse path：
+
+- `Test Execution / Failure Triage` 可复用：triage finding 通过 fan-out 广播给 reviewer 与 auditor 订阅者，verifier 仍然独占 acceptance verdict。
+- `Code Patch / Review Loop` 可复用：patch publication 与 review event 通过 read-only fan-out 通知 reviewer 集群，creator 与 verifier 仍然不可被 override。
+- `PR Review` 可复用：PR 评审事件可以广播给多个 reviewer / auditor，agreement 仍由 NegotiationRecordV1 与 VerifierResultV1 决定。
+
+Coordination protocol / invariant clarified：
+
+- `BroadcastSubscriptionManifestV1` 明确 broadcast primitive 与 `DelegationManifestV1`、`CreatorVerifierPairingV1`、`AgentMessageManifestV1`、`NegotiationRecordV1` 的绑定关系，并通过 `sourceArtifacts` content hash 把上游 contract 当作不可变前提。
+- 不变量：subscriber 必须在 topic allow-list 上；fan-out 必须引用已声明的 CoordinationEventV1 / NegotiationProposal / NegotiationAgreement；fan-out 不携带 side effect、不 override `verifier-runtime-v1`、不 broadcast downstream、不开 public access；creator 与 verifier 必须仍然是不同 agent。
+- 新增 read-only 观察者 `auditor_agent` 仅可作为 subscriber，不允许 publish / acknowledge with side effects / override verifier result / mutate delegation artifacts。
+
+为什么这不是另一个 regression/email fixture：
+
+- 新 artifact 路径为 `artifacts/coordination/post_mvp_broadcast_subscription_manifest.json`，scope 为 `agent_coordination_broadcast_contract`，不是 regression result、email draft、approval lifecycle 或 delivery unlock。
+- schema 字段使用 generic `BroadcastSubscriptionManifestV1` / `BroadcastTopicV1` / `BroadcastSubscriptionV1` / `BroadcastFanOutV1`，topic 仅允许 workload-independent `coordination.delegation_lifecycle` / `coordination.negotiation_lifecycle`；validator 明确拒绝 send_email / delivery_unlock / external side-effect 字段。
+- artifact 记录 `nonRegressionReusePath`，必须包含 `test_execution_failure_triage`、`code_patch_review_loop` 和 `pr_review`。
+
+Acceptance criteria：
+
+- `scripts/coordination_contract.py` 提供 `BroadcastSubscriptionManifestV1` builder / validator / CLI（`--broadcast-subscription-out` / `--validate-broadcast-subscription`）。
+- 新增 committed `artifacts/coordination/post_mvp_broadcast_subscription_manifest.json`，schemaVersion 为 `broadcast-subscription-manifest-v1`，内含 `broadcast-topic-v1`、`broadcast-subscription-v1`、`broadcast-fan-out-v1` 三个子 schema 实例并绑定四份上游 contract。
+- `scripts/validate_repo.py` 验证 committed artifact、deterministic builder output，并拒绝 fan-out side effects / fan-out override verifier result / topic allow-list 包含未授权 agent / topic public access / subscription mayBroadcastDownstream / 缺少 negotiation topic 订阅 / fan-out 缺少 negotiation agreement / broadcastInvariant public access / policy external side effects / 缺 non-regression reuse path / negotiation source hash 漂移 / negotiation agreement ref 解绑等 forced-failure cases。
+- `EvaluationReportV1` 把 broadcast subscription manifest artifact 纳入 source hash 汇总，并把下一推荐切片推进为第二 workload (`Test Execution / Failure Triage`) 的 `TestExecutionTaskSpecV1` envelope。
+
+实现摘要：
+
+- 扩展 `scripts/coordination_contract.py`，新增 `BroadcastSubscriptionManifestV1`、`BroadcastTopicV1`、`BroadcastSubscriptionV1`、`BroadcastFanOutV1` 的 builder / validator 与 CLI 参数 `--broadcast-subscription-out` / `--validate-broadcast-subscription`，保留既有 Delegation / Pairing / AgentMessage / Negotiation 行为。
+- 新增 committed `artifacts/coordination/post_mvp_broadcast_subscription_manifest.json`。
+- 更新 `scripts/validate_repo.py` 的 required files、PLAN markers (`BroadcastSubscriptionManifestV1`、`broadcast-subscription-manifest-v1`、`broadcast-topic-v1`、`broadcast-subscription-v1`、`broadcast-fan-out-v1`、`post_mvp_broadcast_subscription_manifest.json`)、artifact validation、deterministic CLI replay 与 forced-failure cases。
+- 更新 `scripts/evaluation_report.py` 与 `artifacts/evaluation/phase9_mvp_evaluation_report.json`，将 broadcast subscription manifest 纳入 source hash，并把下一推荐切片推进到第二 workload `TestExecutionTaskSpecV1` envelope。
+
+Build vs Integrate：
+
+- Build：`BroadcastSubscriptionManifestV1` schema、deterministic builder / validator / CLI、committed artifact、forced-failure validation gate、`EvaluationReportV1` source hash 集成。
+- Integrate later：真实事件总线、blackboard、消息队列、Slack/Teams/Webhook broadcast、subscriber 动态注册 / 撤销 runtime、LangGraph/AutoGen/CrewAI integration、跨 region fan-out。
+
+验证计划 / 结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline `/usr/bin/python3 scripts/validate_repo.py` before edits：通过。
+- `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- `/usr/bin/python3 scripts/coordination_contract.py --broadcast-subscription-out artifacts/coordination/post_mvp_broadcast_subscription_manifest.json`：通过。
+- `/usr/bin/python3 scripts/coordination_contract.py --validate-broadcast-subscription artifacts/coordination/post_mvp_broadcast_subscription_manifest.json`：通过。
+- `/usr/bin/python3 scripts/evaluation_report.py --report-out artifacts/evaluation/phase9_mvp_evaluation_report.json`：通过。
+- `/usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json`：通过。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 BroadcastSubscriptionManifestV1 committed artifact、deterministic builder output 与 fan_out_carries_side_effects / fan_out_overrides_verifier_result / topic_allow_list_includes_unauthorized_agent / topic_public_access_allowed / subscription_broadcast_downstream_allowed / subscriptions_missing_negotiation_topic / fan_out_missing_negotiation_agreement / broadcast_invariant_public_access_allowed / policy_external_side_effects_allowed / missing_non_regression_reuse_path / negotiation_record_source_hash_mismatch / negotiation_agreement_ref_unbound forced-failure cases。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- `BroadcastSubscriptionManifestV1` 仍是 static contract artifact，不是 production event bus、blackboard、subscriber registry、stream processing runtime 或真实 LangGraph/AutoGen/CrewAI integration。
+- 当前 artifact 仍以 first workload 的 existing TaskSpec / coordination artifacts 作为 source fixture；第二 workload 尚未实现。
+- Agent Coordination Layer 五件套 contract 完成后，下一步应进入第二 workload（`Test Execution / Failure Triage` 的 `TestExecutionTaskSpecV1` envelope）以验证 kernel primitive 真正 workload-independent。
+
+下一轮建议：
+
+```text
+新增 workload-independent `TestExecutionTaskSpecV1` envelope contract artifact：
+为第二 workload `Test Execution / Failure Triage` 提供 TaskSpecV1 子类型，绑定 allowed capability classes、forbidden effect classes、required evidence、独立 verifier 期望，并复用 DelegationManifestV1 / CreatorVerifierPairingV1 / AgentMessageManifestV1 / NegotiationRecordV1 / BroadcastSubscriptionManifestV1 现有 coordination contract；字段不得依赖 regression_result / email_draft / send_email。
+```
+
 ## 22. Parking Lot
 
 以下内容仍然重要，但不进入第一版 MVP：
