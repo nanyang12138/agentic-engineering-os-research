@@ -56,7 +56,7 @@
   "nextRecommendedSlice": {
     "mustRemainMachineVerifiable": true,
     "phase": "post_mvp",
-    "slice": "Add a workload-independent VerifierResultV1 ArtifactV1 subtype contract artifact for the Test Execution / Failure Triage workload, owned by verifier-runtime-v1 and bound to TestExecutionResultV1, FailureTriageReportV1, TestExecutionTaskSpecV1, and the five Agent Coordination Layer manifests, with regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 explicitly forbidden so the OS kernel gains a workload-independent VerifierResult primitive reusable by Code Patch / Review Loop and PR Review."
+    "slice": "Add a workload-independent CapabilityManifestV1 (or ArtifactV1 subtype CapabilityV1) contract artifact that declares the Test Execution / Failure Triage workload's runtime capabilities (execute_tests, classify_failure, summarize_triage) with workload-independent permission, side-effect, timeout, input/output schema fields; bind it by content hash to TestExecutionTaskSpecV1 and the five Agent Coordination Layer manifests, with regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 explicitly forbidden, so the OS kernel gains a workload-independent CapabilityV1 primitive reusable by Code Patch / Review Loop, PR Review, and Documentation Update."
   },
   "outOfScope": [
     {
@@ -263,7 +263,7 @@
   "scope": "read_only_regression_evidence_demo_mvp_completion",
   "sourceArtifacts": [
     {
-      "contentHash": "2b06abe180bee74dd0bfe314d92d7123663043833de47eda44577ccef66d0de0",
+      "contentHash": "0075c037f994a08e3d8405601fa6d8b9dc1e0a81cc8c87e91b533629c1aeac89",
       "path": "scripts/validate_repo.py",
       "role": "validation_script"
     },
@@ -451,6 +451,11 @@
       "contentHash": "0d3e69dba8fbdcb98860c22adb3cd4832fe764d084c0cbabe146d15170207956",
       "path": "artifacts/test_execution/post_mvp_failure_triage_report.json",
       "role": "post_mvp_failure_triage_report"
+    },
+    {
+      "contentHash": "c317f05c5aa5cde6ba6b86fca1968539faef29ff87dc3cf57cbb540a136b8515",
+      "path": "artifacts/verifier/post_mvp_verifier_result_test_execution.json",
+      "role": "post_mvp_verifier_result_test_execution"
     },
     {
       "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",

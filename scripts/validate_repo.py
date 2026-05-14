@@ -130,6 +130,11 @@ from failure_triage_report import (
     build_failure_triage_report,
     validate_failure_triage_report,
 )
+from verifier_result import (
+    VERIFIER_RESULT_ARTIFACT_PATH,
+    build_verifier_result,
+    validate_verifier_result,
+)
 from verifier_runtime import (
     REQUIRED_ARTIFACT_CHECK_IDS,
     REQUIRED_VERIFIER_RULE_IDS,
@@ -172,6 +177,7 @@ BROADCAST_SUBSCRIPTION_MANIFEST_PATH = ROOT / BROADCAST_SUBSCRIPTION_MANIFEST_AR
 TEST_EXECUTION_TASK_SPEC_PATH = ROOT / TEST_EXECUTION_TASK_SPEC_ARTIFACT_PATH
 TEST_EXECUTION_RESULT_PATH = ROOT / TEST_EXECUTION_RESULT_ARTIFACT_PATH
 FAILURE_TRIAGE_REPORT_PATH = ROOT / FAILURE_TRIAGE_REPORT_ARTIFACT_PATH
+VERIFIER_RESULT_PATH = ROOT / VERIFIER_RESULT_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -238,6 +244,7 @@ REQUIRED_FILES = [
     "scripts/test_execution_task_spec.py",
     "scripts/test_execution_result.py",
     "scripts/failure_triage_report.py",
+    "scripts/verifier_result.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
     "artifacts/recovery/interrupted_after_extract/run.json",
@@ -266,6 +273,7 @@ REQUIRED_FILES = [
     "artifacts/task_specs/post_mvp_test_execution_task_spec.json",
     "artifacts/test_execution/post_mvp_test_execution_result.json",
     "artifacts/test_execution/post_mvp_failure_triage_report.json",
+    "artifacts/verifier/post_mvp_verifier_result_test_execution.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -373,6 +381,9 @@ PLAN_REQUIRED_MARKERS = [
     "FailureTriageReportV1",
     "failure-triage-report-v1",
     "post_mvp_failure_triage_report.json",
+    "VerifierResultV1",
+    "verifier-result-v1",
+    "post_mvp_verifier_result_test_execution.json",
     "Agentic Engineering OS Kernel",
     "workload-independent primitives",
     "first workload: Read-only Regression Evidence Demo",
@@ -3940,6 +3951,332 @@ def run_failure_triage_report_builder(artifact_out: Path) -> None:
         )
 
 
+def expect_verifier_result_validation_failure(
+    label: str,
+    report: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_verifier_result(report, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"VerifierResultV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(
+        f"VerifierResultV1 forced-failure case {label} unexpectedly passed validation"
+    )
+
+
+def validate_committed_verifier_result_artifact() -> None:
+    artifact = load_json(VERIFIER_RESULT_PATH)
+    try:
+        validate_verifier_result(artifact, ROOT)
+    except ValueError as exc:
+        raise AssertionError(
+            f"Committed VerifierResultV1 artifact failed validation: {exc}"
+        ) from exc
+
+    expected_artifact = build_verifier_result(ROOT)
+    if artifact != expected_artifact:
+        raise AssertionError(
+            "Committed VerifierResultV1 artifact differs from deterministic builder output"
+        )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["workloadType"] = "read_only_regression_evidence_demo"
+    expect_verifier_result_validation_failure(
+        "workload_type_regression_reuse",
+        tampered,
+        "workloadType must be test_execution_failure_triage",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["kind"] = "FailureTriageReportV1"
+    expect_verifier_result_validation_failure(
+        "kind_reuses_failure_triage_report",
+        tampered,
+        "kind must be VerifierResultV1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["schemaVersion"] = "regression-result-artifact-v1"
+    expect_verifier_result_validation_failure(
+        "schema_regression_reuse",
+        tampered,
+        "schemaVersion must be verifier-result-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["artifactEnvelopeSchemaVersion"] = "regression-result-artifact-v1"
+    expect_verifier_result_validation_failure(
+        "envelope_schema_regression_reuse",
+        tampered,
+        "artifactEnvelopeSchemaVersion must be artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierAgent"] = "creator_agent"
+    expect_verifier_result_validation_failure(
+        "creator_agent_authors_verifier_result",
+        tampered,
+        "verifierAgent must be verifier-runtime-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierVerdictOwner"] = "creator_agent"
+    expect_verifier_result_validation_failure(
+        "creator_owns_verdict",
+        tampered,
+        "verifierVerdictOwner must be verifier-runtime-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["creatorAgentMustNotOwnVerdict"] = False
+    expect_verifier_result_validation_failure(
+        "creator_must_not_own_verdict_disabled",
+        tampered,
+        "creatorAgentMustNotOwnVerdict must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verdict"] = "passed"
+    expect_verifier_result_validation_failure(
+        "verdict_overrides_failed_case",
+        tampered,
+        "verdict must follow workload-independent precedence",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verdict"] = "failed"
+    expect_verifier_result_validation_failure(
+        "verdict_failed_without_failing_rule",
+        tampered,
+        "verdict must follow workload-independent precedence",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verdict"] = "broadcast"
+    expect_verifier_result_validation_failure(
+        "verdict_outside_domain",
+        tampered,
+        "verdict must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verdictDomain"] = ["passed", "failed"]
+    expect_verifier_result_validation_failure(
+        "verdict_domain_narrowed",
+        tampered,
+        "verdictDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["taskSpecBinding"]["taskSpecSchemaVersion"] = "regression-task-spec-v1"
+    expect_verifier_result_validation_failure(
+        "task_spec_binding_regression_schema_reuse",
+        tampered,
+        "taskSpecSchemaVersion must equal test-execution-task-spec-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["taskSpecBinding"]["taskSpecContentHash"] = "0" * 64
+    expect_verifier_result_validation_failure(
+        "task_spec_binding_hash_drift",
+        tampered,
+        "taskSpecContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["testExecutionResultBinding"]["testExecutionResultSchemaVersion"] = (
+        "regression-result-artifact-v1"
+    )
+    expect_verifier_result_validation_failure(
+        "test_execution_result_binding_regression_schema_reuse",
+        tampered,
+        "testExecutionResultSchemaVersion must equal test-execution-result-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["testExecutionResultBinding"]["testExecutionResultContentHash"] = "0" * 64
+    expect_verifier_result_validation_failure(
+        "test_execution_result_binding_hash_drift",
+        tampered,
+        "testExecutionResultContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["failureTriageReportBinding"]["failureTriageReportSchemaVersion"] = (
+        "regression-result-artifact-v1"
+    )
+    expect_verifier_result_validation_failure(
+        "failure_triage_report_binding_regression_schema_reuse",
+        tampered,
+        "failureTriageReportSchemaVersion must equal failure-triage-report-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["failureTriageReportBinding"]["failureTriageReportContentHash"] = "0" * 64
+    expect_verifier_result_validation_failure(
+        "failure_triage_report_binding_hash_drift",
+        tampered,
+        "failureTriageReportContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyBoundary"]["externalSideEffectsAllowed"] = True
+    expect_verifier_result_validation_failure(
+        "policy_external_side_effects_allowed",
+        tampered,
+        "policyBoundary.externalSideEffectsAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyBoundary"]["externalCommunicationAllowed"] = True
+    expect_verifier_result_validation_failure(
+        "policy_external_communication_allowed",
+        tampered,
+        "policyBoundary.externalCommunicationAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["ruleResults"] = []
+    expect_verifier_result_validation_failure(
+        "rule_results_empty",
+        tampered,
+        "ruleResults must be a non-empty list",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["ruleResults"] = [
+        rule for rule in tampered["ruleResults"] if rule["id"] != "evidence_provenance"
+    ]
+    expect_verifier_result_validation_failure(
+        "rule_results_missing_required_rule",
+        tampered,
+        "ruleResults must include rules",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for rule in tampered["ruleResults"]:
+        if rule["id"] == "evidence_provenance":
+            rule["supportingEvidenceIds"] = ["ev-case-002-missing"]
+            break
+    expect_verifier_result_validation_failure(
+        "rule_results_unknown_evidence_id",
+        tampered,
+        "references unknown evidence id",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for rule in tampered["ruleResults"]:
+        if rule["id"] == "schema_validation":
+            rule["kind"] = "send_email_kind"
+            break
+    expect_verifier_result_validation_failure(
+        "rule_results_invalid_kind",
+        tampered,
+        "kind must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    coordination = tampered["coordinationBinding"]
+    del coordination["broadcastSubscriptionManifestRef"]
+    expect_verifier_result_validation_failure(
+        "coordination_binding_missing_broadcast",
+        tampered,
+        "coordinationBinding must include",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["coordinationBinding"]["delegationManifestRef"] = (
+        "artifacts/runs/all_passed/run.json"
+    )
+    expect_verifier_result_validation_failure(
+        "coordination_binding_wrong_path",
+        tampered,
+        "coordinationBinding.delegationManifestRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["nonRegressionReusePath"] = ["read_only_regression_evidence_demo"]
+    expect_verifier_result_validation_failure(
+        "non_regression_reuse_path_missing",
+        tampered,
+        "nonRegressionReusePath must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesRegressionVerifierReportArtifact"] = True
+    expect_verifier_result_validation_failure(
+        "reuses_regression_verifier_report_artifact",
+        tampered,
+        "must not reuse the regression verifier_report.json artifact",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesFailureTriageReportSchema"] = True
+    expect_verifier_result_validation_failure(
+        "reuses_failure_triage_report_schema",
+        tampered,
+        "must not reuse the FailureTriageReportV1 schema",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for source in tampered["sourceArtifacts"]:
+        if source.get("role") == "failure_triage_report":
+            source["contentHash"] = "0" * 64
+            break
+    expect_verifier_result_validation_failure(
+        "source_hash_mismatch_failure_triage_report",
+        tampered,
+        "source hash mismatch",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for source in tampered["sourceArtifacts"]:
+        if source.get("role") == "test_execution_result":
+            source["contentHash"] = "0" * 64
+            break
+    expect_verifier_result_validation_failure(
+        "source_hash_mismatch_test_execution_result",
+        tampered,
+        "source hash mismatch",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for source in tampered["sourceArtifacts"]:
+        if source.get("role") == "broadcast_subscription_manifest":
+            source["contentHash"] = "0" * 64
+            break
+    expect_verifier_result_validation_failure(
+        "source_hash_mismatch_broadcast",
+        tampered,
+        "source hash mismatch",
+    )
+
+
+def run_verifier_result_builder(artifact_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/verifier_result.py"),
+        "--out",
+        str(artifact_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "VerifierResultV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -4345,6 +4682,7 @@ def main() -> None:
     validate_committed_test_execution_task_spec_artifact()
     validate_committed_test_execution_result_artifact()
     validate_committed_failure_triage_report_artifact()
+    validate_committed_verifier_result_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -4477,6 +4815,12 @@ def main() -> None:
         if load_json(generated_failure_triage_report) != load_json(FAILURE_TRIAGE_REPORT_PATH):
             raise AssertionError(
                 "Committed FailureTriageReportV1 artifact differs from deterministic CLI output"
+            )
+        generated_verifier_result = temp_root / "post_mvp_verifier_result_test_execution.json"
+        run_verifier_result_builder(generated_verifier_result)
+        if load_json(generated_verifier_result) != load_json(VERIFIER_RESULT_PATH):
+            raise AssertionError(
+                "Committed VerifierResultV1 artifact differs from deterministic CLI output"
             )
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)
