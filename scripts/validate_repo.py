@@ -135,6 +135,11 @@ from verifier_result import (
     build_verifier_result,
     validate_verifier_result,
 )
+from capability_manifest import (
+    CAPABILITY_MANIFEST_ARTIFACT_PATH,
+    build_capability_manifest,
+    validate_capability_manifest,
+)
 from verifier_runtime import (
     REQUIRED_ARTIFACT_CHECK_IDS,
     REQUIRED_VERIFIER_RULE_IDS,
@@ -178,6 +183,7 @@ TEST_EXECUTION_TASK_SPEC_PATH = ROOT / TEST_EXECUTION_TASK_SPEC_ARTIFACT_PATH
 TEST_EXECUTION_RESULT_PATH = ROOT / TEST_EXECUTION_RESULT_ARTIFACT_PATH
 FAILURE_TRIAGE_REPORT_PATH = ROOT / FAILURE_TRIAGE_REPORT_ARTIFACT_PATH
 VERIFIER_RESULT_PATH = ROOT / VERIFIER_RESULT_ARTIFACT_PATH
+CAPABILITY_MANIFEST_PATH = ROOT / CAPABILITY_MANIFEST_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -245,7 +251,9 @@ REQUIRED_FILES = [
     "scripts/test_execution_result.py",
     "scripts/failure_triage_report.py",
     "scripts/verifier_result.py",
+    "scripts/capability_manifest.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
+    "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
     "artifacts/recovery/interrupted_after_extract/run.json",
     "artifacts/recovery/interrupted_after_extract/events.jsonl",
@@ -384,6 +392,10 @@ PLAN_REQUIRED_MARKERS = [
     "VerifierResultV1",
     "verifier-result-v1",
     "post_mvp_verifier_result_test_execution.json",
+    "CapabilityManifestV1",
+    "capability-manifest-v1",
+    "capability-definition-v1",
+    "post_mvp_test_execution_capability_manifest.json",
     "Agentic Engineering OS Kernel",
     "workload-independent primitives",
     "first workload: Read-only Regression Evidence Demo",
@@ -4277,6 +4289,339 @@ def run_verifier_result_builder(artifact_out: Path) -> None:
         )
 
 
+def expect_capability_manifest_validation_failure(
+    label: str,
+    manifest: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_capability_manifest(manifest, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"CapabilityManifestV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(
+        f"CapabilityManifestV1 forced-failure case {label} unexpectedly passed validation"
+    )
+
+
+def validate_committed_capability_manifest_artifact() -> None:
+    artifact = load_json(CAPABILITY_MANIFEST_PATH)
+    try:
+        validate_capability_manifest(artifact, ROOT)
+    except ValueError as exc:
+        raise AssertionError(
+            f"Committed CapabilityManifestV1 artifact failed validation: {exc}"
+        ) from exc
+
+    expected_artifact = build_capability_manifest(ROOT)
+    if artifact != expected_artifact:
+        raise AssertionError(
+            "Committed CapabilityManifestV1 artifact differs from deterministic builder output"
+        )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["workloadType"] = "read_only_regression_evidence_demo"
+    expect_capability_manifest_validation_failure(
+        "workload_type_regression_reuse",
+        tampered,
+        "workloadType must be test_execution_failure_triage",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["kind"] = "RegressionResultArtifactV1"
+    expect_capability_manifest_validation_failure(
+        "kind_regression_reuse",
+        tampered,
+        "kind must be CapabilityManifestV1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["schemaVersion"] = "regression-task-spec-v1"
+    expect_capability_manifest_validation_failure(
+        "schema_regression_reuse",
+        tampered,
+        "schemaVersion must be capability-manifest-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["artifactEnvelopeSchemaVersion"] = "regression-result-artifact-v1"
+    expect_capability_manifest_validation_failure(
+        "envelope_schema_regression_reuse",
+        tampered,
+        "artifactEnvelopeSchemaVersion must be artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierVerdictOwner"] = "creator_agent"
+    expect_capability_manifest_validation_failure(
+        "creator_owns_verdict",
+        tampered,
+        "verifierVerdictOwner must be verifier-runtime-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierExpectations"]["creatorMustNotOwnVerdict"] = False
+    expect_capability_manifest_validation_failure(
+        "creator_must_not_own_verdict_disabled",
+        tampered,
+        "verifierExpectations.creatorMustNotOwnVerdict must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["taskSpecBinding"]["taskSpecSchemaVersion"] = "regression-task-spec-v1"
+    expect_capability_manifest_validation_failure(
+        "task_spec_binding_regression_schema_reuse",
+        tampered,
+        "taskSpecSchemaVersion must equal test-execution-task-spec-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["taskSpecBinding"]["taskSpecContentHash"] = "0" * 64
+    expect_capability_manifest_validation_failure(
+        "task_spec_binding_hash_drift",
+        tampered,
+        "taskSpecContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyBoundary"]["externalSideEffectsAllowed"] = True
+    expect_capability_manifest_validation_failure(
+        "policy_external_side_effects_allowed",
+        tampered,
+        "policyBoundary.externalSideEffectsAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyBoundary"]["externalCommunicationAllowed"] = True
+    expect_capability_manifest_validation_failure(
+        "policy_external_communication_allowed",
+        tampered,
+        "policyBoundary.externalCommunicationAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilities"] = []
+    expect_capability_manifest_validation_failure(
+        "capabilities_empty",
+        tampered,
+        "capabilities must be a non-empty list",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilities"] = [
+        capability
+        for capability in tampered["capabilities"]
+        if capability["name"] != "write_artifact"
+    ]
+    expect_capability_manifest_validation_failure(
+        "capabilities_missing_required",
+        tampered,
+        "capability names must equal TestExecutionTaskSpecV1.allowedCapabilityClasses",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilities"].append(
+        json.loads(json.dumps(tampered["capabilities"][0]))
+    )
+    expect_capability_manifest_validation_failure(
+        "capabilities_duplicate",
+        tampered,
+        "duplicate capability name",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for capability in tampered["capabilities"]:
+        if capability["name"] == "write_artifact":
+            capability["sideEffect"] = True
+            break
+    expect_capability_manifest_validation_failure(
+        "capability_side_effect_true",
+        tampered,
+        "sideEffect must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for capability in tampered["capabilities"]:
+        if capability["name"] == "write_artifact":
+            capability["permission"] = "external"
+            break
+    expect_capability_manifest_validation_failure(
+        "capability_permission_invalid",
+        tampered,
+        "permission must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for capability in tampered["capabilities"]:
+        if capability["name"] == "write_artifact":
+            capability["timeoutMs"] = 0
+            break
+    expect_capability_manifest_validation_failure(
+        "capability_timeout_invalid",
+        tampered,
+        "timeoutMs must be a positive integer",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for capability in tampered["capabilities"]:
+        if capability["name"] == "classify_test_failure":
+            capability["allowedEffectClasses"] = ["send_external_communication"]
+            break
+    expect_capability_manifest_validation_failure(
+        "capability_allowed_effects_forbidden",
+        tampered,
+        "declares forbidden effect classes",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for capability in tampered["capabilities"]:
+        if capability["name"] == "classify_test_failure":
+            capability["allowedEffectClasses"] = ["unknown_effect"]
+            break
+    expect_capability_manifest_validation_failure(
+        "capability_allowed_effects_unknown",
+        tampered,
+        "allowedEffectClasses contains unknown effect",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for capability in tampered["capabilities"]:
+        if capability["name"] == "classify_test_failure":
+            capability["forbiddenEffectClasses"] = []
+            break
+    expect_capability_manifest_validation_failure(
+        "capability_forbidden_effects_empty",
+        tampered,
+        "forbiddenEffectClasses must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for capability in tampered["capabilities"]:
+        if capability["name"] == "write_artifact":
+            capability["inputContract"] = {"schema": "", "properties": {}}
+            break
+    expect_capability_manifest_validation_failure(
+        "capability_input_contract_empty",
+        tampered,
+        "inputContract.schema must be a non-empty string",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for capability in tampered["capabilities"]:
+        if capability["name"] == "write_artifact":
+            capability["evidenceContract"]["producesEvidence"] = "yes"
+            break
+    expect_capability_manifest_validation_failure(
+        "capability_evidence_contract_boolean",
+        tampered,
+        "evidenceContract.producesEvidence must be a boolean",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for capability in tampered["capabilities"]:
+        if capability["name"] == "write_artifact":
+            capability["ref"] = "capability://post-mvp/test_execution/other"
+            break
+    expect_capability_manifest_validation_failure(
+        "capability_ref_mismatch",
+        tampered,
+        "ref must be capability://post-mvp/test_execution/",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["permissionDomain"] = ["read"]
+    expect_capability_manifest_validation_failure(
+        "permission_domain_narrowed",
+        tampered,
+        "permissionDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["effectClassDomain"] = ["read_test_execution_result"]
+    expect_capability_manifest_validation_failure(
+        "effect_class_domain_narrowed",
+        tampered,
+        "effectClassDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["coordinationBinding"].pop("broadcastSubscriptionManifestRef")
+    expect_capability_manifest_validation_failure(
+        "coordination_binding_missing_broadcast",
+        tampered,
+        "coordinationBinding must include",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["coordinationBinding"]["delegationManifestRef"] = "artifacts/runs/all_passed/run.json"
+    expect_capability_manifest_validation_failure(
+        "coordination_binding_wrong_path",
+        tampered,
+        "coordinationBinding.delegationManifestRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesRegressionCapabilityCatalog"] = True
+    expect_capability_manifest_validation_failure(
+        "reuses_regression_capability_catalog",
+        tampered,
+        "must not reuse the phase3 regression capability catalog",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["nonRegressionReusePath"] = ["read_only_regression_evidence_demo"]
+    expect_capability_manifest_validation_failure(
+        "non_regression_reuse_path_missing",
+        tampered,
+        "nonRegressionReusePath must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for source in tampered["sourceArtifacts"]:
+        if source.get("role") == "test_execution_task_spec":
+            source["contentHash"] = "0" * 64
+            break
+    expect_capability_manifest_validation_failure(
+        "source_hash_mismatch_task_spec",
+        tampered,
+        "source hash mismatch",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for source in tampered["sourceArtifacts"]:
+        if source.get("role") == "broadcast_subscription_manifest":
+            source["contentHash"] = "0" * 64
+            break
+    expect_capability_manifest_validation_failure(
+        "source_hash_mismatch_broadcast",
+        tampered,
+        "source hash mismatch",
+    )
+
+
+def run_capability_manifest_builder(artifact_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/capability_manifest.py"),
+        "--out",
+        str(artifact_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "CapabilityManifestV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -4683,6 +5028,7 @@ def main() -> None:
     validate_committed_test_execution_result_artifact()
     validate_committed_failure_triage_report_artifact()
     validate_committed_verifier_result_artifact()
+    validate_committed_capability_manifest_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -4821,6 +5167,12 @@ def main() -> None:
         if load_json(generated_verifier_result) != load_json(VERIFIER_RESULT_PATH):
             raise AssertionError(
                 "Committed VerifierResultV1 artifact differs from deterministic CLI output"
+            )
+        generated_capability_manifest = temp_root / "post_mvp_test_execution_capability_manifest.json"
+        run_capability_manifest_builder(generated_capability_manifest)
+        if load_json(generated_capability_manifest) != load_json(CAPABILITY_MANIFEST_PATH):
+            raise AssertionError(
+                "Committed CapabilityManifestV1 artifact differs from deterministic CLI output"
             )
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)

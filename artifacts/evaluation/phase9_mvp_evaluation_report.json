@@ -56,7 +56,7 @@
   "nextRecommendedSlice": {
     "mustRemainMachineVerifiable": true,
     "phase": "post_mvp",
-    "slice": "Add a workload-independent CapabilityManifestV1 (or ArtifactV1 subtype CapabilityV1) contract artifact that declares the Test Execution / Failure Triage workload's runtime capabilities (execute_tests, classify_failure, summarize_triage) with workload-independent permission, side-effect, timeout, input/output schema fields; bind it by content hash to TestExecutionTaskSpecV1 and the five Agent Coordination Layer manifests, with regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 explicitly forbidden, so the OS kernel gains a workload-independent CapabilityV1 primitive reusable by Code Patch / Review Loop, PR Review, and Documentation Update."
+    "slice": "Add a workload-independent RunEventV1 (or RunEventLogV1) ArtifactV1 subtype contract artifact that defines the canonical OS-kernel event-log schema for any workload Run: ordered events with stable ids, monotonically increasing timestamps, eventType / status / sourceCapability / sourceAgent / payloadHash fields, and explicit RunControl state transitions. Bind it by content hash to TestExecutionTaskSpecV1 and the five Agent Coordination Layer manifests, declare verifier-runtime-v1 as the verdict owner, and explicitly forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1, so the OS kernel gains a workload-independent event-log primitive reusable by Code Patch / Review Loop, PR Review, Documentation Update, and Incident / Log Analysis."
   },
   "outOfScope": [
     {
@@ -263,7 +263,7 @@
   "scope": "read_only_regression_evidence_demo_mvp_completion",
   "sourceArtifacts": [
     {
-      "contentHash": "0075c037f994a08e3d8405601fa6d8b9dc1e0a81cc8c87e91b533629c1aeac89",
+      "contentHash": "92de3f4624e650070421c03d14bd11b4465a794c461f310a298360bba6cff12d",
       "path": "scripts/validate_repo.py",
       "role": "validation_script"
     },
@@ -456,6 +456,11 @@
       "contentHash": "c317f05c5aa5cde6ba6b86fca1968539faef29ff87dc3cf57cbb540a136b8515",
       "path": "artifacts/verifier/post_mvp_verifier_result_test_execution.json",
       "role": "post_mvp_verifier_result_test_execution"
+    },
+    {
+      "contentHash": "39d71c8275fb5432a8db3b10caae9c4602fa8a0e6f330d797e656f4a1df0e764",
+      "path": "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
+      "role": "post_mvp_test_execution_capability_manifest"
     },
     {
       "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
