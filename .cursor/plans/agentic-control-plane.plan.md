@@ -1265,6 +1265,26 @@ Build vs Integrate：
 
 当前 post-MVP identity-bound approval 前置 gate 已满足 static identity fixture：approval decision 已绑定 actor/intent/policy/replay/source hashes，但完整 identity service、approval backend、database audit log、signed decision 和 external delivery unlock 仍未实现。下一步应补 approval audit query fixture，把 ReplayQueryV1 与 IdentityBoundApprovalRecordV1 一起纳入 read-only audit 查询，仍不得引入真实邮件、PR、workspace mutation 或 provider side effects。
 
+#### Post-MVP ApprovalRevocationOrExpiryV1 Static Lifecycle Fixture Gate
+
+2026-05-14 01:20 UTC 自动化实现结论：ApprovalAuditQueryV1 已能返回 actor、intent、policy、decision、effect boundary 和 source hash chain；下一步最小有用切片不是接入真实 approval backend、数据库、撤销 API、邮件发送器或 PR 创建器，而是提交一个 deterministic `ApprovalRevocationOrExpiryV1` fixture，证明审批生命周期可以被审计为 expired/revoked，且该状态绝不能打开 send_email、external delivery、workspace mutation、PR creation 或 provider side effect。
+
+最小 ApprovalRevocationOrExpiryV1 contract：
+
+- `scripts/approval_revocation.py` 提供 `approval-revocation-or-expiry-v1` / `ApprovalRevocationOrExpiryV1` builder、validator 和 CLI。
+- `artifacts/approval/post_mvp_approval_revocation_or_expiry.json` 采用 POSIX 相对路径和 normalized content hash，绑定 `post_mvp_approval_audit_query.json` 与 `post_mvp_identity_bound_approval_record.json`。
+- `auditBinding` 必须记录 ApprovalAuditQueryV1 id、IdentityBoundApprovalRecordV1 id、required audit query ids 和 source hash chain。
+- `approvalLifecycle` 固定当前 static fixture 为 `currentState="expired_and_revoked"`，并要求 `expired=true`、`revoked=true`、`activeApproval=false`、`approvalUsableForDelivery=false`。
+- `effectBoundary` 与 `lifecyclePolicy` 必须保持 `approvalGrantAllowed=false`、`sendEmailAllowed=false`、`externalDeliveryAllowed=false`、`externalSideEffectsAllowed=false`、`prCreationAllowed=false`、`workspaceMutationAllowed=false`、`realProviderExecutionAllowed=false`、`databaseUsed=false`。
+- validator 拒绝关键错误：currentState 回到 active、active approval 打开、send email allowed、external side effects allowed、source hash chain 被删除或 ApprovalAuditQueryV1 source hash 漂移。
+
+Build vs Integrate：
+
+- Build：post-MVP 最小 `ApprovalRevocationOrExpiryV1` lifecycle fixture、source-bound audit binding、builder/validator/CLI、deterministic repository validation gate。
+- Integrate later：真实 approval revocation/expiry backend、signed lifecycle event、database audit log、multi-user approval state machine、external delivery unlock 和 policy engine backend。
+
+当前 post-MVP approval lifecycle 前置 gate 已满足 static revocation/expiry fixture：系统可以机器验证 expired/revoked approval state 仍保持 no-side-effect 边界。下一步应补 policy unlock request denial fixture，证明即使下游请求 unlock delivery，也必须被 expired/revoked lifecycle state 与 MVP policy 拒绝。
+
 ## 13. 第一版应该证明什么
 
 第一版只需要证明一个核心闭环：
@@ -1901,6 +1921,7 @@ Add forced-failure verifier checks so that python3 scripts/validate_repo.py prov
 16. RunControlV1 State / Permission / Recovery：Phase 6 regression MVP gate 基本满足：`scripts/run_control.py` 提供 `RunControlV1` validator / CLI，`run.json#runControl` 使用 `run-control-v1`、`permission-policy-v1` 和 `recovery-snapshot-v1` 记录 stateHistory、permissionPolicy、stepAttempts 和 recoverySnapshot；`scripts/validate_repo.py` 会拒绝 state history 漂移、允许 external side effects、recovery last event 损坏或 non-terminal recovery 缺失 `resumeTarget` 的契约。`scripts/recovery_fixture.py` 生成 committed `artifacts/recovery/interrupted_after_extract/*`，证明 interrupted `running` 状态可以指向下一步 `write_artifact` resume action。
 17. Post-MVP DurableRunStoreV1：已实现 static replay index gate，入口为 `python3 scripts/durable_run_store.py --store-out artifacts/state/post_mvp_durable_run_store.json`；`durable-run-store-v1` 索引 `all_passed` Run、append-only events、DeliveryReportV1 和 HumanApprovalDecisionV1 的 source hashes、state/delivery/approval/persistence policy，并由 `scripts/validate_repo.py` 拒绝 source hash 漂移、event order 漂移、缺少 approval source、database/外部副作用/approval grant 伪完成。
 18. Post-MVP IdentityBoundApprovalRecordV1：已实现 static identity fixture gate，入口为 `python3 scripts/identity_bound_approval.py --record-out artifacts/approval/post_mvp_identity_bound_approval_record.json`；`identity-bound-approval-record-v1` 绑定 HumanApprovalDecisionV1、DurableRunStoreV1、ReplayQueryV1、Run/TaskSpec 和 permission-policy-v1 的 source hashes、actor identity、intent、decision、policy 与 replay query ids，并由 `scripts/validate_repo.py` 拒绝 actor 漂移、TaskSpec hash 漂移、approval grant、external side effects、send_email approval bypass 和 replay query hash mismatch。
+19. Post-MVP ApprovalRevocationOrExpiryV1：已实现 static lifecycle fixture gate，入口为 `python3 scripts/approval_revocation.py --revocation-out artifacts/approval/post_mvp_approval_revocation_or_expiry.json`；`approval-revocation-or-expiry-v1` 绑定 ApprovalAuditQueryV1 与 IdentityBoundApprovalRecordV1 的 source hashes、audit query ids、source hash chain、expired/revoked lifecycle state 和 no-side-effect effect boundary，并由 `scripts/validate_repo.py` 拒绝 active approval、send email allowed、external side effects、source hash chain removal 和 audit source hash mismatch。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -2196,6 +2217,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-13 16:03 UTC：Phase 8 IDEAdapterContractV1 Static Workspace Observation Gate 已实现；决定先把 IDE 接入收敛为 contract-only `IDEAdapterContractV1` 和 source-bound `WorkspaceObservationV1`，不执行真实 IDE provider、open file、diff view、terminal 或 workspace mutation。真实 IDE extension bridge、diagnostics streaming、approval UI 和 CLI/Web/IDE history synchronization 继续后移；下一轮应补 IDE approval handoff manifest。
 - 2026-05-13 18:01 UTC：Phase 9 MultiAgentDeliveryManifestV1 Handoff / Delivery Gate 已实现；决定先把多 agent 协作收敛为 contract-only `multi-agent-delivery-manifest-v1` 和 `agent-handoff-v1`，五个 agent 只通过已有 TaskSpec、ContextPack、Run、Evidence、Verifier、IDE approval handoff 和 Delivery draft refs 交接。真实多 agent runtime、调度器、PR 创建器、邮件发送器和 delivery dashboard 继续后移；下一轮应补最终 `DeliveryReportV1` / readiness summary contract。
 - 2026-05-14 00:01 UTC：Post-MVP IdentityBoundApprovalRecordV1 Static Identity Fixture Gate 已实现；决定先自研 deterministic `identity-bound-approval-record-v1`，把 HumanApprovalDecisionV1 绑定到 actor identity、TaskSpec intent、permission-policy-v1、DurableRunStoreV1、ReplayQueryV1 和 source hashes。真实 identity provider、signed decisions、approval backend、audit database 和 external delivery unlock 继续后移；下一轮应补 approval audit query fixture。
+- 2026-05-14 01:20 UTC：Post-MVP ApprovalRevocationOrExpiryV1 Static Lifecycle Fixture Gate 已实现；决定先自研 deterministic `approval-revocation-or-expiry-v1`，把 ApprovalAuditQueryV1 与 IdentityBoundApprovalRecordV1 绑定到 expired/revoked lifecycle state 和 no-side-effect effect boundary。真实 approval revocation backend、signed lifecycle events、database audit log、delivery unlock 和 policy engine backend 继续后移；下一轮应补 policy unlock request denial fixture。
 
 ## 20. Open Questions
 
@@ -2226,6 +2248,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - Phase 6 的 state/permission/recovery gate 固定为 `RunControlV1` + `InterruptedRecoveryFixtureV1`：terminal run 使用 `terminal_replay_only`，non-terminal interrupted run 必须提供 `resumeTarget` 和 `resume_step`；durable checkpoint store、真实 resume executor、retry scheduler 和 approval backend 后移。
 - Phase 7 的 Computer Runtime / CUA Adapter gate 固定为 contract-only artifact set：`ComputerRuntimeAdapterV1` 定义底层 `computer.*` / `sandbox.*` / `trajectory.*` 能力边界，`TrajectoryObservationV1` 只能作为 Evidence/Verifier 输入，`AdapterPolicyManifestV1` 阻止未审批 dangerous capability，`ObservationRedactionPolicyV1` 禁止 raw screen pixels、secret、credential 和 trajectory task verdict；真实 trycua/cua、GUI automation、redaction engine 和 replay runtime 后移。
 - Phase 8 的 IDE Adapter gate 已启动为 contract-only artifact set：`IDEAdapterContractV1` 定义 IDE workspace/current file/diagnostics/open file/diff view/terminal/approval request 边界，`WorkspaceObservationV1` 只能作为 source-bound ContextPack/workspace observation，不能声明 task verdict；真实 IDE extension、terminal execution、diff view UI、workspace registry 和 approval UI 后移。
+- Post-MVP approval lifecycle gate 固定为 `ApprovalRevocationOrExpiryV1` / `approval-revocation-or-expiry-v1` static fixture：expired/revoked approval state 只能作为 audit artifact，必须绑定 ApprovalAuditQueryV1、IdentityBoundApprovalRecordV1 和 source hash chain，且不得解锁 send_email、external delivery、PR creation、workspace mutation、provider execution 或 database backend。
 
 ### 20.2 仍开放的问题
 
@@ -4994,6 +5017,68 @@ Add ApprovalAuditQueryV1 fixture so that /usr/bin/python3 scripts/validate_repo.
 ```text
 进入 post-MVP approval expiry / revocation fixture：
 新增最小 ApprovalRevocationOrExpiryV1 fixture，基于 ApprovalAuditQueryV1 证明审批记录可以被审计为 revoked/expired 且不能打开 send_email、external delivery 或 provider side effects；仍不得接入真实身份服务、数据库、邮件发送、PR 创建或 provider side effects。
+```
+
+### 2026-05-14 01:20 UTC Automation Sprint：Post-MVP ApprovalRevocationOrExpiryV1 Static Lifecycle Fixture Gate
+
+Active phase：post-MVP approval / state hardening（Phase 1a-9 contract-only MVP 已满足，完整 Agentic Engineering OS 产品仍未完成）。
+
+Selected slice：
+
+```text
+Add ApprovalRevocationOrExpiryV1 fixture so that /usr/bin/python3 scripts/validate_repo.py verifies revoked/expired approval state remains source-bound and cannot enable email/external side effects.
+```
+
+为什么这是下一步：
+
+- `.github/workflows/validate.yml` 和 `.github/workflows/auto-merge-cursor-pr.yml` 均存在；最近 `validate` 与 auto-merge workflow run 均为 success，本轮 baseline `/usr/bin/python3 scripts/validate_repo.py` 已通过。
+- 上一轮 `EvaluationReportV1` 与主计划均推荐 approval expiry / revocation fixture。
+- 真实 approval backend、identity provider、database audit log、邮件发送、PR 创建和 external delivery unlock 仍过早；本轮只完成可机器验证的 static lifecycle artifact。
+
+验收标准：
+
+- 新增 `scripts/approval_revocation.py` builder / validator / CLI。
+- 新增 committed `artifacts/approval/post_mvp_approval_revocation_or_expiry.json`，schemaVersion 为 `approval-revocation-or-expiry-v1`。
+- `ApprovalRevocationOrExpiryV1` 必须绑定 ApprovalAuditQueryV1、IdentityBoundApprovalRecordV1、audit query ids、source hash chain、expired/revoked lifecycle state 和 no-side-effect effect boundary。
+- `scripts/validate_repo.py` 必须验证 committed artifact、deterministic CLI output，并拒绝 active current state、active approval、send email allowed、external side effects、source hash chain removal 和 ApprovalAuditQueryV1 hash mismatch。
+- `EvaluationReportV1` 必须把 approval revocation script/artifact 纳入 source hash 汇总，并把下一推荐切片推进为 policy unlock request denial fixture。
+
+实现摘要：
+
+- 新增 `scripts/approval_revocation.py`，提供 `ApprovalRevocationOrExpiryV1` / `approval-revocation-or-expiry-v1` builder、validator 和 CLI。
+- 新增 committed `artifacts/approval/post_mvp_approval_revocation_or_expiry.json`，记录 auditBinding、approvalLifecycle、effectBoundary、lifecyclePolicy 和 invariants。
+- 更新 `scripts/validate_repo.py` 的 required files/markers、committed artifact validation、deterministic builder output comparison 和 forced-failure cases。
+- 更新 `scripts/evaluation_report.py` 与 `artifacts/evaluation/phase9_mvp_evaluation_report.json`，将 approval revocation/expiry 作为 post-MVP source artifact 并推进下一推荐切片。
+
+验证计划 / 结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline `/usr/bin/python3 scripts/validate_repo.py` before edits：通过。
+- `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 ApprovalRevocationOrExpiryV1 committed artifact、deterministic builder output，以及 active current state / active approval / send email allowed / external side effects / source hash chain removal / ApprovalAuditQueryV1 hash mismatch forced-failure cases。
+- `/usr/bin/python3 scripts/approval_revocation.py --validate-revocation artifacts/approval/post_mvp_approval_revocation_or_expiry.json`：通过。
+- `/usr/bin/python3 scripts/approval_revocation.py --revocation-out /tmp/post-mvp-approval-revocation-checks/post_mvp_approval_revocation_or_expiry.json`：通过，可 deterministic 生成 ApprovalRevocationOrExpiryV1 artifact。
+- `/usr/bin/python3 scripts/approval_audit_query.py --validate-audit artifacts/approval/post_mvp_approval_audit_query.json`：通过。
+- `/usr/bin/python3 scripts/identity_bound_approval.py --validate-record artifacts/approval/post_mvp_identity_bound_approval_record.json`：通过。
+- `/usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json`：通过。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/post-mvp-approval-revocation-checks/fixture-smoke`：通过。
+- `/usr/bin/python3 scripts/task_spec.py --goal ... --input-log-path fixtures/regression/all_passed/input.log --out /tmp/post-mvp-approval-revocation-checks/task-spec.json`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json`：通过。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- ApprovalRevocationOrExpiryV1 仍是 static JSON lifecycle fixture，不是 production approval backend、signed lifecycle event、database audit log、UI、revocation API 或 delivery unlock。
+- 本切片只覆盖 `all_passed` read-only regression run；多用户、多 run、多 approval point、撤销/过期策略、审批 UI 和 external delivery unlock 仍后移。
+- 完整 Agentic Engineering OS 产品仍缺真实 durable runtime、identity-bound approval backend、IDE/CUA providers、external delivery adapters 和 production learning/evaluation loop。
+
+下一轮建议：
+
+```text
+进入 post-MVP policy unlock request denial fixture：
+新增最小 PolicyUnlockRequestDeniedV1 fixture，基于 ApprovalRevocationOrExpiryV1 证明下游 delivery unlock 请求会被 expired/revoked approval state 与 MVP no-side-effect policy 拒绝；仍不得接入真实身份服务、数据库、邮件发送、PR 创建或 provider side effects。
 ```
 
 ## 22. Parking Lot
