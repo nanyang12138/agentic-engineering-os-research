@@ -56,7 +56,7 @@
   "nextRecommendedSlice": {
     "mustRemainMachineVerifiable": true,
     "phase": "post_mvp",
-    "slice": "Add a workload-independent IntentV1 / TaskSpecEnvelopeV1 ArtifactV1 subtype contract artifact at artifacts/intents/post_mvp_test_execution_intent.json that defines the canonical OS-kernel Intent primitive for any workload: each intent must declare intentId / intentNarrative / intentOriginAgent / intentOriginChannel / requestedWorkloadType / requestedCapabilityClasses / requestedArtifactKinds / requestedVerifierClass / requestedDeliveryClass / requestedPolicyClass / intentLifecycleState / acceptedTaskSpecRef using only workload-independent vocabulary; intent envelope must bind TestExecutionTaskSpecV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 by content hash plus the five Agent Coordination Layer manifests; intentLifecycleState must lie in [drafted, refined, accepted_into_task_spec, rejected, withdrawn] and IntentV1.acceptedTaskSpecRef must resolve to TestExecutionTaskSpecV1.id with workloadType=test_execution_failure_triage; requestedCapabilityClasses must be a subset of [read_only_inspection, evidence_collection, artifact_writing, verifier_check, human_approval_request] and reject [external_communication, repository_mutation, release_or_deploy, gui_or_browser_or_desktop_call, public_access]; declare verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true; force the six workload-independent permission flags to false; forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 / reusesRegressionIntentArtifact=false."
+    "slice": "Add a workload-independent CapabilityV1 ArtifactV1 subtype contract artifact at artifacts/capabilities/post_mvp_capability_v1_catalog.json that defines the canonical OS-kernel Capability primitive distinct from the workload-specific CapabilityManifestV1: each capability must declare capabilityId / capabilityClass / sideEffectClass / inputSchemaRef / outputSchemaRef / sourceAgentDomain / permissionFlagOverrides / verifierVerdictOwner / capabilityLifecycleState (drafted / registered / deprecated / withdrawn) using only workload-independent vocabulary; capability envelope must bind TestExecutionTaskSpecV1 / IntentV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 by content hash plus the five Agent Coordination Layer manifests; capabilityClass must lie in [read_only_inspection, evidence_collection, artifact_writing, verifier_check, human_approval_request] and reject [external_communication, repository_mutation, release_or_deploy, gui_or_browser_or_desktop_call, public_access]; sideEffectClass must lie in [read_only, evidence_writer, artifact_writer, verifier_check]; declare verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true; force the six workload-independent permission flags to false; forbid regression-task-spec-v1 / regression-result-artifact-v1 / send_email / regression_result / email_draft / reusesRegressionCapabilityArtifact=false; ensure the artifact reuses ArtifactV1 envelope (artifactEnvelopeSchemaVersion=artifact-v1) and ToolCallListV1.toolCallItems[*].capabilityRef can resolve into CapabilityV1.capabilityId."
   },
   "outOfScope": [
     {
@@ -263,7 +263,7 @@
   "scope": "read_only_regression_evidence_demo_mvp_completion",
   "sourceArtifacts": [
     {
-      "contentHash": "7e90320b12746a17db683375a6bae9f73bab4cf0d3065f541059dcd1b5aa4e2e",
+      "contentHash": "de892e497b1aa2c619abb438f0dc2beebdec7746733a40bc8bd69ae6d5ac76c5",
       "path": "scripts/validate_repo.py",
       "role": "validation_script"
     },
@@ -501,6 +501,11 @@
       "contentHash": "697d38d54d60d1202af0d757e517985c54ab9417b03b9166aad1360ab957ef03",
       "path": "artifacts/tool_calls/post_mvp_test_execution_tool_call_list.json",
       "role": "post_mvp_test_execution_tool_call_list"
+    },
+    {
+      "contentHash": "ac6b5c59ff090076374bba41dd55d87bbee65baf62b7c400c3365a67aba0cfb2",
+      "path": "artifacts/intents/post_mvp_test_execution_intent.json",
+      "role": "post_mvp_test_execution_intent"
     },
     {
       "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
