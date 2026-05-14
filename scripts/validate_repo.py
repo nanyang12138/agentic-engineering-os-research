@@ -150,6 +150,11 @@ from delivery_manifest import (
     build_delivery_manifest,
     validate_delivery_manifest,
 )
+from policy_manifest import (
+    POLICY_MANIFEST_ARTIFACT_PATH as POST_MVP_POLICY_MANIFEST_ARTIFACT_PATH,
+    build_policy_manifest,
+    validate_policy_manifest,
+)
 from verifier_runtime import (
     REQUIRED_ARTIFACT_CHECK_IDS,
     REQUIRED_VERIFIER_RULE_IDS,
@@ -196,6 +201,7 @@ VERIFIER_RESULT_PATH = ROOT / VERIFIER_RESULT_ARTIFACT_PATH
 CAPABILITY_MANIFEST_PATH = ROOT / CAPABILITY_MANIFEST_ARTIFACT_PATH
 RUN_EVENT_LOG_PATH = ROOT / RUN_EVENT_LOG_ARTIFACT_PATH
 DELIVERY_MANIFEST_PATH = ROOT / DELIVERY_MANIFEST_ARTIFACT_PATH
+POLICY_MANIFEST_PATH = ROOT / POST_MVP_POLICY_MANIFEST_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -266,6 +272,7 @@ REQUIRED_FILES = [
     "scripts/capability_manifest.py",
     "scripts/run_event_log.py",
     "scripts/delivery_manifest.py",
+    "scripts/policy_manifest.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
@@ -298,6 +305,7 @@ REQUIRED_FILES = [
     "artifacts/verifier/post_mvp_verifier_result_test_execution.json",
     "artifacts/state/post_mvp_test_execution_run_event_log.json",
     "artifacts/delivery/post_mvp_test_execution_delivery_manifest.json",
+    "artifacts/policy/post_mvp_test_execution_policy_manifest.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -421,6 +429,12 @@ PLAN_REQUIRED_MARKERS = [
     "delivery-manifest-v1",
     "delivery-channel-v1",
     "post_mvp_test_execution_delivery_manifest.json",
+    "PolicyManifestV1",
+    "policy-manifest-v1",
+    "policy-rule-v1",
+    "policy-effect-class-v1",
+    "policy-revocation-rule-v1",
+    "post_mvp_test_execution_policy_manifest.json",
     "Agentic Engineering OS Kernel",
     "workload-independent primitives",
     "first workload: Read-only Regression Evidence Demo",
@@ -5438,6 +5452,552 @@ def run_delivery_manifest_builder(artifact_out: Path) -> None:
         )
 
 
+def expect_policy_manifest_validation_failure(
+    label: str,
+    manifest: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_policy_manifest(manifest, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"PolicyManifestV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(
+        f"PolicyManifestV1 forced-failure case {label} unexpectedly passed validation"
+    )
+
+
+def _find_policy_rule_index(rules: list, *, rule_kind: str, key: str | None = None, value: str | None = None) -> int:
+    for index, rule in enumerate(rules):
+        if rule.get("ruleKind") != rule_kind:
+            continue
+        if key is None:
+            return index
+        if rule.get(key) == value:
+            return index
+    raise AssertionError(
+        f"PolicyManifestV1 forced-failure case could not locate rule with kind={rule_kind} {key}={value}"
+    )
+
+
+def validate_committed_policy_manifest_artifact() -> None:
+    artifact = load_json(POLICY_MANIFEST_PATH)
+    try:
+        validate_policy_manifest(artifact, ROOT)
+    except ValueError as exc:
+        raise AssertionError(
+            f"Committed PolicyManifestV1 artifact failed validation: {exc}"
+        ) from exc
+
+    expected_artifact = build_policy_manifest(ROOT)
+    if artifact != expected_artifact:
+        raise AssertionError(
+            "Committed PolicyManifestV1 artifact differs from deterministic builder output"
+        )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["workloadType"] = "read_only_regression_evidence_demo"
+    expect_policy_manifest_validation_failure(
+        "workload_type_regression_reuse",
+        tampered,
+        "workloadType must be test_execution_failure_triage",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["kind"] = "RegressionResultArtifactV1"
+    expect_policy_manifest_validation_failure(
+        "kind_regression_reuse",
+        tampered,
+        "kind must be PolicyManifestV1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["schemaVersion"] = "regression-result-artifact-v1"
+    expect_policy_manifest_validation_failure(
+        "schema_regression_reuse",
+        tampered,
+        "schemaVersion must be policy-manifest-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["artifactEnvelopeSchemaVersion"] = "regression-result-artifact-v1"
+    expect_policy_manifest_validation_failure(
+        "envelope_schema_regression_reuse",
+        tampered,
+        "artifactEnvelopeSchemaVersion must be artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyOwner"] = "creator_agent"
+    expect_policy_manifest_validation_failure(
+        "policy_owner_creator",
+        tampered,
+        "policyOwner must be policy-runtime-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierVerdictOwner"] = "creator_agent"
+    expect_policy_manifest_validation_failure(
+        "creator_owns_verdict",
+        tampered,
+        "verifierVerdictOwner must be verifier-runtime-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierExpectations"]["creatorMustNotOwnVerdict"] = False
+    expect_policy_manifest_validation_failure(
+        "creator_must_not_own_verdict_disabled",
+        tampered,
+        "verifierExpectations.creatorMustNotOwnVerdict must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["permissionFlags"]["externalSideEffectsAllowed"] = True
+    expect_policy_manifest_validation_failure(
+        "permission_flag_external_side_effects_true",
+        tampered,
+        "permissionFlags.externalSideEffectsAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["permissionFlags"]["repositoryMutationAllowed"] = True
+    expect_policy_manifest_validation_failure(
+        "permission_flag_repository_mutation_true",
+        tampered,
+        "permissionFlags.repositoryMutationAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["permissionFlags"].pop("publicAccessAllowed")
+    expect_policy_manifest_validation_failure(
+        "permission_flag_missing",
+        tampered,
+        "permissionFlags must declare every flag",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["permissionFlagDomain"] = ["externalSideEffectsAllowed"]
+    expect_policy_manifest_validation_failure(
+        "permission_flag_domain_drift",
+        tampered,
+        "permissionFlagDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["effectClassDomain"] = ["internal_read"]
+    expect_policy_manifest_validation_failure(
+        "effect_class_domain_drift",
+        tampered,
+        "effectClassDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["allowEffectClasses"] = []
+    expect_policy_manifest_validation_failure(
+        "allow_effect_classes_drift",
+        tampered,
+        "allowEffectClasses must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["denyEffectClasses"] = []
+    expect_policy_manifest_validation_failure(
+        "deny_effect_classes_drift",
+        tampered,
+        "denyEffectClasses must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for entry in tampered["effectClasses"]:
+        if entry["className"] == "external_side_effect":
+            entry["decision"] = "allow"
+            break
+    expect_policy_manifest_validation_failure(
+        "effect_class_external_side_effect_allow",
+        tampered,
+        "decision must be deny for class external_side_effect",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for entry in tampered["effectClasses"]:
+        if entry["className"] == "internal_read":
+            entry["decision"] = "deny"
+            break
+    expect_policy_manifest_validation_failure(
+        "effect_class_internal_read_deny",
+        tampered,
+        "decision must be allow for class internal_read",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["effectClasses"] = tampered["effectClasses"][:-1]
+    expect_policy_manifest_validation_failure(
+        "effect_classes_truncated",
+        tampered,
+        "effectClasses must be a list of length",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["effectClasses"][0]["schemaVersion"] = "regression-policy-effect-class-v1"
+    expect_policy_manifest_validation_failure(
+        "effect_class_schema_regression_reuse",
+        tampered,
+        "schemaVersion must be policy-effect-class-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyRules"] = []
+    expect_policy_manifest_validation_failure(
+        "policy_rules_empty",
+        tampered,
+        "policyRules must be a non-empty list",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    idx = _find_policy_rule_index(
+        tampered["policyRules"], rule_kind="capability_allow", key="appliesToCapability", value="write_artifact"
+    )
+    tampered["policyRules"][idx]["effectClass"] = "internal_read"
+    expect_policy_manifest_validation_failure(
+        "capability_rule_effect_class_mismatch",
+        tampered,
+        "for capability write_artifact",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    idx = _find_policy_rule_index(
+        tampered["policyRules"], rule_kind="capability_allow", key="appliesToCapability", value="read_test_execution_result"
+    )
+    tampered["policyRules"][idx]["decision"] = "deny"
+    expect_policy_manifest_validation_failure(
+        "capability_rule_decision_deny",
+        tampered,
+        "capability_allow.decision must be allow",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    idx = _find_policy_rule_index(
+        tampered["policyRules"], rule_kind="capability_allow", key="appliesToCapability", value="read_test_execution_result"
+    )
+    tampered["policyRules"][idx]["appliesToCapability"] = "send_email_capability"
+    expect_policy_manifest_validation_failure(
+        "capability_rule_unknown_capability",
+        tampered,
+        "appliesToCapability must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    idx = _find_policy_rule_index(
+        tampered["policyRules"], rule_kind="capability_allow", key="appliesToCapability", value="classify_test_failure"
+    )
+    del tampered["policyRules"][idx]
+    expect_policy_manifest_validation_failure(
+        "capability_rule_missing_for_capability",
+        tampered,
+        "must declare a capability_allow rule for every CapabilityManifestV1 capability",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    idx = _find_policy_rule_index(
+        tampered["policyRules"], rule_kind="effect_class_deny", key="effectClass", value="external_communication"
+    )
+    tampered["policyRules"][idx]["decision"] = "allow"
+    expect_policy_manifest_validation_failure(
+        "effect_class_deny_rule_decision_allow",
+        tampered,
+        "effect_class_deny.decision must be deny",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    idx = _find_policy_rule_index(
+        tampered["policyRules"], rule_kind="effect_class_deny", key="effectClass", value="public_access"
+    )
+    tampered["policyRules"][idx]["effectClass"] = "internal_read"
+    expect_policy_manifest_validation_failure(
+        "effect_class_deny_rule_allow_class",
+        tampered,
+        "effect_class_deny must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    idx = _find_policy_rule_index(
+        tampered["policyRules"], rule_kind="effect_class_deny", key="effectClass", value="release_or_deployment"
+    )
+    del tampered["policyRules"][idx]
+    expect_policy_manifest_validation_failure(
+        "effect_class_deny_rule_missing",
+        tampered,
+        "must declare an effect_class_deny rule for every deny effect class",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    idx = _find_policy_rule_index(
+        tampered["policyRules"], rule_kind="permission_flag_deny", key="permissionFlag", value="publicAccessAllowed"
+    )
+    tampered["policyRules"][idx]["decision"] = "allow"
+    expect_policy_manifest_validation_failure(
+        "permission_flag_deny_rule_decision_allow",
+        tampered,
+        "permission_flag_deny.decision must be deny",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    idx = _find_policy_rule_index(
+        tampered["policyRules"], rule_kind="permission_flag_deny", key="permissionFlag", value="repositoryMutationAllowed"
+    )
+    del tampered["policyRules"][idx]
+    expect_policy_manifest_validation_failure(
+        "permission_flag_deny_rule_missing",
+        tampered,
+        "must declare a permission_flag_deny rule for every permission flag",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyRuleCount"] = 0
+    expect_policy_manifest_validation_failure(
+        "policy_rule_count_drift",
+        tampered,
+        "policyRuleCount must equal len(policyRules)",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyRules"][0]["schemaVersion"] = "regression-policy-rule-v1"
+    expect_policy_manifest_validation_failure(
+        "policy_rule_schema_regression_reuse",
+        tampered,
+        "schemaVersion must be policy-rule-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["revocationRules"] = []
+    expect_policy_manifest_validation_failure(
+        "revocation_rules_empty",
+        tampered,
+        "revocationRules must declare at least five",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["revocationRules"][0]["action"] = "warn"
+    expect_policy_manifest_validation_failure(
+        "revocation_rule_action_not_revoke",
+        tampered,
+        "action must be revoke_all_unlocks",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for rule in tampered["revocationRules"]:
+        if rule.get("trigger") == "verifier_result_verdict_not_passed":
+            rule["trigger"] = "unknown_workload_specific_trigger"
+            break
+    expect_policy_manifest_validation_failure(
+        "revocation_rule_missing_verdict_trigger",
+        tampered,
+        "must cover triggers",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["revocationRules"][0]["schemaVersion"] = "regression-policy-revocation-rule-v1"
+    expect_policy_manifest_validation_failure(
+        "revocation_rule_schema_regression_reuse",
+        tampered,
+        "schemaVersion must be policy-revocation-rule-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["taskSpecBinding"]["taskSpecSchemaVersion"] = "regression-task-spec-v1"
+    expect_policy_manifest_validation_failure(
+        "task_spec_binding_regression_schema_reuse",
+        tampered,
+        "taskSpecSchemaVersion must equal test-execution-task-spec-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["taskSpecBinding"]["taskSpecContentHash"] = "0" * 64
+    expect_policy_manifest_validation_failure(
+        "task_spec_binding_hash_drift",
+        tampered,
+        "taskSpecContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityManifestBinding"]["capabilityManifestSchemaVersion"] = "capability-envelope-v1"
+    expect_policy_manifest_validation_failure(
+        "capability_manifest_binding_regression_schema_reuse",
+        tampered,
+        "capabilityManifestSchemaVersion must equal capability-manifest-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityManifestBinding"]["capabilityManifestContentHash"] = "0" * 64
+    expect_policy_manifest_validation_failure(
+        "capability_manifest_binding_hash_drift",
+        tampered,
+        "capabilityManifestContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventLogBinding"]["runEventLogSchemaVersion"] = "regression-events-v1"
+    expect_policy_manifest_validation_failure(
+        "run_event_log_binding_regression_schema_reuse",
+        tampered,
+        "runEventLogSchemaVersion must equal run-event-log-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventLogBinding"]["runEventLogContentHash"] = "0" * 64
+    expect_policy_manifest_validation_failure(
+        "run_event_log_binding_hash_drift",
+        tampered,
+        "runEventLogContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierResultBinding"]["verifierResultSchemaVersion"] = "regression-result-artifact-v1"
+    expect_policy_manifest_validation_failure(
+        "verifier_result_binding_regression_schema_reuse",
+        tampered,
+        "verifierResultSchemaVersion must equal verifier-result-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierResultBinding"]["verifierResultContentHash"] = "0" * 64
+    expect_policy_manifest_validation_failure(
+        "verifier_result_binding_hash_drift",
+        tampered,
+        "verifierResultContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["deliveryManifestBinding"]["deliveryManifestSchemaVersion"] = "multi-agent-delivery-manifest-v1"
+    expect_policy_manifest_validation_failure(
+        "delivery_manifest_binding_regression_schema_reuse",
+        tampered,
+        "deliveryManifestSchemaVersion must equal delivery-manifest-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["deliveryManifestBinding"]["deliveryManifestContentHash"] = "0" * 64
+    expect_policy_manifest_validation_failure(
+        "delivery_manifest_binding_hash_drift",
+        tampered,
+        "deliveryManifestContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["approvalRecordBinding"]["approvalRecordContentHash"] = "0" * 64
+    expect_policy_manifest_validation_failure(
+        "approval_record_binding_hash_drift",
+        tampered,
+        "approvalRecordContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["unlockConditions"]["requiredVerdict"] = "needs_human_check"
+    expect_policy_manifest_validation_failure(
+        "unlock_required_verdict_not_passed",
+        tampered,
+        "unlockConditions.requiredVerdict must be passed",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["unlockConditions"]["unlocked"] = True
+    expect_policy_manifest_validation_failure(
+        "unlock_unlocked_when_blocked",
+        tampered,
+        "unlockConditions.unlocked must be true only when verdict",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["coordinationBinding"].pop("broadcastSubscriptionManifestRef")
+    expect_policy_manifest_validation_failure(
+        "coordination_binding_missing_broadcast",
+        tampered,
+        "coordinationBinding must include",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["coordinationBinding"]["delegationManifestRef"] = "artifacts/runs/all_passed/run.json"
+    expect_policy_manifest_validation_failure(
+        "coordination_binding_wrong_path",
+        tampered,
+        "coordinationBinding.delegationManifestRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesPhase7AdapterPolicyManifest"] = True
+    expect_policy_manifest_validation_failure(
+        "reuses_phase7_adapter_policy_manifest",
+        tampered,
+        "must not reuse phase7_adapter_policy_manifest.json",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesPolicyUnlockDenialFixture"] = True
+    expect_policy_manifest_validation_failure(
+        "reuses_policy_unlock_denial_fixture",
+        tampered,
+        "must not reuse post_mvp_policy_unlock_request_denied.json",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesSendEmailCapability"] = True
+    expect_policy_manifest_validation_failure(
+        "reuses_send_email_capability",
+        tampered,
+        "must not reuse the send_email capability",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["nonRegressionReusePath"] = ["read_only_regression_evidence_demo"]
+    expect_policy_manifest_validation_failure(
+        "non_regression_reuse_path_missing",
+        tampered,
+        "nonRegressionReusePath must equal",
+    )
+
+    for hash_role, label in [
+        ("test_execution_task_spec", "source_hash_mismatch_task_spec"),
+        ("test_execution_capability_manifest", "source_hash_mismatch_capability_manifest"),
+        ("test_execution_run_event_log", "source_hash_mismatch_run_event_log"),
+        ("test_execution_verifier_result", "source_hash_mismatch_verifier_result"),
+        ("test_execution_delivery_manifest", "source_hash_mismatch_delivery_manifest"),
+        ("broadcast_subscription_manifest", "source_hash_mismatch_broadcast"),
+    ]:
+        tampered = json.loads(json.dumps(artifact))
+        for source in tampered["sourceArtifacts"]:
+            if source.get("role") == hash_role:
+                source["contentHash"] = "0" * 64
+                break
+        expect_policy_manifest_validation_failure(
+            label,
+            tampered,
+            "source hash mismatch",
+        )
+
+
+def run_policy_manifest_builder(artifact_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/policy_manifest.py"),
+        "--out",
+        str(artifact_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "PolicyManifestV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -5847,6 +6407,7 @@ def main() -> None:
     validate_committed_capability_manifest_artifact()
     validate_committed_run_event_log_artifact()
     validate_committed_delivery_manifest_artifact()
+    validate_committed_policy_manifest_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -6003,6 +6564,12 @@ def main() -> None:
         if load_json(generated_delivery_manifest) != load_json(DELIVERY_MANIFEST_PATH):
             raise AssertionError(
                 "Committed DeliveryManifestV1 artifact differs from deterministic CLI output"
+            )
+        generated_policy_manifest = temp_root / "post_mvp_test_execution_policy_manifest.json"
+        run_policy_manifest_builder(generated_policy_manifest)
+        if load_json(generated_policy_manifest) != load_json(POLICY_MANIFEST_PATH):
+            raise AssertionError(
+                "Committed PolicyManifestV1 artifact differs from deterministic CLI output"
             )
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)
