@@ -1,0 +1,107 @@
+{
+  "actorIdentity": {
+    "actorId": "static-human-approver-fixture",
+    "actorType": "human",
+    "approvalAuthority": "permission-policy-v1:send_email_requires_human_approval",
+    "authenticated": true,
+    "identityProvider": "static_fixture_identity_provider",
+    "identitySynthesized": false,
+    "identityVerificationMode": "source_hash_bound_static_fixture"
+  },
+  "approvalBinding": {
+    "approvalPoint": "send_email_requires_human_approval",
+    "approvalRequiredFor": [
+      "dangerous",
+      "external_side_effect",
+      "send_email"
+    ],
+    "handoffCapabilityRef": "ide-adapter://phase8/ide.approval.request",
+    "handoffRequestId": "approval-handoff-task-spec-send-email",
+    "permissionPolicyRef": "permission-policy-all_passed",
+    "permissionPolicySchemaVersion": "permission-policy-v1"
+  },
+  "decisionBinding": {
+    "approvalDecisionSynthesized": false,
+    "approvalGranted": false,
+    "decidedBy": "static-human-approval-fixture",
+    "decision": "rejected",
+    "decisionId": "human-decision-all_passed-send-email-rejected",
+    "humanDecisionRecorded": true,
+    "reasonCode": "mvp_external_delivery_not_allowed",
+    "taskVerdictOverrideAllowed": false,
+    "taskVerdictOwner": "verifier-runtime-v1"
+  },
+  "effectBoundary": {
+    "approvalGrantAllowed": false,
+    "databaseUsed": false,
+    "externalDeliveryAllowed": false,
+    "externalSideEffectsAllowed": false,
+    "prCreationAllowed": false,
+    "realProviderExecutionAllowed": false,
+    "sendEmailAllowed": false,
+    "workspaceMutationAllowed": false
+  },
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "post-mvp-identity-bound-approval-record-all_passed",
+  "intentBinding": {
+    "fixtureId": "all_passed",
+    "goal": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",
+    "inputLogPath": "fixtures/regression/all_passed/input.log",
+    "runId": "run-all_passed-988940c2",
+    "taskSpecContentHash": "8227b51a438db2340c404ac5751921f92b1f7c5c8db194cbaa7183f16f242e71",
+    "taskSpecId": "task-spec-all_passed",
+    "taskSpecRef": "artifacts/runs/all_passed/run.json#taskSpec"
+  },
+  "invariants": [
+    "IdentityBoundApprovalRecordV1 binds a human decision to an actor, intent, policy, replay store, and source hashes.",
+    "This fixture records identity provenance only; it does not grant approval or execute an approval backend.",
+    "Identity binding cannot override VerifierRuntimeV1 verdicts, permission-policy-v1, or no-side-effect delivery policy."
+  ],
+  "mode": "static_identity_fixture_only",
+  "phase": "post_mvp",
+  "policyBinding": {
+    "externalSideEffectsAllowed": false,
+    "localWriteBoundary": "artifacts/runs/all_passed",
+    "permissionPolicyContentHash": "e6924feccefad02d5a788d27956e889085e37f171b712e1fe95e75d439ab647d",
+    "permissionPolicyId": "permission-policy-all_passed",
+    "permissionPolicySchemaVersion": "permission-policy-v1",
+    "sendEmailRequiresApproval": true
+  },
+  "replayBinding": {
+    "approvalDecisionRef": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+    "durableRunStoreId": "post-mvp-durable-run-store-fixture-all_passed",
+    "durableRunStoreRef": "artifacts/state/post_mvp_durable_run_store.json",
+    "replayQueryId": "post-mvp-replay-query-fixture-all_passed",
+    "replayQueryRef": "artifacts/state/post_mvp_replay_query.json",
+    "requiredQueryIds": [
+      "query-run-state-by-id",
+      "query-delivery-readiness-by-run-id",
+      "query-approval-decision-by-run-id",
+      "query-event-log-tail-by-run-id"
+    ]
+  },
+  "schemaVersion": "identity-bound-approval-record-v1",
+  "scope": "identity_bound_approval_record_fixture",
+  "sourceArtifacts": [
+    {
+      "contentHash": "99b6e4391d1fd0111b375c3393f20374f3c37419f3c4d6a043c1dc2eebdcb017",
+      "path": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+      "role": "human_approval_decision"
+    },
+    {
+      "contentHash": "5e57764de6e9c125d9644d0e4a6797bf8922e5fe346062b77a8dc7c50f7cd0af",
+      "path": "artifacts/state/post_mvp_durable_run_store.json",
+      "role": "durable_run_store"
+    },
+    {
+      "contentHash": "e020d1b30f00445c7b6671f0c63a5f57da069c8c26ff4b7f13008fd73e90fe3f",
+      "path": "artifacts/state/post_mvp_replay_query.json",
+      "role": "replay_query"
+    },
+    {
+      "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
+      "path": "artifacts/runs/all_passed/run.json",
+      "role": "run"
+    }
+  ]
+}
