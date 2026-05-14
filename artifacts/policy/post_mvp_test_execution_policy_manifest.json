@@ -1,0 +1,472 @@
+{
+  "allowEffectClasses": [
+    "internal_read",
+    "internal_compute",
+    "internal_artifact_write"
+  ],
+  "approvalRecordBinding": {
+    "approvalGranted": false,
+    "approvalRecordContentHash": "99b6e4391d1fd0111b375c3393f20374f3c37419f3c4d6a043c1dc2eebdcb017",
+    "approvalRecordRef": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+    "approvalRecordSchemaVersion": "human-approval-decision-v1",
+    "currentDecision": "rejected"
+  },
+  "artifactEnvelopeSchemaVersion": "artifact-v1",
+  "capabilityManifestBinding": {
+    "capabilityManifestContentHash": "39d71c8275fb5432a8db3b10caae9c4602fa8a0e6f330d797e656f4a1df0e764",
+    "capabilityManifestEnvelopeSchemaVersion": "artifact-v1",
+    "capabilityManifestId": "post-mvp-test-execution-capability-manifest-kernel-contract",
+    "capabilityManifestRef": "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
+    "capabilityManifestSchemaVersion": "capability-manifest-v1"
+  },
+  "coordinationBinding": {
+    "agentMessageManifestRef": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+    "broadcastSubscriptionManifestRef": "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
+    "creatorVerifierPairingRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+    "delegationManifestRef": "artifacts/coordination/post_mvp_delegation_manifest.json",
+    "negotiationRecordRef": "artifacts/coordination/post_mvp_negotiation_record.json"
+  },
+  "creatorAgent": "creator_agent",
+  "decisionDomain": [
+    "allow",
+    "deny"
+  ],
+  "deliveryManifestBinding": {
+    "deliveryManifestContentHash": "8074c4224a63cf99902e20d0cfd7373c4c7907e74b82a01a61897d23fd5404ec",
+    "deliveryManifestEnvelopeSchemaVersion": "artifact-v1",
+    "deliveryManifestId": "post-mvp-test-execution-delivery-manifest-kernel-contract",
+    "deliveryManifestRef": "artifacts/delivery/post_mvp_test_execution_delivery_manifest.json",
+    "deliveryManifestSchemaVersion": "delivery-manifest-v1"
+  },
+  "denyEffectClasses": [
+    "external_side_effect",
+    "repository_mutation",
+    "external_communication",
+    "release_or_deployment",
+    "gui_or_browser_or_desktop_call",
+    "public_access"
+  ],
+  "effectClassDomain": [
+    "internal_read",
+    "internal_compute",
+    "internal_artifact_write",
+    "external_side_effect",
+    "repository_mutation",
+    "external_communication",
+    "release_or_deployment",
+    "gui_or_browser_or_desktop_call",
+    "public_access"
+  ],
+  "effectClasses": [
+    {
+      "className": "internal_read",
+      "decision": "allow",
+      "reason": "Reading internal evidence and artifact records is required for any verifier-owned acceptance flow and never crosses a workload boundary.",
+      "schemaVersion": "policy-effect-class-v1"
+    },
+    {
+      "className": "internal_compute",
+      "decision": "allow",
+      "reason": "Pure deterministic computation over internal evidence is required for failure classification and verifier rule evaluation.",
+      "schemaVersion": "policy-effect-class-v1"
+    },
+    {
+      "className": "internal_artifact_write",
+      "decision": "allow",
+      "reason": "Writing the workload-independent artifact bundle to the local artifact directory is the only sanctioned creator-side write path.",
+      "schemaVersion": "policy-effect-class-v1"
+    },
+    {
+      "className": "external_side_effect",
+      "decision": "deny",
+      "reason": "External side effects (real email, ticketing, web requests, deployment) are out of scope for the contract-only MVP and must not be triggered by any workload.",
+      "schemaVersion": "policy-effect-class-v1"
+    },
+    {
+      "className": "repository_mutation",
+      "decision": "deny",
+      "reason": "Repository mutation (commits, branches, tags, deletes) requires explicit human authorization that is not granted by the contract-only MVP.",
+      "schemaVersion": "policy-effect-class-v1"
+    },
+    {
+      "className": "external_communication",
+      "decision": "deny",
+      "reason": "External communication (email, Slack, PR comments, webhooks) crosses a delivery boundary and is owned by the future delivery runtime, not the policy primitive.",
+      "schemaVersion": "policy-effect-class-v1"
+    },
+    {
+      "className": "release_or_deployment",
+      "decision": "deny",
+      "reason": "Release or deployment is a release-engineering concern outside the policy primitive's authority.",
+      "schemaVersion": "policy-effect-class-v1"
+    },
+    {
+      "className": "gui_or_browser_or_desktop_call",
+      "decision": "deny",
+      "reason": "GUI / browser / desktop calls require a real Computer Runtime adapter; the policy primitive denies them by default and defers to AdapterPolicyManifestV1 for any future overlay.",
+      "schemaVersion": "policy-effect-class-v1"
+    },
+    {
+      "className": "public_access",
+      "decision": "deny",
+      "reason": "Public access (publishing artifacts, exposing endpoints) is outside the policy primitive's authority.",
+      "schemaVersion": "policy-effect-class-v1"
+    }
+  ],
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "post-mvp-test-execution-policy-manifest-kernel-contract",
+  "invariants": [
+    "PolicyManifestV1 is an ArtifactV1 subtype distinct from every workload-specific result subtype.",
+    "PolicyManifestV1 must bind TestExecutionTaskSpecV1, CapabilityManifestV1, RunEventLogV1, VerifierResultV1, DeliveryManifestV1, HumanApprovalDecisionV1, and all five coordination contracts by content hash.",
+    "PolicyManifestV1 declares the canonical workload-independent permission flag set; every flag is forced to false at the manifest level.",
+    "PolicyManifestV1 partitions the effect-class domain into a fixed allow set and deny set; deny effect classes can never be allowed.",
+    "PolicyManifestV1 binds every capability in CapabilityManifestV1 to exactly one allow effect class through a policy-rule-v1 rule.",
+    "PolicyManifestV1 must not own the verifier verdict; verifier-runtime-v1 owns acceptance and policy-runtime-v1 owns enforcement.",
+    "PolicyManifestV1 unlock requires verdict=passed, terminal run state=completed, and granted human approval; revocation rules revert the unlock the moment any of those conditions drifts.",
+    "PolicyManifestV1 must not reuse phase7_adapter_policy_manifest.json or post_mvp_policy_unlock_request_denied.json; both remain workload-specific overlays."
+  ],
+  "kind": "PolicyManifestV1",
+  "nonRegressionReusePath": [
+    "test_execution_failure_triage",
+    "code_patch_review_loop",
+    "pr_review"
+  ],
+  "permissionFlagDomain": [
+    "externalSideEffectsAllowed",
+    "repositoryMutationAllowed",
+    "externalCommunicationAllowed",
+    "releaseOrDeploymentAllowed",
+    "guiOrBrowserOrDesktopCallAllowed",
+    "publicAccessAllowed"
+  ],
+  "permissionFlags": {
+    "externalCommunicationAllowed": false,
+    "externalSideEffectsAllowed": false,
+    "guiOrBrowserOrDesktopCallAllowed": false,
+    "publicAccessAllowed": false,
+    "releaseOrDeploymentAllowed": false,
+    "repositoryMutationAllowed": false
+  },
+  "policyEffectClassSchemaVersion": "policy-effect-class-v1",
+  "policyOwner": "policy-runtime-v1",
+  "policyRevocationRuleSchemaVersion": "policy-revocation-rule-v1",
+  "policyRuleCount": 16,
+  "policyRuleSchemaVersion": "policy-rule-v1",
+  "policyRules": [
+    {
+      "appliesToCapability": "read_test_execution_result",
+      "decision": "allow",
+      "effectClass": "internal_read",
+      "reason": "Capability read_test_execution_result is bound to allow effect class internal_read; no other effect class is permitted for this capability.",
+      "ruleId": "capability-allow-read-test-execution-result",
+      "ruleKind": "capability_allow",
+      "schemaVersion": "policy-rule-v1"
+    },
+    {
+      "appliesToCapability": "collect_test_failure_evidence",
+      "decision": "allow",
+      "effectClass": "internal_read",
+      "reason": "Capability collect_test_failure_evidence is bound to allow effect class internal_read; no other effect class is permitted for this capability.",
+      "ruleId": "capability-allow-collect-test-failure-evidence",
+      "ruleKind": "capability_allow",
+      "schemaVersion": "policy-rule-v1"
+    },
+    {
+      "appliesToCapability": "classify_test_failure",
+      "decision": "allow",
+      "effectClass": "internal_compute",
+      "reason": "Capability classify_test_failure is bound to allow effect class internal_compute; no other effect class is permitted for this capability.",
+      "ruleId": "capability-allow-classify-test-failure",
+      "ruleKind": "capability_allow",
+      "schemaVersion": "policy-rule-v1"
+    },
+    {
+      "appliesToCapability": "write_artifact",
+      "decision": "allow",
+      "effectClass": "internal_artifact_write",
+      "reason": "Capability write_artifact is bound to allow effect class internal_artifact_write; no other effect class is permitted for this capability.",
+      "ruleId": "capability-allow-write-artifact",
+      "ruleKind": "capability_allow",
+      "schemaVersion": "policy-rule-v1"
+    },
+    {
+      "decision": "deny",
+      "effectClass": "external_side_effect",
+      "reason": "Effect class external_side_effect is denied for every workload covered by this policy primitive.",
+      "ruleId": "effect-class-deny-external-side-effect",
+      "ruleKind": "effect_class_deny",
+      "schemaVersion": "policy-rule-v1"
+    },
+    {
+      "decision": "deny",
+      "effectClass": "repository_mutation",
+      "reason": "Effect class repository_mutation is denied for every workload covered by this policy primitive.",
+      "ruleId": "effect-class-deny-repository-mutation",
+      "ruleKind": "effect_class_deny",
+      "schemaVersion": "policy-rule-v1"
+    },
+    {
+      "decision": "deny",
+      "effectClass": "external_communication",
+      "reason": "Effect class external_communication is denied for every workload covered by this policy primitive.",
+      "ruleId": "effect-class-deny-external-communication",
+      "ruleKind": "effect_class_deny",
+      "schemaVersion": "policy-rule-v1"
+    },
+    {
+      "decision": "deny",
+      "effectClass": "release_or_deployment",
+      "reason": "Effect class release_or_deployment is denied for every workload covered by this policy primitive.",
+      "ruleId": "effect-class-deny-release-or-deployment",
+      "ruleKind": "effect_class_deny",
+      "schemaVersion": "policy-rule-v1"
+    },
+    {
+      "decision": "deny",
+      "effectClass": "gui_or_browser_or_desktop_call",
+      "reason": "Effect class gui_or_browser_or_desktop_call is denied for every workload covered by this policy primitive.",
+      "ruleId": "effect-class-deny-gui-or-browser-or-desktop-call",
+      "ruleKind": "effect_class_deny",
+      "schemaVersion": "policy-rule-v1"
+    },
+    {
+      "decision": "deny",
+      "effectClass": "public_access",
+      "reason": "Effect class public_access is denied for every workload covered by this policy primitive.",
+      "ruleId": "effect-class-deny-public-access",
+      "ruleKind": "effect_class_deny",
+      "schemaVersion": "policy-rule-v1"
+    },
+    {
+      "decision": "deny",
+      "permissionFlag": "externalSideEffectsAllowed",
+      "reason": "Permission flag externalSideEffectsAllowed is forced to false; flipping it to true revokes every unlock granted under this policy.",
+      "ruleId": "permission-flag-deny-externalSideEffectsAllowed",
+      "ruleKind": "permission_flag_deny",
+      "schemaVersion": "policy-rule-v1"
+    },
+    {
+      "decision": "deny",
+      "permissionFlag": "repositoryMutationAllowed",
+      "reason": "Permission flag repositoryMutationAllowed is forced to false; flipping it to true revokes every unlock granted under this policy.",
+      "ruleId": "permission-flag-deny-repositoryMutationAllowed",
+      "ruleKind": "permission_flag_deny",
+      "schemaVersion": "policy-rule-v1"
+    },
+    {
+      "decision": "deny",
+      "permissionFlag": "externalCommunicationAllowed",
+      "reason": "Permission flag externalCommunicationAllowed is forced to false; flipping it to true revokes every unlock granted under this policy.",
+      "ruleId": "permission-flag-deny-externalCommunicationAllowed",
+      "ruleKind": "permission_flag_deny",
+      "schemaVersion": "policy-rule-v1"
+    },
+    {
+      "decision": "deny",
+      "permissionFlag": "releaseOrDeploymentAllowed",
+      "reason": "Permission flag releaseOrDeploymentAllowed is forced to false; flipping it to true revokes every unlock granted under this policy.",
+      "ruleId": "permission-flag-deny-releaseOrDeploymentAllowed",
+      "ruleKind": "permission_flag_deny",
+      "schemaVersion": "policy-rule-v1"
+    },
+    {
+      "decision": "deny",
+      "permissionFlag": "guiOrBrowserOrDesktopCallAllowed",
+      "reason": "Permission flag guiOrBrowserOrDesktopCallAllowed is forced to false; flipping it to true revokes every unlock granted under this policy.",
+      "ruleId": "permission-flag-deny-guiOrBrowserOrDesktopCallAllowed",
+      "ruleKind": "permission_flag_deny",
+      "schemaVersion": "policy-rule-v1"
+    },
+    {
+      "decision": "deny",
+      "permissionFlag": "publicAccessAllowed",
+      "reason": "Permission flag publicAccessAllowed is forced to false; flipping it to true revokes every unlock granted under this policy.",
+      "ruleId": "permission-flag-deny-publicAccessAllowed",
+      "ruleKind": "permission_flag_deny",
+      "schemaVersion": "policy-rule-v1"
+    }
+  ],
+  "regressionWorkloadIsolation": {
+    "forbiddenFields": [
+      "regression_result",
+      "regression_result.json",
+      "email_draft",
+      "email_draft.md",
+      "send_email",
+      "regression-task-spec-v1",
+      "regression-result-artifact-v1"
+    ],
+    "reusesPhase7AdapterPolicyManifest": false,
+    "reusesPolicyUnlockDenialFixture": false,
+    "reusesRegressionResultArtifact": false,
+    "reusesSendEmailCapability": false
+  },
+  "revocationRules": [
+    {
+      "action": "revoke_all_unlocks",
+      "reason": "Any verdict other than passed must immediately revoke every unlock granted under this policy.",
+      "ruleId": "revoke-on-verdict-not-passed",
+      "schemaVersion": "policy-revocation-rule-v1",
+      "trigger": "verifier_result_verdict_not_passed",
+      "watchedField": "VerifierResultV1.verdict"
+    },
+    {
+      "action": "revoke_all_unlocks",
+      "reason": "If the run never reaches a completed terminal state the policy unlock must be revoked even if the verdict was provisionally passed.",
+      "ruleId": "revoke-on-run-not-completed",
+      "schemaVersion": "policy-revocation-rule-v1",
+      "trigger": "run_event_log_terminal_state_not_completed",
+      "watchedField": "RunEventLogV1.terminalState"
+    },
+    {
+      "action": "revoke_all_unlocks",
+      "reason": "Loss of human approval (rejection, expiry, revocation) must immediately revoke every unlock granted under this policy.",
+      "ruleId": "revoke-on-approval-revocation",
+      "schemaVersion": "policy-revocation-rule-v1",
+      "trigger": "human_approval_decision_revoked_or_not_granted",
+      "watchedField": "HumanApprovalDecisionV1.decision.approvalGranted"
+    },
+    {
+      "action": "revoke_all_unlocks",
+      "reason": "Any permission flag flipping to true breaks the contract-only MVP guarantee and must revoke every unlock.",
+      "ruleId": "revoke-on-permission-flag-flipped-true",
+      "schemaVersion": "policy-revocation-rule-v1",
+      "trigger": "permission_flag_flipped_true",
+      "watchedField": "PolicyManifestV1.permissionFlags"
+    },
+    {
+      "action": "revoke_all_unlocks",
+      "reason": "Drift in any pinned source artifact invalidates the policy decision and must revoke every unlock.",
+      "ruleId": "revoke-on-source-artifact-drift",
+      "schemaVersion": "policy-revocation-rule-v1",
+      "trigger": "source_artifact_content_hash_drift",
+      "watchedField": "PolicyManifestV1.sourceArtifacts[*].contentHash"
+    }
+  ],
+  "runEventLogBinding": {
+    "runEventLogContentHash": "f1a32305df32fde0cdf212bcd67a9368fc8cccbedb362b38ad1059c099f2793d",
+    "runEventLogEnvelopeSchemaVersion": "artifact-v1",
+    "runEventLogId": "post-mvp-test-execution-run-event-log-kernel-contract",
+    "runEventLogRef": "artifacts/state/post_mvp_test_execution_run_event_log.json",
+    "runEventLogSchemaVersion": "run-event-log-v1",
+    "terminalState": "completed"
+  },
+  "schemaVersion": "policy-manifest-v1",
+  "scope": "test_execution_failure_triage_policy_manifest_contract",
+  "sourceArtifacts": [
+    {
+      "contentHash": "e026fb8f8d78f3a54d0a1a3d846cd93d8289cd9a8fefb59ead112fb18e4552f2",
+      "path": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+      "role": "agent_message_manifest"
+    },
+    {
+      "contentHash": "4e622eafff1480cb2e109aad1230e0852d99c412470ff8f33b215898beeb90b6",
+      "path": "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
+      "role": "broadcast_subscription_manifest"
+    },
+    {
+      "contentHash": "834b3c6bfe4dc401a5c34f3ed20edb479c4352e85363ac629caab3a3af429932",
+      "path": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+      "role": "creator_verifier_pairing"
+    },
+    {
+      "contentHash": "7779a468076194ccb7f88ffeb9e37727d479742ec0add917ac45777b748d5b8f",
+      "path": "artifacts/coordination/post_mvp_delegation_manifest.json",
+      "role": "delegation_manifest"
+    },
+    {
+      "contentHash": "99b6e4391d1fd0111b375c3393f20374f3c37419f3c4d6a043c1dc2eebdcb017",
+      "path": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+      "role": "human_approval_decision"
+    },
+    {
+      "contentHash": "fbbcd49ad9e7cd229658b431ab15313829f3a58107d809ef288043236746698e",
+      "path": "artifacts/coordination/post_mvp_negotiation_record.json",
+      "role": "negotiation_record"
+    },
+    {
+      "contentHash": "39d71c8275fb5432a8db3b10caae9c4602fa8a0e6f330d797e656f4a1df0e764",
+      "path": "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
+      "role": "test_execution_capability_manifest"
+    },
+    {
+      "contentHash": "8074c4224a63cf99902e20d0cfd7373c4c7907e74b82a01a61897d23fd5404ec",
+      "path": "artifacts/delivery/post_mvp_test_execution_delivery_manifest.json",
+      "role": "test_execution_delivery_manifest"
+    },
+    {
+      "contentHash": "f1a32305df32fde0cdf212bcd67a9368fc8cccbedb362b38ad1059c099f2793d",
+      "path": "artifacts/state/post_mvp_test_execution_run_event_log.json",
+      "role": "test_execution_run_event_log"
+    },
+    {
+      "contentHash": "1b9bbb64c87879848276b77fe2be1a20f89df2bfed971a7a0ec5210a91f664ba",
+      "path": "artifacts/task_specs/post_mvp_test_execution_task_spec.json",
+      "role": "test_execution_task_spec"
+    },
+    {
+      "contentHash": "c317f05c5aa5cde6ba6b86fca1968539faef29ff87dc3cf57cbb540a136b8515",
+      "path": "artifacts/verifier/post_mvp_verifier_result_test_execution.json",
+      "role": "test_execution_verifier_result"
+    }
+  ],
+  "taskSpecBinding": {
+    "taskSpecContentHash": "1b9bbb64c87879848276b77fe2be1a20f89df2bfed971a7a0ec5210a91f664ba",
+    "taskSpecEnvelopeSchemaVersion": "task-spec-v1",
+    "taskSpecId": "post-mvp-test-execution-failure-triage-task-spec",
+    "taskSpecRef": "artifacts/task_specs/post_mvp_test_execution_task_spec.json",
+    "taskSpecSchemaVersion": "test-execution-task-spec-v1"
+  },
+  "unlockConditions": {
+    "approvalGranted": false,
+    "approvalRecordRef": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+    "approvalRecordSchemaVersion": "human-approval-decision-v1",
+    "currentApprovalDecision": "rejected",
+    "currentTerminalRunState": "completed",
+    "currentVerdict": "needs_human_check",
+    "requiredApprovalDecision": "approved",
+    "requiredTerminalRunState": "completed",
+    "requiredVerdict": "passed",
+    "unlocked": false,
+    "verdictOwner": "verifier-runtime-v1"
+  },
+  "verdictDomain": [
+    "passed",
+    "failed",
+    "incomplete",
+    "needs_human_check"
+  ],
+  "verifierExpectations": {
+    "creatorMustNotOwnVerdict": true,
+    "mustEnforceCapabilityRules": true,
+    "mustEnforceEffectClassDecisions": true,
+    "mustEnforceRevocationRules": true,
+    "mustEnforceUnlockConditions": true,
+    "mustValidateApprovalRecordBinding": true,
+    "mustValidateCapabilityManifestBinding": true,
+    "mustValidateDeliveryManifestBinding": true,
+    "mustValidatePermissionFlags": true,
+    "mustValidateRunEventLogBinding": true,
+    "mustValidateSchema": true,
+    "mustValidateTaskSpecBinding": true,
+    "mustValidateVerifierResultBinding": true,
+    "verdictDomain": [
+      "passed",
+      "failed",
+      "incomplete",
+      "needs_human_check"
+    ],
+    "verdictOwner": "verifier-runtime-v1"
+  },
+  "verifierResultBinding": {
+    "verdict": "needs_human_check",
+    "verifierResultContentHash": "c317f05c5aa5cde6ba6b86fca1968539faef29ff87dc3cf57cbb540a136b8515",
+    "verifierResultEnvelopeSchemaVersion": "artifact-v1",
+    "verifierResultId": "post-mvp-verifier-result-test-execution-kernel-contract",
+    "verifierResultRef": "artifacts/verifier/post_mvp_verifier_result_test_execution.json",
+    "verifierResultSchemaVersion": "verifier-result-v1"
+  },
+  "verifierVerdictOwner": "verifier-runtime-v1",
+  "workloadCategory": "engineering_workload",
+  "workloadType": "test_execution_failure_triage"
+}
