@@ -140,6 +140,11 @@ from capability_manifest import (
     build_capability_manifest,
     validate_capability_manifest,
 )
+from run_event_log import (
+    RUN_EVENT_LOG_ARTIFACT_PATH,
+    build_run_event_log,
+    validate_run_event_log,
+)
 from verifier_runtime import (
     REQUIRED_ARTIFACT_CHECK_IDS,
     REQUIRED_VERIFIER_RULE_IDS,
@@ -184,6 +189,7 @@ TEST_EXECUTION_RESULT_PATH = ROOT / TEST_EXECUTION_RESULT_ARTIFACT_PATH
 FAILURE_TRIAGE_REPORT_PATH = ROOT / FAILURE_TRIAGE_REPORT_ARTIFACT_PATH
 VERIFIER_RESULT_PATH = ROOT / VERIFIER_RESULT_ARTIFACT_PATH
 CAPABILITY_MANIFEST_PATH = ROOT / CAPABILITY_MANIFEST_ARTIFACT_PATH
+RUN_EVENT_LOG_PATH = ROOT / RUN_EVENT_LOG_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -252,6 +258,7 @@ REQUIRED_FILES = [
     "scripts/failure_triage_report.py",
     "scripts/verifier_result.py",
     "scripts/capability_manifest.py",
+    "scripts/run_event_log.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
@@ -282,6 +289,7 @@ REQUIRED_FILES = [
     "artifacts/test_execution/post_mvp_test_execution_result.json",
     "artifacts/test_execution/post_mvp_failure_triage_report.json",
     "artifacts/verifier/post_mvp_verifier_result_test_execution.json",
+    "artifacts/state/post_mvp_test_execution_run_event_log.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -396,6 +404,11 @@ PLAN_REQUIRED_MARKERS = [
     "capability-manifest-v1",
     "capability-definition-v1",
     "post_mvp_test_execution_capability_manifest.json",
+    "RunEventLogV1",
+    "run-event-log-v1",
+    "run-event-v1",
+    "run-state-machine-v1",
+    "post_mvp_test_execution_run_event_log.json",
     "Agentic Engineering OS Kernel",
     "workload-independent primitives",
     "first workload: Read-only Regression Evidence Demo",
@@ -4622,6 +4635,373 @@ def run_capability_manifest_builder(artifact_out: Path) -> None:
         )
 
 
+def expect_run_event_log_validation_failure(
+    label: str,
+    log: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_run_event_log(log, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"RunEventLogV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(
+        f"RunEventLogV1 forced-failure case {label} unexpectedly passed validation"
+    )
+
+
+def validate_committed_run_event_log_artifact() -> None:
+    artifact = load_json(RUN_EVENT_LOG_PATH)
+    try:
+        validate_run_event_log(artifact, ROOT)
+    except ValueError as exc:
+        raise AssertionError(
+            f"Committed RunEventLogV1 artifact failed validation: {exc}"
+        ) from exc
+
+    expected_artifact = build_run_event_log(ROOT)
+    if artifact != expected_artifact:
+        raise AssertionError(
+            "Committed RunEventLogV1 artifact differs from deterministic builder output"
+        )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["workloadType"] = "read_only_regression_evidence_demo"
+    expect_run_event_log_validation_failure(
+        "workload_type_regression_reuse",
+        tampered,
+        "workloadType must be test_execution_failure_triage",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["kind"] = "RegressionResultArtifactV1"
+    expect_run_event_log_validation_failure(
+        "kind_regression_reuse",
+        tampered,
+        "kind must be RunEventLogV1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["schemaVersion"] = "regression-task-spec-v1"
+    expect_run_event_log_validation_failure(
+        "schema_regression_reuse",
+        tampered,
+        "schemaVersion must be run-event-log-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["artifactEnvelopeSchemaVersion"] = "regression-result-artifact-v1"
+    expect_run_event_log_validation_failure(
+        "envelope_schema_regression_reuse",
+        tampered,
+        "artifactEnvelopeSchemaVersion must be artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierVerdictOwner"] = "creator_agent"
+    expect_run_event_log_validation_failure(
+        "creator_owns_verdict",
+        tampered,
+        "verifierVerdictOwner must be verifier-runtime-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierExpectations"]["creatorMustNotOwnVerdict"] = False
+    expect_run_event_log_validation_failure(
+        "creator_must_not_own_verdict_disabled",
+        tampered,
+        "verifierExpectations.creatorMustNotOwnVerdict must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["taskSpecBinding"]["taskSpecSchemaVersion"] = "regression-task-spec-v1"
+    expect_run_event_log_validation_failure(
+        "task_spec_binding_regression_schema_reuse",
+        tampered,
+        "taskSpecSchemaVersion must equal test-execution-task-spec-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["taskSpecBinding"]["taskSpecContentHash"] = "0" * 64
+    expect_run_event_log_validation_failure(
+        "task_spec_binding_hash_drift",
+        tampered,
+        "taskSpecContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityManifestBinding"]["capabilityManifestSchemaVersion"] = "capability-envelope-v1"
+    expect_run_event_log_validation_failure(
+        "capability_manifest_binding_regression_schema_reuse",
+        tampered,
+        "capabilityManifestSchemaVersion must equal capability-manifest-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityManifestBinding"]["capabilityManifestContentHash"] = "0" * 64
+    expect_run_event_log_validation_failure(
+        "capability_manifest_binding_hash_drift",
+        tampered,
+        "capabilityManifestContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyBoundary"]["externalSideEffectsAllowed"] = True
+    expect_run_event_log_validation_failure(
+        "policy_external_side_effects_allowed",
+        tampered,
+        "policyBoundary.externalSideEffectsAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyBoundary"]["externalCommunicationAllowed"] = True
+    expect_run_event_log_validation_failure(
+        "policy_external_communication_allowed",
+        tampered,
+        "policyBoundary.externalCommunicationAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["events"] = []
+    expect_run_event_log_validation_failure(
+        "events_empty",
+        tampered,
+        "events must be a non-empty list",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["events"][1]["sequence"] = 99
+    expect_run_event_log_validation_failure(
+        "event_sequence_non_contiguous",
+        tampered,
+        "sequence must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["events"][2]["timestampMs"] = 0
+    expect_run_event_log_validation_failure(
+        "event_timestamp_non_monotonic",
+        tampered,
+        "timestampMs must be monotonically non-decreasing",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["events"][0]["eventType"] = "capability.invoked"
+    expect_run_event_log_validation_failure(
+        "event_first_not_run_created",
+        tampered,
+        "first event eventType must be run.created",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["events"][-1]["eventType"] = "capability.completed"
+    expect_run_event_log_validation_failure(
+        "event_last_not_run_completed",
+        tampered,
+        "last event must be run.completed or run.failed",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["events"][3]["eventType"] = "unknown.event"
+    expect_run_event_log_validation_failure(
+        "event_unknown_type",
+        tampered,
+        "eventType must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["events"][3]["status"] = "unknown"
+    expect_run_event_log_validation_failure(
+        "event_unknown_status",
+        tampered,
+        "status must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["events"][3]["sourceAgent"] = "rogue_agent"
+    expect_run_event_log_validation_failure(
+        "event_unknown_source_agent",
+        tampered,
+        "sourceAgent must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["events"][3]["sourceCapability"] = "rogue_capability"
+    expect_run_event_log_validation_failure(
+        "event_capability_not_in_manifest",
+        tampered,
+        "sourceCapability must be the run-kernel sentinel",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["events"][3]["payloadHash"] = "0" * 64
+    expect_run_event_log_validation_failure(
+        "event_payload_hash_mismatch",
+        tampered,
+        "payloadHash must equal sha256",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["events"][3]["runControlStateAfter"] = "unknown_state"
+    expect_run_event_log_validation_failure(
+        "event_state_unknown",
+        tampered,
+        "runControlStateAfter must be in declared states",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["events"][1]["runControlStateAfter"] = "completed"
+    expect_run_event_log_validation_failure(
+        "event_state_transition_illegal",
+        tampered,
+        "illegal runControlStateAfter transition",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["events"][3]["schemaVersion"] = "regression-event-v1"
+    expect_run_event_log_validation_failure(
+        "event_schema_regression_reuse",
+        tampered,
+        "schemaVersion must be run-event-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["events"][3]["eventId"] = tampered["events"][2]["eventId"]
+    expect_run_event_log_validation_failure(
+        "event_id_duplicate",
+        tampered,
+        "duplicate eventId",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["events"][3]["eventId"] = "evt-rogue-0003"
+    expect_run_event_log_validation_failure(
+        "event_id_format_invalid",
+        tampered,
+        "eventId must start with",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["allowedRunControlTransitions"] = [["created", "completed"]]
+    expect_run_event_log_validation_failure(
+        "allowed_transitions_narrowed",
+        tampered,
+        "allowedRunControlTransitions must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["eventCount"] = 0
+    expect_run_event_log_validation_failure(
+        "event_count_drift",
+        tampered,
+        "eventCount must equal len(events)",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["terminalState"] = "running"
+    expect_run_event_log_validation_failure(
+        "terminal_state_drift",
+        tampered,
+        "terminalState must equal the last event runControlStateAfter",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["coordinationBinding"].pop("broadcastSubscriptionManifestRef")
+    expect_run_event_log_validation_failure(
+        "coordination_binding_missing_broadcast",
+        tampered,
+        "coordinationBinding must include",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["coordinationBinding"]["delegationManifestRef"] = "artifacts/runs/all_passed/run.json"
+    expect_run_event_log_validation_failure(
+        "coordination_binding_wrong_path",
+        tampered,
+        "coordinationBinding.delegationManifestRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesRegressionRunArtifact"] = True
+    expect_run_event_log_validation_failure(
+        "reuses_regression_run_artifact",
+        tampered,
+        "must not reuse the regression run.json artifact",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesRegressionEventsArtifact"] = True
+    expect_run_event_log_validation_failure(
+        "reuses_regression_events_artifact",
+        tampered,
+        "must not reuse the regression events.jsonl artifact",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["nonRegressionReusePath"] = ["read_only_regression_evidence_demo"]
+    expect_run_event_log_validation_failure(
+        "non_regression_reuse_path_missing",
+        tampered,
+        "nonRegressionReusePath must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for source in tampered["sourceArtifacts"]:
+        if source.get("role") == "test_execution_task_spec":
+            source["contentHash"] = "0" * 64
+            break
+    expect_run_event_log_validation_failure(
+        "source_hash_mismatch_task_spec",
+        tampered,
+        "source hash mismatch",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for source in tampered["sourceArtifacts"]:
+        if source.get("role") == "test_execution_capability_manifest":
+            source["contentHash"] = "0" * 64
+            break
+    expect_run_event_log_validation_failure(
+        "source_hash_mismatch_capability_manifest",
+        tampered,
+        "source hash mismatch",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for source in tampered["sourceArtifacts"]:
+        if source.get("role") == "broadcast_subscription_manifest":
+            source["contentHash"] = "0" * 64
+            break
+    expect_run_event_log_validation_failure(
+        "source_hash_mismatch_broadcast",
+        tampered,
+        "source hash mismatch",
+    )
+
+
+def run_run_event_log_builder(artifact_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/run_event_log.py"),
+        "--out",
+        str(artifact_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "RunEventLogV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -5029,6 +5409,7 @@ def main() -> None:
     validate_committed_failure_triage_report_artifact()
     validate_committed_verifier_result_artifact()
     validate_committed_capability_manifest_artifact()
+    validate_committed_run_event_log_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -5173,6 +5554,12 @@ def main() -> None:
         if load_json(generated_capability_manifest) != load_json(CAPABILITY_MANIFEST_PATH):
             raise AssertionError(
                 "Committed CapabilityManifestV1 artifact differs from deterministic CLI output"
+            )
+        generated_run_event_log = temp_root / "post_mvp_test_execution_run_event_log.json"
+        run_run_event_log_builder(generated_run_event_log)
+        if load_json(generated_run_event_log) != load_json(RUN_EVENT_LOG_PATH):
+            raise AssertionError(
+                "Committed RunEventLogV1 artifact differs from deterministic CLI output"
             )
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)

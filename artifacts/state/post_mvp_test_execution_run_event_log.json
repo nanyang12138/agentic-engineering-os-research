@@ -1,0 +1,399 @@
+{
+  "allowedRunControlTransitions": [
+    [
+      "created",
+      "planning"
+    ],
+    [
+      "planning",
+      "waiting_context"
+    ],
+    [
+      "waiting_context",
+      "running"
+    ],
+    [
+      "running",
+      "running"
+    ],
+    [
+      "running",
+      "verifying"
+    ],
+    [
+      "verifying",
+      "completed"
+    ],
+    [
+      "verifying",
+      "failed"
+    ]
+  ],
+  "artifactEnvelopeSchemaVersion": "artifact-v1",
+  "capabilityManifestBinding": {
+    "capabilityManifestContentHash": "39d71c8275fb5432a8db3b10caae9c4602fa8a0e6f330d797e656f4a1df0e764",
+    "capabilityManifestEnvelopeSchemaVersion": "artifact-v1",
+    "capabilityManifestId": "post-mvp-test-execution-capability-manifest-kernel-contract",
+    "capabilityManifestRef": "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
+    "capabilityManifestSchemaVersion": "capability-manifest-v1"
+  },
+  "coordinationBinding": {
+    "agentMessageManifestRef": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+    "broadcastSubscriptionManifestRef": "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
+    "creatorVerifierPairingRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+    "delegationManifestRef": "artifacts/coordination/post_mvp_delegation_manifest.json",
+    "negotiationRecordRef": "artifacts/coordination/post_mvp_negotiation_record.json"
+  },
+  "creatorAgent": "creator_agent",
+  "eventCount": 12,
+  "eventStatusDomain": [
+    "started",
+    "completed",
+    "failed"
+  ],
+  "eventTypeDomain": [
+    "run.created",
+    "task_spec.generated",
+    "capability.invoked",
+    "capability.completed",
+    "artifact.written",
+    "verifier.completed",
+    "run.completed",
+    "run.failed"
+  ],
+  "events": [
+    {
+      "eventId": "evt-run-post-mvp-test-execution-failure-triage-0000",
+      "eventType": "run.created",
+      "payload": {
+        "runIdentifier": "run-post-mvp-test-execution-failure-triage",
+        "taskSpecId": "post-mvp-test-execution-failure-triage-task-spec"
+      },
+      "payloadHash": "57b47ed10f92ac39d66530a0a172627c581f855e199c055dc3397fe59986f1e0",
+      "runControlStateAfter": "created",
+      "schemaVersion": "run-event-v1",
+      "sequence": 0,
+      "sourceAgent": "run_kernel",
+      "sourceCapability": "__run_kernel__",
+      "status": "completed",
+      "timestampMs": 0
+    },
+    {
+      "eventId": "evt-run-post-mvp-test-execution-failure-triage-0001",
+      "eventType": "task_spec.generated",
+      "payload": {
+        "taskSpecRef": "artifacts/task_specs/post_mvp_test_execution_task_spec.json",
+        "taskSpecSchemaVersion": "test-execution-task-spec-v1"
+      },
+      "payloadHash": "ae29d4b389e8c802e093cb7e96930574679a671c266c66b8a301a8bc4c62f355",
+      "runControlStateAfter": "planning",
+      "schemaVersion": "run-event-v1",
+      "sequence": 1,
+      "sourceAgent": "run_kernel",
+      "sourceCapability": "__run_kernel__",
+      "status": "completed",
+      "timestampMs": 100
+    },
+    {
+      "eventId": "evt-run-post-mvp-test-execution-failure-triage-0002",
+      "eventType": "capability.invoked",
+      "payload": {
+        "capabilityRef": "capability://post-mvp/test_execution/read_test_execution_result",
+        "inputSchema": "ReadTestExecutionResultInputV1"
+      },
+      "payloadHash": "fc24004f71b6349578e45d9013cb78e52be44e72600ccf2e1fc6531fa6f5a268",
+      "runControlStateAfter": "waiting_context",
+      "schemaVersion": "run-event-v1",
+      "sequence": 2,
+      "sourceAgent": "creator_agent",
+      "sourceCapability": "read_test_execution_result",
+      "status": "started",
+      "timestampMs": 200
+    },
+    {
+      "eventId": "evt-run-post-mvp-test-execution-failure-triage-0003",
+      "eventType": "capability.completed",
+      "payload": {
+        "capabilityRef": "capability://post-mvp/test_execution/read_test_execution_result",
+        "outputSchema": "ReadTestExecutionResultOutputV1"
+      },
+      "payloadHash": "d4b142fe121b9b746d628ad9d35cfbc6041009385e5811c53128c307172b780f",
+      "runControlStateAfter": "running",
+      "schemaVersion": "run-event-v1",
+      "sequence": 3,
+      "sourceAgent": "creator_agent",
+      "sourceCapability": "read_test_execution_result",
+      "status": "completed",
+      "timestampMs": 300
+    },
+    {
+      "eventId": "evt-run-post-mvp-test-execution-failure-triage-0004",
+      "eventType": "capability.invoked",
+      "payload": {
+        "capabilityRef": "capability://post-mvp/test_execution/collect_test_failure_evidence",
+        "inputSchema": "CollectTestFailureEvidenceInputV1"
+      },
+      "payloadHash": "bd1105d87d5f9c04634760f8067bdad8003f894799cac383db17b25018ba0c1e",
+      "runControlStateAfter": "running",
+      "schemaVersion": "run-event-v1",
+      "sequence": 4,
+      "sourceAgent": "creator_agent",
+      "sourceCapability": "collect_test_failure_evidence",
+      "status": "started",
+      "timestampMs": 400
+    },
+    {
+      "eventId": "evt-run-post-mvp-test-execution-failure-triage-0005",
+      "eventType": "capability.completed",
+      "payload": {
+        "capabilityRef": "capability://post-mvp/test_execution/collect_test_failure_evidence",
+        "outputSchema": "CollectTestFailureEvidenceOutputV1"
+      },
+      "payloadHash": "66230272946becdd4482af1009601fdbe931046f0740cdc25b418656edd20244",
+      "runControlStateAfter": "running",
+      "schemaVersion": "run-event-v1",
+      "sequence": 5,
+      "sourceAgent": "creator_agent",
+      "sourceCapability": "collect_test_failure_evidence",
+      "status": "completed",
+      "timestampMs": 500
+    },
+    {
+      "eventId": "evt-run-post-mvp-test-execution-failure-triage-0006",
+      "eventType": "capability.invoked",
+      "payload": {
+        "capabilityRef": "capability://post-mvp/test_execution/classify_test_failure",
+        "inputSchema": "ClassifyTestFailureInputV1"
+      },
+      "payloadHash": "54815ddc6bcb51da684cd600ef0119104ef4f7d35d2981f79524220b9bfed8d7",
+      "runControlStateAfter": "running",
+      "schemaVersion": "run-event-v1",
+      "sequence": 6,
+      "sourceAgent": "creator_agent",
+      "sourceCapability": "classify_test_failure",
+      "status": "started",
+      "timestampMs": 600
+    },
+    {
+      "eventId": "evt-run-post-mvp-test-execution-failure-triage-0007",
+      "eventType": "capability.completed",
+      "payload": {
+        "capabilityRef": "capability://post-mvp/test_execution/classify_test_failure",
+        "outputSchema": "ClassifyTestFailureOutputV1"
+      },
+      "payloadHash": "a19fd500cada5d2bcfe0bcd39c264d007f00f207d98497f77ba22ddaa978b5da",
+      "runControlStateAfter": "running",
+      "schemaVersion": "run-event-v1",
+      "sequence": 7,
+      "sourceAgent": "creator_agent",
+      "sourceCapability": "classify_test_failure",
+      "status": "completed",
+      "timestampMs": 700
+    },
+    {
+      "eventId": "evt-run-post-mvp-test-execution-failure-triage-0008",
+      "eventType": "capability.invoked",
+      "payload": {
+        "capabilityRef": "capability://post-mvp/test_execution/write_artifact",
+        "inputSchema": "WriteArtifactInputV1"
+      },
+      "payloadHash": "ef7abb3e1ed25eedf3a84e8c5f43e6f744137a8704528bfc6f82930b9b189b7c",
+      "runControlStateAfter": "running",
+      "schemaVersion": "run-event-v1",
+      "sequence": 8,
+      "sourceAgent": "creator_agent",
+      "sourceCapability": "write_artifact",
+      "status": "started",
+      "timestampMs": 800
+    },
+    {
+      "eventId": "evt-run-post-mvp-test-execution-failure-triage-0009",
+      "eventType": "artifact.written",
+      "payload": {
+        "artifactKinds": [
+          "TestExecutionResultV1",
+          "FailureTriageReportV1"
+        ],
+        "capabilityRef": "capability://post-mvp/test_execution/write_artifact",
+        "outputSchema": "WriteArtifactOutputV1"
+      },
+      "payloadHash": "03147dec2ca07f3852be83df930f54464c92ab2032a318c54e3e7af90bfc72a6",
+      "runControlStateAfter": "running",
+      "schemaVersion": "run-event-v1",
+      "sequence": 9,
+      "sourceAgent": "creator_agent",
+      "sourceCapability": "write_artifact",
+      "status": "completed",
+      "timestampMs": 900
+    },
+    {
+      "eventId": "evt-run-post-mvp-test-execution-failure-triage-0010",
+      "eventType": "verifier.completed",
+      "payload": {
+        "verdictDomain": [
+          "passed",
+          "failed",
+          "incomplete",
+          "needs_human_check"
+        ],
+        "verifierAgent": "verifier-runtime-v1"
+      },
+      "payloadHash": "116763e278f122e9fc3cd3b026d48e2999e3e868fd348cdec3b4cafe9ac57f5d",
+      "runControlStateAfter": "verifying",
+      "schemaVersion": "run-event-v1",
+      "sequence": 10,
+      "sourceAgent": "verifier-runtime-v1",
+      "sourceCapability": "__run_kernel__",
+      "status": "completed",
+      "timestampMs": 1000
+    },
+    {
+      "eventId": "evt-run-post-mvp-test-execution-failure-triage-0011",
+      "eventType": "run.completed",
+      "payload": {
+        "runIdentifier": "run-post-mvp-test-execution-failure-triage",
+        "terminalState": "completed"
+      },
+      "payloadHash": "2b4ba739b283185e2d5e1e1b5e079a3d65f74410437e7007058c7094fa0bf089",
+      "runControlStateAfter": "completed",
+      "schemaVersion": "run-event-v1",
+      "sequence": 11,
+      "sourceAgent": "run_kernel",
+      "sourceCapability": "__run_kernel__",
+      "status": "completed",
+      "timestampMs": 1100
+    }
+  ],
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "post-mvp-test-execution-run-event-log-kernel-contract",
+  "initialRunControlState": "created",
+  "invariants": [
+    "RunEventLogV1 is an ArtifactV1 subtype distinct from every workload-specific result subtype.",
+    "RunEventLogV1 must bind the TestExecutionTaskSpecV1 envelope, the CapabilityManifestV1 artifact, and all five coordination contracts by content hash.",
+    "RunEventLogV1 events must be ordered: sequences are contiguous from 0 and timestamps are monotonically non-decreasing.",
+    "RunEventLogV1 first event must be run.created and the last event must be run.completed or run.failed.",
+    "RunEventLogV1 every event sourceCapability must be the run-kernel sentinel or appear in CapabilityManifestV1.capabilities[*].name.",
+    "RunEventLogV1 every event payloadHash must equal sha256 over canonical payload JSON.",
+    "RunEventLogV1 every (previous, current) runControlStateAfter pair must appear in allowedRunControlTransitions.",
+    "RunEventLogV1 must not own the verifier verdict; verifier-runtime-v1 owns acceptance.",
+    "RunEventLogV1 must keep external side effects, repository mutation, external communication, GUI/desktop access, public access, and release/deployment disabled."
+  ],
+  "kind": "RunEventLogV1",
+  "nonRegressionReusePath": [
+    "test_execution_failure_triage",
+    "code_patch_review_loop",
+    "pr_review"
+  ],
+  "policyBoundary": {
+    "externalCommunicationAllowed": false,
+    "externalSideEffectsAllowed": false,
+    "guiOrBrowserOrDesktopCallAllowed": false,
+    "publicAccessAllowed": false,
+    "releaseOrDeploymentAllowed": false,
+    "repositoryMutationAllowed": false
+  },
+  "regressionWorkloadIsolation": {
+    "forbiddenFields": [
+      "regression_result",
+      "regression_result.json",
+      "email_draft",
+      "email_draft.md",
+      "send_email",
+      "regression-task-spec-v1",
+      "regression-result-artifact-v1"
+    ],
+    "reusesEmailDraftArtifact": false,
+    "reusesRegressionEventsArtifact": false,
+    "reusesRegressionResultArtifact": false,
+    "reusesRegressionRunArtifact": false
+  },
+  "runControlStateMachineSchemaVersion": "run-state-machine-v1",
+  "runControlStates": [
+    "created",
+    "planning",
+    "waiting_context",
+    "running",
+    "verifying",
+    "completed",
+    "failed"
+  ],
+  "runEventSchemaVersion": "run-event-v1",
+  "runIdentifier": "run-post-mvp-test-execution-failure-triage",
+  "runKernelCapabilitySentinel": "__run_kernel__",
+  "schemaVersion": "run-event-log-v1",
+  "scope": "test_execution_failure_triage_run_event_log_contract",
+  "sourceAgentDomain": [
+    "run_kernel",
+    "creator_agent",
+    "verifier-runtime-v1"
+  ],
+  "sourceArtifacts": [
+    {
+      "contentHash": "e026fb8f8d78f3a54d0a1a3d846cd93d8289cd9a8fefb59ead112fb18e4552f2",
+      "path": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+      "role": "agent_message_manifest"
+    },
+    {
+      "contentHash": "4e622eafff1480cb2e109aad1230e0852d99c412470ff8f33b215898beeb90b6",
+      "path": "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
+      "role": "broadcast_subscription_manifest"
+    },
+    {
+      "contentHash": "834b3c6bfe4dc401a5c34f3ed20edb479c4352e85363ac629caab3a3af429932",
+      "path": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+      "role": "creator_verifier_pairing"
+    },
+    {
+      "contentHash": "7779a468076194ccb7f88ffeb9e37727d479742ec0add917ac45777b748d5b8f",
+      "path": "artifacts/coordination/post_mvp_delegation_manifest.json",
+      "role": "delegation_manifest"
+    },
+    {
+      "contentHash": "fbbcd49ad9e7cd229658b431ab15313829f3a58107d809ef288043236746698e",
+      "path": "artifacts/coordination/post_mvp_negotiation_record.json",
+      "role": "negotiation_record"
+    },
+    {
+      "contentHash": "39d71c8275fb5432a8db3b10caae9c4602fa8a0e6f330d797e656f4a1df0e764",
+      "path": "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
+      "role": "test_execution_capability_manifest"
+    },
+    {
+      "contentHash": "1b9bbb64c87879848276b77fe2be1a20f89df2bfed971a7a0ec5210a91f664ba",
+      "path": "artifacts/task_specs/post_mvp_test_execution_task_spec.json",
+      "role": "test_execution_task_spec"
+    }
+  ],
+  "taskSpecBinding": {
+    "taskSpecContentHash": "1b9bbb64c87879848276b77fe2be1a20f89df2bfed971a7a0ec5210a91f664ba",
+    "taskSpecEnvelopeSchemaVersion": "task-spec-v1",
+    "taskSpecId": "post-mvp-test-execution-failure-triage-task-spec",
+    "taskSpecRef": "artifacts/task_specs/post_mvp_test_execution_task_spec.json",
+    "taskSpecSchemaVersion": "test-execution-task-spec-v1"
+  },
+  "terminalRunControlStates": [
+    "completed",
+    "failed"
+  ],
+  "terminalState": "completed",
+  "verifierExpectations": {
+    "creatorMustNotOwnVerdict": true,
+    "mustEnforcePolicyBoundary": true,
+    "mustValidateCapabilityManifestBinding": true,
+    "mustValidateEventSequence": true,
+    "mustValidatePayloadHashes": true,
+    "mustValidateRunControlTransitions": true,
+    "mustValidateSchema": true,
+    "mustValidateTaskSpecBinding": true,
+    "verdictDomain": [
+      "passed",
+      "failed",
+      "incomplete",
+      "needs_human_check"
+    ],
+    "verdictOwner": "verifier-runtime-v1"
+  },
+  "verifierVerdictOwner": "verifier-runtime-v1",
+  "workloadCategory": "engineering_workload",
+  "workloadType": "test_execution_failure_triage"
+}

@@ -56,7 +56,7 @@
   "nextRecommendedSlice": {
     "mustRemainMachineVerifiable": true,
     "phase": "post_mvp",
-    "slice": "Add a workload-independent RunEventV1 (or RunEventLogV1) ArtifactV1 subtype contract artifact that defines the canonical OS-kernel event-log schema for any workload Run: ordered events with stable ids, monotonically increasing timestamps, eventType / status / sourceCapability / sourceAgent / payloadHash fields, and explicit RunControl state transitions. Bind it by content hash to TestExecutionTaskSpecV1 and the five Agent Coordination Layer manifests, declare verifier-runtime-v1 as the verdict owner, and explicitly forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1, so the OS kernel gains a workload-independent event-log primitive reusable by Code Patch / Review Loop, PR Review, Documentation Update, and Incident / Log Analysis."
+    "slice": "Add a workload-independent DeliveryV1 (or DeliveryManifestV1) ArtifactV1 subtype contract artifact that defines the canonical OS-kernel delivery primitive for any workload: bind a VerifierResultV1 verdict, a RunEventLogV1 terminal state, and an approval/policy gate to one or more delivery channels via channel-agnostic kind / status / approvalRef / policyBoundary fields, with externalSideEffectsAllowed=false. Bind it by content hash to TestExecutionTaskSpecV1, CapabilityManifestV1, VerifierResultV1, RunEventLogV1, and the five Agent Coordination Layer manifests, declare verifier-runtime-v1 as the verdict owner, and explicitly forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1, so the OS kernel gains a workload-independent delivery primitive reusable by Code Patch / Review Loop, PR Review, Documentation Update, and Incident / Log Analysis."
   },
   "outOfScope": [
     {
@@ -263,7 +263,7 @@
   "scope": "read_only_regression_evidence_demo_mvp_completion",
   "sourceArtifacts": [
     {
-      "contentHash": "92de3f4624e650070421c03d14bd11b4465a794c461f310a298360bba6cff12d",
+      "contentHash": "f12a05720c45f88a8d2655f179aa33d0bb4da9fdb81a046ca86cd4e890736c5b",
       "path": "scripts/validate_repo.py",
       "role": "validation_script"
     },
@@ -461,6 +461,11 @@
       "contentHash": "39d71c8275fb5432a8db3b10caae9c4602fa8a0e6f330d797e656f4a1df0e764",
       "path": "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
       "role": "post_mvp_test_execution_capability_manifest"
+    },
+    {
+      "contentHash": "f1a32305df32fde0cdf212bcd67a9368fc8cccbedb362b38ad1059c099f2793d",
+      "path": "artifacts/state/post_mvp_test_execution_run_event_log.json",
+      "role": "post_mvp_test_execution_run_event_log"
     },
     {
       "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",

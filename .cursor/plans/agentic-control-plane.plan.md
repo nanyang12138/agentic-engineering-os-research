@@ -6345,6 +6345,95 @@ Build vs Integrate：
 为 OS kernel 抽象一个 workload-independent 的 RunEventV1 / RunEventLogV1 ArtifactV1 子类型，定义 eventId / eventType / status / sourceCapability / sourceAgent / timestamp / payloadHash / runControlStateAfter 字段，绑定 TestExecutionTaskSpecV1 与 Agent Coordination Layer 五件套，强制 verifier-runtime-v1 拥有 verdict 与 creatorMustNotOwnVerdict=true；字段不得依赖 regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1。
 ```
 
+### 2026-05-14 10:00 UTC Automation Sprint：RunEventLogV1 Workload-Independent Event Log Primitive Gate
+
+Active phase：post-MVP Kernel Generalization / Multi-Workload Expansion（Phase 1a-9 contract-only MVP 已满足，Agent Coordination Layer 五件套 contract 完成，第二 workload 的 TaskSpec envelope、TestExecutionResultV1、FailureTriageReportV1、VerifierResultV1、CapabilityManifestV1 均已 land，正在闭合 OS kernel 的 RunEvent / RunEventLog 原语，把「事件日志」从 first-workload regression `events.jsonl` 抽象为 workload-independent ArtifactV1 子类型）。
+
+Selected slice：
+
+```text
+Add RunEventLogV1 ArtifactV1 subtype contract artifact at artifacts/state/post_mvp_test_execution_run_event_log.json so /usr/bin/python3 scripts/validate_repo.py verifies a workload-independent RunEventLog primitive for Test Execution / Failure Triage, bound to TestExecutionTaskSpecV1 (test-execution-task-spec-v1) and CapabilityManifestV1 (capability-manifest-v1) by content hash and to DelegationManifestV1 / CreatorVerifierPairingV1 / AgentMessageManifestV1 / NegotiationRecordV1 / BroadcastSubscriptionManifestV1 by ref and source content hash, with regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 explicitly forbidden, contiguous event sequences from 0, monotonically non-decreasing timestamps, run.created as the first event, run.completed as the last event, sourceCapability ∈ ({__run_kernel__} ∪ CapabilityManifestV1 capability names), payloadHash equals sha256 over canonical payload JSON, every (previous, current) runControlStateAfter pair appears in allowedRunControlTransitions, and verifierVerdictOwner=verifier-runtime-v1.
+```
+
+为什么这是下一步：
+
+- 上一轮 `EvaluationReportV1.nextRecommendedSlice` 明确要求新增 workload-independent `RunEventV1 / RunEventLogV1` ArtifactV1 subtype，把 OS kernel 的事件日志原语在第二 workload 上独立抽象出来。
+- Post-MVP slice priority #1（generalize workload-independent kernel primitive：`RunEventV1`）与 #2（add second workload：`Test Execution / Failure Triage`）继续叠加：在 `ArtifactV1` envelope 上引入第六个具体 subtype `run-event-log-v1`，与 `regression-result-artifact-v1`、`test-execution-result-v1`、`failure-triage-report-v1`、`verifier-result-v1`、`capability-manifest-v1` 并列。
+- 这是 OS kernel 的 `RunEvent` 抽象第一次以 workload-independent 形式独立成 ArtifactV1 子类型。既有的 `events.jsonl`（first workload regression artifact）以 fixture run 为单位写入，schema 与 regression 强绑定；新 RunEventLogV1 用 workload-independent `run-event-v1` 事件 schema + 显式 `runControlStateMachineSchemaVersion=run-state-machine-v1` 状态机 + `sourceCapability` 与 `CapabilityManifestV1` 一致性约束，覆盖任意工程任务的 Run 事件流。
+- `.github/workflows/validate.yml` 与 `.github/workflows/auto-merge-cursor-pr.yml` 均存在；本轮 baseline `/usr/bin/python3 scripts/validate_repo.py` 已通过。
+
+OS kernel primitive advanced：
+
+- 在 `ArtifactV1` envelope 上引入第六个 subtype `run-event-log-v1`；`artifactEnvelopeSchemaVersion=artifact-v1` 显式声明 envelope 复用。未来 `CodePatchRunEventLogV1`、`PRReviewRunEventLogV1`、`IncidentAnalysisRunEventLogV1` 等可以复用同一 envelope。
+- `RunEventV1`：第一次把 OS kernel 中的 `RunEvent` 抽象作为独立 schema 落地，字段为 `schemaVersion / eventId / sequence / timestampMs / eventType / status / sourceCapability / sourceAgent / payloadHash / payload / runControlStateAfter`，全部 workload-independent。
+- `RunControl ↔ RunEvent` 一致性：`allowedRunControlTransitions` 与 `runControlStates` 在 artifact 自身层级被显式声明，validator 通过 set-membership 校验每个事件状态转移；`initialRunControlState` 与 `terminalRunControlStates` 在 schema 层钉死起止边界。
+- `Capability ↔ RunEvent` 一致性：`sourceCapability` 必须是 `__run_kernel__` 哨兵或绑定 CapabilityManifestV1 中存在的 capability name；任何捏造 capability 都会让 validator 立刻失败。OS kernel 第一次拥有机器可验证的 RunEvent → Capability 一致性约束。
+
+Non-regression workload reuse path：
+
+- `Test Execution / Failure Triage`：本 artifact 直接覆盖；12 个 synthetic events 全部使用 workload-independent 字段。
+- `Code Patch / Review Loop`：未来 `CodePatchRunEventLogV1` 可复用同一 `artifactEnvelopeSchemaVersion=artifact-v1`、`run-event-v1` event schema、`run-state-machine-v1` 状态机和 `__run_kernel__` 哨兵；`sourceCapability` 切换到 `read_diff` / `propose_patch` / `lint_patch` 等 capability。
+- `PR Review` / `Documentation Update` / `Incident / Log Analysis`：同理。本 artifact 的 `nonRegressionReusePath` 字段已声明 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review` 三条路径。
+
+Coordination protocol / invariant clarified：
+
+- `coordinationBinding` 字段强制 RunEventLogV1 绑定 Agent Coordination Layer 五件套 contract artifact，并通过 `sourceArtifacts[].contentHash` 把上游 coordination / task spec / capability manifest contract 当作不可变前提；任何一个上游 contract 漂移都会让本 artifact validate 失败。
+- `verifierVerdictOwner=verifier-runtime-v1` 与 `verifierExpectations.creatorMustNotOwnVerdict=true` 把 CreatorVerifierPairingV1 不变量延伸到事件日志层：creator 写入 events，但 verifier 拥有 acceptance。
+- `policyBoundary` 对 `externalSideEffectsAllowed` / `repositoryMutationAllowed` / `externalCommunicationAllowed` / `releaseOrDeploymentAllowed` / `guiOrBrowserOrDesktopCallAllowed` / `publicAccessAllowed` 全部强制为 `false`，与既有 BroadcastSubscriptionManifestV1 / NegotiationRecordV1 / DelegationManifestV1 / TestExecutionTaskSpecV1 / TestExecutionResultV1 / FailureTriageReportV1 / VerifierResultV1 / CapabilityManifestV1 的 policy invariant 对齐：事件日志自身不允许触发 side effect / delivery / approval unlock。
+
+为什么这不是另一个 regression/email fixture：
+
+- artifact 路径为 `artifacts/state/post_mvp_test_execution_run_event_log.json`（独立于 `artifacts/runs/<fixture>/events.jsonl` 这一 first-workload regression artifact），scope 为 `test_execution_failure_triage_run_event_log_contract`，不是 regression result、email draft、approval lifecycle、delivery unlock 或 policy unlock。
+- `workloadType` 必须等于 `test_execution_failure_triage`，validator 显式拒绝把它改成 `read_only_regression_evidence_demo` 或任何 regression workload；`kind` 必须为 `RunEventLogV1`，`schemaVersion` 必须为 `run-event-log-v1`，每个 event 的 `schemaVersion` 必须为 `run-event-v1`。
+- `regressionWorkloadIsolation.forbiddenFields` 包含 `regression_result` / `regression_result.json` / `email_draft` / `email_draft.md` / `send_email` / `regression-task-spec-v1` / `regression-result-artifact-v1`；新增 `reusesRegressionRunArtifact=false` 与 `reusesRegressionEventsArtifact=false` 把本 artifact 与 first-workload `run.json` / `events.jsonl` artifact 显式隔离。defensive scan 拒绝这些 token 在 forbiddenFields 之外再次出现。
+- `nonRegressionReusePath` 必须包含 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review`，强制本 artifact 至少有两个 non-regression 复用路径。
+
+Acceptance criteria：
+
+- `scripts/run_event_log.py` 提供 `build_run_event_log` / `validate_run_event_log` 与 CLI（`--out` / `--validate`）。
+- 新增 committed `artifacts/state/post_mvp_test_execution_run_event_log.json`，schemaVersion 为 `run-event-log-v1`，artifactEnvelopeSchemaVersion 为 `artifact-v1`，每个 event 的 `schemaVersion` 为 `run-event-v1`，`runControlStateMachineSchemaVersion` 为 `run-state-machine-v1`。
+- `scripts/validate_repo.py` 验证 committed artifact、deterministic builder output 与多条 forced-failure case：workload_type_regression_reuse / kind_regression_reuse / schema_regression_reuse / envelope_schema_regression_reuse / creator_owns_verdict / creator_must_not_own_verdict_disabled / task_spec_binding_regression_schema_reuse / task_spec_binding_hash_drift / capability_manifest_binding_regression_schema_reuse / capability_manifest_binding_hash_drift / policy_external_side_effects_allowed / policy_external_communication_allowed / events_empty / event_sequence_non_contiguous / event_timestamp_non_monotonic / event_first_not_run_created / event_last_not_run_completed / event_unknown_type / event_unknown_status / event_unknown_source_agent / event_capability_not_in_manifest / event_payload_hash_mismatch / event_state_unknown / event_state_transition_illegal / event_schema_regression_reuse / event_id_duplicate / event_id_format_invalid / allowed_transitions_narrowed / event_count_drift / terminal_state_drift / coordination_binding_missing_broadcast / coordination_binding_wrong_path / reuses_regression_run_artifact / reuses_regression_events_artifact / non_regression_reuse_path_missing / source_hash_mismatch_task_spec / source_hash_mismatch_capability_manifest / source_hash_mismatch_broadcast。
+- `EvaluationReportV1` 把 RunEventLogV1 artifact 纳入 source hash，并把下一推荐切片推进为 workload-independent `DeliveryV1 / DeliveryManifestV1` ArtifactV1 subtype。
+
+实现摘要：
+
+- 新增 `scripts/run_event_log.py`，包含 schema 常量、12 个 synthetic deterministic 事件、builder、validator、deterministic CLI（`--out` / `--validate`），以及 ArtifactV1 envelope / TaskSpec & CapabilityManifest dual binding / 五件套 coordination binding 逻辑；每个事件的 `payloadHash` 通过 sha256 over canonical JSON 计算并校验。
+- 新增 committed `artifacts/state/post_mvp_test_execution_run_event_log.json`。
+- 更新 `scripts/validate_repo.py`：REQUIRED_FILES 增加 `scripts/run_event_log.py` 与 `artifacts/state/post_mvp_test_execution_run_event_log.json`，PLAN markers 增加 `RunEventLogV1` / `run-event-log-v1` / `run-event-v1` / `run-state-machine-v1` / `post_mvp_test_execution_run_event_log.json`，新增 committed artifact 校验、deterministic CLI replay 与 38 条 forced-failure case。
+- 更新 `scripts/evaluation_report.py` 与 `artifacts/evaluation/phase9_mvp_evaluation_report.json`：把 RunEventLogV1 加入 source hash，并把 `nextRecommendedSlice` 推进为 workload-independent `DeliveryV1 / DeliveryManifestV1` ArtifactV1 subtype。
+
+Build vs Integrate：
+
+- Build：`RunEventLogV1` schema、deterministic builder / validator / CLI、committed artifact、38 条 forced-failure case、`EvaluationReportV1` source hash 集成、TaskSpec ↔ Capability ↔ RunEvent 一致性约束、RunControl 状态机 ↔ RunEvent 一致性约束。
+- Integrate later：真实事件总线 / event sourcing / event log 持久化（durable run store）、跨 workload `RunEventLogV1` catalogue、ArtifactV1 envelope 抽取为独立 schema 文件、`DeliveryV1` / `RunV1` / `StepV1` 等下一批 OS kernel primitive。
+
+验证计划 / 结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline /usr/bin/python3 scripts/validate_repo.py before edits：通过。
+- /usr/bin/python3 -m py_compile scripts/*.py：通过。
+- /usr/bin/python3 scripts/run_event_log.py --out artifacts/state/post_mvp_test_execution_run_event_log.json：通过。
+- /usr/bin/python3 scripts/run_event_log.py --validate artifacts/state/post_mvp_test_execution_run_event_log.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --report-out artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/validate_repo.py：通过，覆盖 RunEventLogV1 committed artifact、deterministic builder output 与 38 条 forced-failure case。
+- git diff --check：通过。
+```
+
+剩余风险：
+
+- `RunEventLogV1` 仍是 static contract artifact，不驱动任何真实事件总线 / event sourcing 落地；下一切片应给出 workload-independent `DeliveryV1 / DeliveryManifestV1` ArtifactV1 subtype，把 verifier verdict + run event log terminal state 绑定到 channel-agnostic delivery primitive。
+- 当前 artifact 复用 first workload 的 5 件套 coordination contract artifact 作为 source fixture；`Code Patch / Review Loop` 与 `PR Review` 的 TaskSpec / Artifact / RunEventLog subtype 仍未实现。
+- `ArtifactV1` envelope 目前仍通过 `artifactEnvelopeSchemaVersion` 字段表达；未来需要把 `regression-result-artifact-v1` / `test-execution-result-v1` / `failure-triage-report-v1` / `verifier-result-v1` / `capability-manifest-v1` / `run-event-log-v1` 抽出共同 base schema（真正的 `artifact-v1` envelope）。
+
+下一轮建议：
+
+```text
+新增 workload-independent DeliveryV1 / DeliveryManifestV1 ArtifactV1 subtype contract artifact：
+为 OS kernel 抽象一个 workload-independent 的 DeliveryV1 / DeliveryManifestV1 ArtifactV1 子类型，绑定 VerifierResultV1 verdict、RunEventLogV1 terminal state 与 approval/policy gate 到 channel-agnostic kind / status / approvalRef / policyBoundary 字段，强制 externalSideEffectsAllowed=false，绑定 TestExecutionTaskSpecV1 / CapabilityManifestV1 / VerifierResultV1 / RunEventLogV1 与 Agent Coordination Layer 五件套；字段不得依赖 regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1。
+```
+
 ## 22. Parking Lot
 
 以下内容仍然重要，但不进入第一版 MVP：
