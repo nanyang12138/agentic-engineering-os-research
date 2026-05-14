@@ -2163,6 +2163,7 @@ Add forced-failure verifier checks so that python3 scripts/validate_repo.py prov
 17. Post-MVP DurableRunStoreV1：已实现 static replay index gate，入口为 `python3 scripts/durable_run_store.py --store-out artifacts/state/post_mvp_durable_run_store.json`；`durable-run-store-v1` 索引 `all_passed` Run、append-only events、DeliveryReportV1 和 HumanApprovalDecisionV1 的 source hashes、state/delivery/approval/persistence policy，并由 `scripts/validate_repo.py` 拒绝 source hash 漂移、event order 漂移、缺少 approval source、database/外部副作用/approval grant 伪完成。
 18. Post-MVP IdentityBoundApprovalRecordV1：已实现 static identity fixture gate，入口为 `python3 scripts/identity_bound_approval.py --record-out artifacts/approval/post_mvp_identity_bound_approval_record.json`；`identity-bound-approval-record-v1` 绑定 HumanApprovalDecisionV1、DurableRunStoreV1、ReplayQueryV1、Run/TaskSpec 和 permission-policy-v1 的 source hashes、actor identity、intent、decision、policy 与 replay query ids，并由 `scripts/validate_repo.py` 拒绝 actor 漂移、TaskSpec hash 漂移、approval grant、external side effects、send_email approval bypass 和 replay query hash mismatch。
 19. Post-MVP ApprovalRevocationOrExpiryV1：已实现 static lifecycle fixture gate，入口为 `python3 scripts/approval_revocation.py --revocation-out artifacts/approval/post_mvp_approval_revocation_or_expiry.json`；`approval-revocation-or-expiry-v1` 绑定 ApprovalAuditQueryV1 与 IdentityBoundApprovalRecordV1 的 source hashes、audit query ids、source hash chain、expired/revoked lifecycle state 和 no-side-effect effect boundary，并由 `scripts/validate_repo.py` 拒绝 active approval、send email allowed、external side effects、source hash chain removal 和 audit source hash mismatch。
+20. Post-MVP CreatorVerifierPairingV1：已实现 workload-independent creator-verifier pairing gate，入口为 `python3 scripts/coordination_contract.py --pairing-out artifacts/coordination/post_mvp_creator_verifier_pairing.json`；`creator-verifier-pairing-v1` 绑定 DelegationManifestV1、creator output ArtifactV1、EvidenceListV1、VerifierResultV1、独立 verifier assignment 和 no-side-effect independence policy，并由 `scripts/validate_repo.py` 拒绝 creator self-verification、缺 verifier acceptance evidence、weak self-verification、creator override、email delivery artifact、缺 non-regression reuse path 和 source hash 漂移。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -2462,6 +2463,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-14 01:40 UTC：Post-MVP PolicyUnlockRequestDeniedV1 Static Denial Fixture Gate 已实现；决定先自研 deterministic `policy-unlock-request-denied-v1`，把 ApprovalRevocationOrExpiryV1、DeliveryReportV1、delivery unlock request、denial decision 和 no-side-effect effect boundary 绑定到 source hashes。真实 policy engine、delivery unlock API、signed policy decision、approval backend、database audit log、邮件/PR/ticket/Slack delivery adapter 继续后移；下一轮应补 PolicyDecisionAuditTraceV1 fixture。
 - 2026-05-14 02:19 UTC：Plan hardening 决定把 Agentic Engineering OS 明确重写为 `OS Kernel + workload catalogue + first workload`。Regression Evidence Demo 只是第一个 deterministic workload / kernel smoke test，不是产品边界；Phase 9 的 runtime 目标升级为 Agent Coordination Layer，覆盖 delegation、creator-verifier、direct communication、negotiation 和 broadcast/event bus。Cursor 中的多视角评审机制改名为 research review loop，不能再与产品 runtime multi-agent coordination 混用。
 - 2026-05-14 02:36 UTC：Plan / Automation Prompt Hardening 决定新增防走偏护栏。后续 automation 在 Phase 1a-9 contract-only MVP 完成后，必须按 `Kernel Generalization -> Multi-Workload Expansion -> Agent Coordination Runtime Contracts -> Workload-independent verifier/policy invariant -> First workload extension` 的优先级选 slice；禁止继续新增只服务 `all_passed`、`email_draft`、`regression_result`、`send_email` 或 approval/delivery unlock 的 artifact，除非它明确泛化 OS kernel primitive 或 coordination protocol。
+- 2026-05-14 06:55 UTC：Post-MVP CreatorVerifierPairingV1 Coordination Kernel Contract Gate 已实现；决定先自研 deterministic `creator-verifier-pairing-v1`，把 DelegationManifestV1 的 creator output、EvidenceListV1、VerifierResultV1、independent verifier assignment 和 no-side-effect policy 固化为可机器验证 contract。真实多 agent scheduler、message bus、LangGraph/AutoGen/CrewAI runtime、review UI 和 external delivery 继续后移；下一轮应补 `AgentMessageV1` direct communication contract。
 
 ## 20. Open Questions
 
@@ -5563,6 +5565,88 @@ Acceptance criteria：
 ```text
 新增 workload-independent `CreatorVerifierPairingV1` contract artifact：
 基于 DelegationManifestV1 明确 creator output、verifier assignment、verifier independence strength、weak/self-verification prohibition、acceptance evidence 和 verifier result binding；字段不得依赖 regression_result/email_draft/send_email。
+```
+
+### 2026-05-14 06:55 UTC Automation Sprint：CreatorVerifierPairingV1 Coordination Kernel Contract Gate
+
+Active phase：post-MVP Kernel Generalization / Agent Coordination Runtime Contracts（Phase 1a-9 contract-only MVP 已满足，完整 Agentic Engineering OS 产品仍未完成）。
+
+Selected slice：
+
+```text
+Add CreatorVerifierPairingV1 contract artifact so that /usr/bin/python3 scripts/validate_repo.py verifies creator output, independent verifier assignment, acceptance evidence, and weak/self-verification prohibition over DelegationManifestV1.
+```
+
+为什么这是下一步：
+
+- `.github/workflows/validate.yml` 和 `.github/workflows/auto-merge-cursor-pr.yml` 均存在；本轮 baseline `/usr/bin/python3 scripts/validate_repo.py` 已通过。
+- Phase 1a-9 contract-only MVP 已由 `EvaluationReportV1` 标记完成；后续 slice 必须按 post-MVP guardrail 避免继续深化 regression/email approval 链路。
+- 上一轮 `DelegationManifestV1` 已有 planner -> creator delegation 和 CoordinationEventV1 causal chain；本轮补 creator-verifier pairing，使 creator output 与 verifier acceptance 分离成为独立可验证 contract。
+
+OS kernel primitive advanced：
+
+- `Agent` / `Verifier`：明确 creator_agent 与 verifier_agent 的职责、权限和 ownership。
+- `Artifact` / `Evidence`：creator output 必须绑定 workload-independent `ArtifactV1`，acceptance 必须绑定 `EvidenceListV1` 与 `VerifierResultV1`。
+- `Delegation` / `CoordinationEvent`：pairing 继承 `DelegationManifestV1` 的 delegationRef 和 coordinationEventRefs，证明 creator-verifier 协议不是孤立声明。
+
+Non-regression workload reuse path：
+
+- `Test Execution / Failure Triage` 可复用 pairing：creator 产出 test run / triage artifact，verifier 独立检查 exit code、test log evidence、flake policy 和 failure classification。
+- `Code Patch / Review Loop` 可复用 pairing：creator 产出 patch artifact，verifier/reviewer 绑定 tests、lint、review findings 和 policy invariant 后才允许 acceptance。
+- `PR Review` 可复用 pairing：review finding creator 与 independent verifier 分离，避免 finding 自证有效。
+
+Coordination protocol / invariant clarified：
+
+- `CreatorVerifierPairingV1` / `creator-verifier-pairing-v1` 明确 creator output、verifier assignment、verifier result binding、acceptance evidence 和 independence policy。
+- creator 与 verifier 必须是不同 agent；creator 不能 verify artifact、不能 declare acceptance、不能 override verifier result。
+- `VerifierResultV1` owner 仍是 `verifier-runtime-v1`；weak/self-verification 被 validator 明确拒绝。
+
+为什么这不是另一个 regression/email fixture：
+
+- 新 artifact 路径为 `artifacts/coordination/post_mvp_creator_verifier_pairing.json`，scope 是 `agent_coordination_creator_verifier_pairing_contract`，不是 regression result、email draft、approval lifecycle 或 delivery unlock。
+- schema 字段使用 generic `ArtifactV1`、`EvidenceListV1`、`VerifierResultV1`、`Agent`、`Delegation` 和 `CoordinationEvent`；validator 明确拒绝 email/send_email/delivery unlock artifact ref。
+- artifact 必须记录 `nonRegressionReusePath`，包含 `test_execution_failure_triage`、`code_patch_review_loop` 和 `pr_review`。
+
+Acceptance criteria：
+
+- `scripts/coordination_contract.py` 提供 `CreatorVerifierPairingV1` builder / validator / CLI。
+- 新增 committed `artifacts/coordination/post_mvp_creator_verifier_pairing.json`，schemaVersion 为 `creator-verifier-pairing-v1`。
+- `scripts/validate_repo.py` 验证 committed artifact、deterministic builder output，并拒绝 creator self-verification、缺 verifier acceptance evidence、weak self-verification、creator override、email delivery artifact、缺 non-regression reuse path 和 source hash 漂移。
+- `EvaluationReportV1` 把 creator-verifier pairing artifact 纳入 source hash 汇总，并把下一推荐切片推进为 `AgentMessageV1` direct communication contract。
+
+实现摘要：
+
+- 扩展 `scripts/coordination_contract.py`，在保留 `DelegationManifestV1` 的同时新增 `CreatorVerifierPairingV1` builder、validator 和 CLI 参数 `--pairing-out` / `--validate-pairing`。
+- 新增 committed `artifacts/coordination/post_mvp_creator_verifier_pairing.json`。
+- 更新 `scripts/validate_repo.py` 的 required files/markers、artifact validation、deterministic CLI replay 和 forced-failure cases。
+- 更新 `scripts/evaluation_report.py` 与 `artifacts/evaluation/phase9_mvp_evaluation_report.json`，将 pairing artifact 纳入 source hash，并推荐下一步 `AgentMessageV1`。
+
+验证计划 / 结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline `/usr/bin/python3 scripts/validate_repo.py` before edits：通过。
+- `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 CreatorVerifierPairingV1 committed artifact、deterministic builder output，以及 creator self-verification / missing verifier acceptance evidence / weak self-verification / creator override / email delivery artifact / missing non-regression reuse path / source hash mismatch forced-failure cases。
+- `/usr/bin/python3 scripts/coordination_contract.py --validate-pairing artifacts/coordination/post_mvp_creator_verifier_pairing.json`：通过。
+- `/usr/bin/python3 scripts/coordination_contract.py --pairing-out /tmp/.../post_mvp_creator_verifier_pairing.json`：通过，可 deterministic 生成 CreatorVerifierPairingV1 artifact。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/.../fixture-smoke`：通过。
+- `/usr/bin/python3 scripts/task_spec.py --goal ... --input-log-path fixtures/regression/all_passed/input.log --out /tmp/.../task-spec.json`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json`：通过。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- `CreatorVerifierPairingV1` 仍是 static contract artifact，不是 production multi-agent scheduler、message bus、blackboard database、LangGraph/AutoGen/CrewAI integration 或 durable coordination runtime。
+- 当前 artifact 仍以 first workload 的 existing TaskSpec / artifact refs 作为 source fixture；第二 workload 尚未实现。
+- Direct communication、negotiation 和 broadcast 仍需要后续 `AgentMessageV1`、`NegotiationRecordV1`、`BroadcastSubscriptionV1` contracts。
+
+下一轮建议：
+
+```text
+新增 workload-independent `AgentMessageV1` direct communication contract artifact：
+基于 DelegationManifestV1 和 CreatorVerifierPairingV1 明确 creator -> verifier verification request、verifier -> creator response、message causal refs、source hash binding 和 no-side-effect policy；字段不得依赖 regression_result/email_draft/send_email。
 ```
 
 ## 22. Parking Lot

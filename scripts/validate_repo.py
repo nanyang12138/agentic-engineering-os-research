@@ -72,8 +72,11 @@ from policy_unlock_denial import (
     validate_policy_unlock_request_denied,
 )
 from coordination_contract import (
+    CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH,
     DELEGATION_MANIFEST_ARTIFACT_PATH,
+    build_creator_verifier_pairing,
     build_delegation_manifest,
+    validate_creator_verifier_pairing,
     validate_delegation_manifest,
 )
 from human_approval import (
@@ -138,6 +141,7 @@ APPROVAL_AUDIT_QUERY_PATH = ROOT / APPROVAL_AUDIT_QUERY_ARTIFACT_PATH
 APPROVAL_REVOCATION_PATH = ROOT / APPROVAL_REVOCATION_ARTIFACT_PATH
 POLICY_UNLOCK_DENIAL_PATH = ROOT / POLICY_UNLOCK_DENIAL_ARTIFACT_PATH
 DELEGATION_MANIFEST_PATH = ROOT / DELEGATION_MANIFEST_ARTIFACT_PATH
+CREATOR_VERIFIER_PAIRING_PATH = ROOT / CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -222,6 +226,7 @@ REQUIRED_FILES = [
     "artifacts/approval/post_mvp_approval_revocation_or_expiry.json",
     "artifacts/approval/post_mvp_policy_unlock_request_denied.json",
     "artifacts/coordination/post_mvp_delegation_manifest.json",
+    "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -301,6 +306,9 @@ PLAN_REQUIRED_MARKERS = [
     "CoordinationEventV1",
     "coordination-event-v1",
     "post_mvp_delegation_manifest.json",
+    "CreatorVerifierPairingV1",
+    "creator-verifier-pairing-v1",
+    "post_mvp_creator_verifier_pairing.json",
     "Agentic Engineering OS Kernel",
     "workload-independent primitives",
     "first workload: Read-only Regression Evidence Demo",
@@ -2613,6 +2621,117 @@ def run_delegation_manifest_builder(manifest_out: Path) -> None:
         )
 
 
+def expect_creator_verifier_pairing_validation_failure(
+    label: str,
+    pairing: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_creator_verifier_pairing(pairing, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"CreatorVerifierPairingV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"CreatorVerifierPairingV1 forced-failure case {label} unexpectedly passed validation")
+
+
+def validate_committed_creator_verifier_pairing_artifact() -> None:
+    pairing = load_json(CREATOR_VERIFIER_PAIRING_PATH)
+    try:
+        validate_creator_verifier_pairing(pairing, ROOT)
+    except ValueError as exc:
+        raise AssertionError(f"Committed CreatorVerifierPairingV1 artifact failed validation: {exc}") from exc
+
+    expected_pairing = build_creator_verifier_pairing(ROOT)
+    if pairing != expected_pairing:
+        raise AssertionError("Committed CreatorVerifierPairingV1 artifact differs from deterministic builder output")
+
+    tampered_pairing = json.loads(json.dumps(pairing))
+    tampered_pairing["creator"]["mayVerifyArtifacts"] = True
+    expect_creator_verifier_pairing_validation_failure(
+        "creator_self_verifies",
+        tampered_pairing,
+        "creator must not verify artifacts or declare acceptance",
+    )
+
+    tampered_pairing = json.loads(json.dumps(pairing))
+    tampered_pairing["acceptanceEvidence"] = [
+        evidence
+        for evidence in tampered_pairing["acceptanceEvidence"]
+        if evidence.get("artifactKind") != "VerifierResultV1"
+    ]
+    expect_creator_verifier_pairing_validation_failure(
+        "missing_verifier_result_acceptance_evidence",
+        tampered_pairing,
+        "acceptanceEvidence must include EvidenceListV1 and VerifierResultV1",
+    )
+
+    tampered_pairing = json.loads(json.dumps(pairing))
+    tampered_pairing["independencePolicy"]["weakSelfVerificationAllowed"] = True
+    expect_creator_verifier_pairing_validation_failure(
+        "weak_self_verification_allowed",
+        tampered_pairing,
+        "weakSelfVerificationAllowed false",
+    )
+
+    tampered_pairing = json.loads(json.dumps(pairing))
+    tampered_pairing["verifierResultBinding"]["creatorOverrideAllowed"] = True
+    expect_creator_verifier_pairing_validation_failure(
+        "creator_overrides_verifier_result",
+        tampered_pairing,
+        "must gate acceptance and forbid creator override",
+    )
+
+    tampered_pairing = json.loads(json.dumps(pairing))
+    tampered_pairing["creatorOutput"]["artifactRef"] = "artifacts/runs/all_passed/email_draft.md"
+    expect_creator_verifier_pairing_validation_failure(
+        "email_delivery_artifact_added",
+        tampered_pairing,
+        "must not add regression/email delivery artifacts",
+    )
+
+    tampered_pairing = json.loads(json.dumps(pairing))
+    tampered_pairing["nonRegressionReusePath"] = ["read_only_regression_evidence_demo"]
+    expect_creator_verifier_pairing_validation_failure(
+        "missing_non_regression_reuse_path",
+        tampered_pairing,
+        "non-regression workload reuse paths",
+    )
+
+    tampered_pairing = json.loads(json.dumps(pairing))
+    for source in tampered_pairing["sourceArtifacts"]:
+        if source.get("role") == "delegation_manifest":
+            source["contentHash"] = "0" * 64
+            break
+    expect_creator_verifier_pairing_validation_failure(
+        "delegation_manifest_hash_mismatch",
+        tampered_pairing,
+        "source hash mismatch",
+    )
+
+
+def run_creator_verifier_pairing_builder(pairing_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/coordination_contract.py"),
+        "--pairing-out",
+        str(pairing_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "CreatorVerifierPairingV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -3011,6 +3130,7 @@ def main() -> None:
     validate_committed_approval_revocation_artifact()
     validate_committed_policy_unlock_denial_artifact()
     validate_committed_delegation_manifest_artifact()
+    validate_committed_creator_verifier_pairing_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -3108,6 +3228,10 @@ def main() -> None:
         run_delegation_manifest_builder(generated_delegation_manifest)
         if load_json(generated_delegation_manifest) != load_json(DELEGATION_MANIFEST_PATH):
             raise AssertionError("Committed DelegationManifestV1 artifact differs from deterministic CLI output")
+        generated_creator_verifier_pairing = temp_root / "post_mvp_creator_verifier_pairing.json"
+        run_creator_verifier_pairing_builder(generated_creator_verifier_pairing)
+        if load_json(generated_creator_verifier_pairing) != load_json(CREATOR_VERIFIER_PAIRING_PATH):
+            raise AssertionError("Committed CreatorVerifierPairingV1 artifact differs from deterministic CLI output")
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)
         if load_json(generated_evaluation_report) != load_json(EVALUATION_REPORT_PATH):

@@ -13,11 +13,14 @@ from verifier_runtime import validate_verifier_rule_catalog
 DELEGATION_MANIFEST_SCHEMA_VERSION = "delegation-manifest-v1"
 DELEGATION_SCHEMA_VERSION = "delegation-v1"
 COORDINATION_EVENT_SCHEMA_VERSION = "coordination-event-v1"
+CREATOR_VERIFIER_PAIRING_SCHEMA_VERSION = "creator-verifier-pairing-v1"
 TASK_SPEC_ENVELOPE_SCHEMA_VERSION = "task-spec-v1"
 GENERATED_AT = "2026-05-12T14:39:00Z"
 
 DELEGATION_MANIFEST_ID = "post-mvp-delegation-manifest-kernel-contract"
 DELEGATION_MANIFEST_ARTIFACT_PATH = "artifacts/coordination/post_mvp_delegation_manifest.json"
+CREATOR_VERIFIER_PAIRING_ID = "post-mvp-creator-verifier-pairing-kernel-contract"
+CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH = "artifacts/coordination/post_mvp_creator_verifier_pairing.json"
 
 DEFAULT_RUN_PATH = "artifacts/runs/all_passed/run.json"
 DEFAULT_CAPABILITY_CATALOG_PATH = "artifacts/capabilities/phase3_capability_catalog.json"
@@ -99,6 +102,18 @@ def _artifact_ref(relative_path: str, fragment: str | None = None) -> str:
     if fragment:
         return f"{relative_path}{fragment}"
     return relative_path
+
+
+def _artifact_paths_by_kind(delegation: dict[str, Any]) -> dict[str, str]:
+    artifacts = delegation["expectedArtifacts"]
+    paths_by_kind: dict[str, str] = {}
+    for artifact in artifacts:
+        kind = artifact["artifactKind"]
+        artifact_ref = artifact["artifactRef"]
+        if "#" in artifact_ref:
+            artifact_ref = artifact_ref.split("#", 1)[0]
+        paths_by_kind[kind] = artifact_ref
+    return paths_by_kind
 
 
 def _build_task_spec_envelope(run: dict[str, Any]) -> dict[str, Any]:
@@ -286,6 +301,117 @@ def build_delegation_manifest(root: Path) -> dict[str, Any]:
             "Creator and verifier agents must be distinct; creator output cannot self-certify acceptance.",
             "CoordinationEventV1 entries must preserve causal refs from delegation creation to verification request.",
             "The manifest is a static contract artifact and does not run a real multi-agent framework, send email, mutate a workspace, or execute providers.",
+        ],
+    }
+
+
+def _build_pairing_source_artifacts(delegation_manifest: dict[str, Any], root: Path) -> list[dict[str, Any]]:
+    delegation = delegation_manifest["delegations"][0]
+    paths_by_kind = _artifact_paths_by_kind(delegation)
+    return [
+        _artifact_source("delegation_manifest", DELEGATION_MANIFEST_ARTIFACT_PATH, root),
+        _artifact_source("creator_output_artifact", paths_by_kind["ArtifactV1"], root),
+        _artifact_source("acceptance_evidence", paths_by_kind["EvidenceListV1"], root),
+        _artifact_source("verifier_result", paths_by_kind["VerifierResultV1"], root),
+    ]
+
+
+def _delegation_ref(delegation_id: str) -> str:
+    return f"{DELEGATION_MANIFEST_ARTIFACT_PATH}#delegations/{delegation_id}"
+
+
+def build_creator_verifier_pairing(root: Path) -> dict[str, Any]:
+    delegation_manifest = _load_json(root / DELEGATION_MANIFEST_ARTIFACT_PATH)
+    validate_delegation_manifest(delegation_manifest, root)
+    delegation = delegation_manifest["delegations"][0]
+    paths_by_kind = _artifact_paths_by_kind(delegation)
+    delegation_ref = _delegation_ref(delegation["id"])
+
+    return {
+        "schemaVersion": CREATOR_VERIFIER_PAIRING_SCHEMA_VERSION,
+        "id": CREATOR_VERIFIER_PAIRING_ID,
+        "generatedAt": GENERATED_AT,
+        "phase": "post_mvp",
+        "scope": "agent_coordination_creator_verifier_pairing_contract",
+        "mode": "static_contract_only",
+        "kernelPrimitive": "CreatorVerifierPairing",
+        "coordinationProtocols": ["creator_verifier"],
+        "sourceArtifacts": _build_pairing_source_artifacts(delegation_manifest, root),
+        "delegationBinding": {
+            "delegationManifestRef": DELEGATION_MANIFEST_ARTIFACT_PATH,
+            "delegationRef": delegation_ref,
+            "parentTaskSpecRef": delegation["parentTaskSpecRef"],
+            "parentRunRef": delegation["parentRunRef"],
+            "workloadIndependentObjective": delegation["workloadIndependentObjective"],
+        },
+        "creator": {
+            "agentId": delegation["creatorAgent"],
+            "role": "creator",
+            "assignedDelegationRef": delegation_ref,
+            "mayCreateArtifacts": True,
+            "mayVerifyArtifacts": False,
+            "mayDeclareAcceptance": False,
+            "owns": ["artifact_creation", "evidence_backlink_collection"],
+        },
+        "verifier": {
+            "agentId": delegation["verifierAgent"],
+            "role": "verifier",
+            "assignedDelegationRef": delegation_ref,
+            "mayCreateArtifacts": False,
+            "mayVerifyArtifacts": True,
+            "verifierResultOwner": "verifier-runtime-v1",
+            "independentFromCreator": True,
+            "owns": ["independent_verifier_result", "policy_invariant_check"],
+        },
+        "creatorOutput": {
+            "artifactKind": "ArtifactV1",
+            "artifactRef": paths_by_kind["ArtifactV1"],
+            "producedBy": delegation["creatorAgent"],
+            "acceptanceVerdictOwner": "verifier-runtime-v1",
+            "creatorOutputCanSelfCertify": False,
+        },
+        "acceptanceEvidence": [
+            {
+                "artifactKind": "EvidenceListV1",
+                "artifactRef": paths_by_kind["EvidenceListV1"],
+                "requiredForAcceptance": True,
+            },
+            {
+                "artifactKind": "VerifierResultV1",
+                "artifactRef": paths_by_kind["VerifierResultV1"],
+                "requiredForAcceptance": True,
+            },
+        ],
+        "verifierResultBinding": {
+            "artifactKind": "VerifierResultV1",
+            "verifierResultRef": paths_by_kind["VerifierResultV1"],
+            "verifierAgent": delegation["verifierAgent"],
+            "verifierResultOwner": "verifier-runtime-v1",
+            "acceptedOnlyIfVerifierPassed": True,
+            "creatorOverrideAllowed": False,
+        },
+        "independencePolicy": {
+            "policySchemaVersion": "policy-v1",
+            "verifierMustBeDistinct": True,
+            "creatorMaySelfVerify": False,
+            "weakSelfVerificationAllowed": False,
+            "creatorMayOverrideVerifier": False,
+            "externalSideEffectsAllowed": False,
+            "workspaceMutationAllowed": False,
+            "deliverySendAllowed": False,
+            "realMultiAgentRuntimeAllowed": False,
+            "providerExecutionAllowed": False,
+        },
+        "coordinationEventRefs": [
+            f"{DELEGATION_MANIFEST_ARTIFACT_PATH}#coordinationEvents/{event['id']}"
+            for event in delegation_manifest["coordinationEvents"]
+        ],
+        "nonRegressionReusePath": list(NON_REGRESSION_REUSE_PATHS),
+        "invariants": [
+            "CreatorVerifierPairingV1 is workload-independent: it binds creator output, acceptance evidence, and VerifierResultV1 without adding regression/email behavior.",
+            "Creator and verifier agents must be distinct; creator output cannot self-certify acceptance.",
+            "VerifierResultV1 remains the acceptance source of truth and is owned by verifier-runtime-v1.",
+            "The pairing is a static contract artifact and does not run a real multi-agent framework, send email, mutate a workspace, or execute providers.",
         ],
     }
 
@@ -579,17 +705,267 @@ def validate_delegation_manifest(manifest: dict[str, Any], root: Path) -> None:
         raise ValueError("DelegationManifestV1 must include non-regression workload reuse paths")
 
 
+def _expected_pairing_source_paths(delegation_manifest: dict[str, Any]) -> dict[str, str]:
+    paths_by_kind = _artifact_paths_by_kind(delegation_manifest["delegations"][0])
+    return {
+        "delegation_manifest": DELEGATION_MANIFEST_ARTIFACT_PATH,
+        "creator_output_artifact": paths_by_kind["ArtifactV1"],
+        "acceptance_evidence": paths_by_kind["EvidenceListV1"],
+        "verifier_result": paths_by_kind["VerifierResultV1"],
+    }
+
+
+def _validate_pairing_source_artifacts(
+    source_artifacts: list[Any],
+    delegation_manifest: dict[str, Any],
+    root: Path,
+) -> dict[str, dict[str, Any]]:
+    if not isinstance(source_artifacts, list) or not source_artifacts:
+        raise ValueError("CreatorVerifierPairingV1 sourceArtifacts must be a non-empty list")
+    expected_paths = _expected_pairing_source_paths(delegation_manifest)
+    sources_by_role: dict[str, dict[str, Any]] = {}
+    for source in source_artifacts:
+        if not isinstance(source, dict):
+            raise ValueError("CreatorVerifierPairingV1 sourceArtifacts must be objects")
+        _require_fields("CreatorVerifierPairingV1 source artifact", source, ["role", "path", "contentHash"])
+        role = source["role"]
+        path = source["path"]
+        _validate_relative_posix_path(path)
+        if role not in expected_paths:
+            raise ValueError(f"Unexpected CreatorVerifierPairingV1 source role: {role}")
+        if path != expected_paths[role]:
+            raise ValueError(f"CreatorVerifierPairingV1 source role {role} must point to {expected_paths[role]}")
+        source_path = root / path
+        if not source_path.is_file():
+            raise ValueError(f"CreatorVerifierPairingV1 source artifact does not exist: {path}")
+        if _stable_file_hash(source_path) != source["contentHash"]:
+            raise ValueError(f"CreatorVerifierPairingV1 source hash mismatch for {path}")
+        sources_by_role[role] = source
+    if set(sources_by_role) != set(expected_paths):
+        raise ValueError(f"CreatorVerifierPairingV1 source roles must equal {sorted(expected_paths)}")
+    return sources_by_role
+
+
+def _reject_regression_email_delivery_ref(label: str, artifact_ref: str) -> None:
+    lowered = artifact_ref.lower()
+    if "email" in lowered or "send_email" in lowered or "delivery_unlock" in lowered:
+        raise ValueError(f"{label} must not add regression/email delivery artifacts")
+    _validate_relative_posix_path(artifact_ref)
+
+
+def validate_creator_verifier_pairing(pairing: dict[str, Any], root: Path) -> None:
+    _require_fields(
+        "CreatorVerifierPairingV1",
+        pairing,
+        [
+            "schemaVersion",
+            "id",
+            "generatedAt",
+            "phase",
+            "scope",
+            "mode",
+            "kernelPrimitive",
+            "coordinationProtocols",
+            "sourceArtifacts",
+            "delegationBinding",
+            "creator",
+            "verifier",
+            "creatorOutput",
+            "acceptanceEvidence",
+            "verifierResultBinding",
+            "independencePolicy",
+            "coordinationEventRefs",
+            "nonRegressionReusePath",
+            "invariants",
+        ],
+    )
+    if pairing["schemaVersion"] != CREATOR_VERIFIER_PAIRING_SCHEMA_VERSION:
+        raise ValueError(f"CreatorVerifierPairingV1 schemaVersion must be {CREATOR_VERIFIER_PAIRING_SCHEMA_VERSION}")
+    if pairing["id"] != CREATOR_VERIFIER_PAIRING_ID:
+        raise ValueError(f"CreatorVerifierPairingV1 id must be {CREATOR_VERIFIER_PAIRING_ID}")
+    if pairing["phase"] != "post_mvp":
+        raise ValueError("CreatorVerifierPairingV1 phase must be post_mvp")
+    if pairing["scope"] != "agent_coordination_creator_verifier_pairing_contract":
+        raise ValueError("CreatorVerifierPairingV1 scope must be agent_coordination_creator_verifier_pairing_contract")
+    if pairing["mode"] != "static_contract_only":
+        raise ValueError("CreatorVerifierPairingV1 mode must be static_contract_only")
+    if pairing["kernelPrimitive"] != "CreatorVerifierPairing":
+        raise ValueError("CreatorVerifierPairingV1 kernelPrimitive must be CreatorVerifierPairing")
+    if "creator_verifier" not in pairing["coordinationProtocols"]:
+        raise ValueError("CreatorVerifierPairingV1 coordinationProtocols must include creator_verifier")
+
+    delegation_manifest = _load_json(root / DELEGATION_MANIFEST_ARTIFACT_PATH)
+    validate_delegation_manifest(delegation_manifest, root)
+    delegation = delegation_manifest["delegations"][0]
+    paths_by_kind = _artifact_paths_by_kind(delegation)
+    delegation_ref = _delegation_ref(delegation["id"])
+    _validate_pairing_source_artifacts(pairing["sourceArtifacts"], delegation_manifest, root)
+
+    binding = pairing["delegationBinding"]
+    _require_fields(
+        "CreatorVerifierPairingV1 delegationBinding",
+        binding,
+        [
+            "delegationManifestRef",
+            "delegationRef",
+            "parentTaskSpecRef",
+            "parentRunRef",
+            "workloadIndependentObjective",
+        ],
+    )
+    if binding["delegationManifestRef"] != DELEGATION_MANIFEST_ARTIFACT_PATH or binding["delegationRef"] != delegation_ref:
+        raise ValueError("CreatorVerifierPairingV1 delegationBinding must reference DelegationManifestV1")
+    if binding["parentTaskSpecRef"] != delegation["parentTaskSpecRef"] or binding["parentRunRef"] != delegation["parentRunRef"]:
+        raise ValueError("CreatorVerifierPairingV1 delegationBinding must inherit parent TaskSpec and Run refs")
+
+    creator = pairing["creator"]
+    verifier = pairing["verifier"]
+    _require_fields(
+        "CreatorVerifierPairingV1 creator",
+        creator,
+        ["agentId", "role", "assignedDelegationRef", "mayCreateArtifacts", "mayVerifyArtifacts", "mayDeclareAcceptance", "owns"],
+    )
+    _require_fields(
+        "CreatorVerifierPairingV1 verifier",
+        verifier,
+        [
+            "agentId",
+            "role",
+            "assignedDelegationRef",
+            "mayCreateArtifacts",
+            "mayVerifyArtifacts",
+            "verifierResultOwner",
+            "independentFromCreator",
+            "owns",
+        ],
+    )
+    if creator["agentId"] != delegation["creatorAgent"] or verifier["agentId"] != delegation["verifierAgent"]:
+        raise ValueError("CreatorVerifierPairingV1 agents must match DelegationManifestV1 creator and verifier")
+    if creator["agentId"] == verifier["agentId"]:
+        raise ValueError("CreatorVerifierPairingV1 creator and verifier agents must be distinct")
+    if creator["mayVerifyArtifacts"] is not False or creator["mayDeclareAcceptance"] is not False:
+        raise ValueError("CreatorVerifierPairingV1 creator must not verify artifacts or declare acceptance")
+    if verifier["mayCreateArtifacts"] is not False or verifier["mayVerifyArtifacts"] is not True:
+        raise ValueError("CreatorVerifierPairingV1 verifier must verify without creating delegated artifacts")
+    if verifier["verifierResultOwner"] != "verifier-runtime-v1" or verifier["independentFromCreator"] is not True:
+        raise ValueError("CreatorVerifierPairingV1 verifier must be independent and owned by verifier-runtime-v1")
+
+    creator_output = pairing["creatorOutput"]
+    _require_fields(
+        "CreatorVerifierPairingV1 creatorOutput",
+        creator_output,
+        ["artifactKind", "artifactRef", "producedBy", "acceptanceVerdictOwner", "creatorOutputCanSelfCertify"],
+    )
+    if creator_output["artifactKind"] != "ArtifactV1":
+        raise ValueError("CreatorVerifierPairingV1 creatorOutput must be workload-independent ArtifactV1")
+    _reject_regression_email_delivery_ref("CreatorVerifierPairingV1 creatorOutput", creator_output["artifactRef"])
+    if creator_output["artifactRef"] != paths_by_kind["ArtifactV1"]:
+        raise ValueError("CreatorVerifierPairingV1 creatorOutput must bind DelegationManifestV1 ArtifactV1")
+    if creator_output["producedBy"] != creator["agentId"]:
+        raise ValueError("CreatorVerifierPairingV1 creatorOutput producedBy must match creator")
+    if creator_output["acceptanceVerdictOwner"] != "verifier-runtime-v1" or creator_output["creatorOutputCanSelfCertify"] is not False:
+        raise ValueError("CreatorVerifierPairingV1 creator output cannot self-certify acceptance")
+
+    acceptance_evidence = pairing["acceptanceEvidence"]
+    if not isinstance(acceptance_evidence, list):
+        raise ValueError("CreatorVerifierPairingV1 acceptanceEvidence must be a list")
+    evidence_by_kind = {
+        evidence.get("artifactKind"): evidence
+        for evidence in acceptance_evidence
+        if isinstance(evidence, dict)
+    }
+    if set(evidence_by_kind) != {"EvidenceListV1", "VerifierResultV1"}:
+        raise ValueError("CreatorVerifierPairingV1 acceptanceEvidence must include EvidenceListV1 and VerifierResultV1")
+    for kind, expected_ref in [("EvidenceListV1", paths_by_kind["EvidenceListV1"]), ("VerifierResultV1", paths_by_kind["VerifierResultV1"])]:
+        evidence = evidence_by_kind[kind]
+        _require_fields("CreatorVerifierPairingV1 acceptance evidence", evidence, ["artifactKind", "artifactRef", "requiredForAcceptance"])
+        if evidence["artifactRef"] != expected_ref or evidence["requiredForAcceptance"] is not True:
+            raise ValueError("CreatorVerifierPairingV1 acceptanceEvidence must bind required delegation artifacts")
+        _reject_regression_email_delivery_ref("CreatorVerifierPairingV1 acceptanceEvidence", evidence["artifactRef"])
+
+    verifier_binding = pairing["verifierResultBinding"]
+    _require_fields(
+        "CreatorVerifierPairingV1 verifierResultBinding",
+        verifier_binding,
+        [
+            "artifactKind",
+            "verifierResultRef",
+            "verifierAgent",
+            "verifierResultOwner",
+            "acceptedOnlyIfVerifierPassed",
+            "creatorOverrideAllowed",
+        ],
+    )
+    if verifier_binding["artifactKind"] != "VerifierResultV1" or verifier_binding["verifierResultRef"] != paths_by_kind["VerifierResultV1"]:
+        raise ValueError("CreatorVerifierPairingV1 verifierResultBinding must bind DelegationManifestV1 VerifierResultV1")
+    if verifier_binding["verifierAgent"] != verifier["agentId"] or verifier_binding["verifierResultOwner"] != "verifier-runtime-v1":
+        raise ValueError("CreatorVerifierPairingV1 verifierResultBinding must match independent verifier")
+    if verifier_binding["acceptedOnlyIfVerifierPassed"] is not True or verifier_binding["creatorOverrideAllowed"] is not False:
+        raise ValueError("CreatorVerifierPairingV1 verifier result must gate acceptance and forbid creator override")
+
+    policy = pairing["independencePolicy"]
+    _require_fields(
+        "CreatorVerifierPairingV1 independencePolicy",
+        policy,
+        [
+            "policySchemaVersion",
+            "verifierMustBeDistinct",
+            "creatorMaySelfVerify",
+            "weakSelfVerificationAllowed",
+            "creatorMayOverrideVerifier",
+            "externalSideEffectsAllowed",
+            "workspaceMutationAllowed",
+            "deliverySendAllowed",
+            "realMultiAgentRuntimeAllowed",
+            "providerExecutionAllowed",
+        ],
+    )
+    if policy["policySchemaVersion"] != "policy-v1":
+        raise ValueError("CreatorVerifierPairingV1 independencePolicy must use policy-v1")
+    if policy["verifierMustBeDistinct"] is not True:
+        raise ValueError("CreatorVerifierPairingV1 independencePolicy must require a distinct verifier")
+    for field in [
+        "creatorMaySelfVerify",
+        "weakSelfVerificationAllowed",
+        "creatorMayOverrideVerifier",
+        "externalSideEffectsAllowed",
+        "workspaceMutationAllowed",
+        "deliverySendAllowed",
+        "realMultiAgentRuntimeAllowed",
+        "providerExecutionAllowed",
+    ]:
+        if policy[field] is not False:
+            raise ValueError(f"CreatorVerifierPairingV1 independencePolicy must keep {field} false")
+
+    event_refs = pairing["coordinationEventRefs"]
+    expected_event_refs = [
+        f"{DELEGATION_MANIFEST_ARTIFACT_PATH}#coordinationEvents/{event['id']}"
+        for event in delegation_manifest["coordinationEvents"]
+    ]
+    if event_refs != expected_event_refs:
+        raise ValueError("CreatorVerifierPairingV1 coordinationEventRefs must bind DelegationManifestV1 coordination events")
+    if not set(NON_REGRESSION_REUSE_PATHS).issubset(set(pairing["nonRegressionReusePath"])):
+        raise ValueError("CreatorVerifierPairingV1 must include non-regression workload reuse paths")
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="coordination-contract")
     parser.add_argument("--delegation-out", type=Path)
     parser.add_argument("--validate-delegation", type=Path)
+    parser.add_argument("--pairing-out", type=Path)
+    parser.add_argument("--validate-pairing", type=Path)
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     root = Path(__file__).resolve().parents[1]
-    if args.delegation_out is None and args.validate_delegation is None:
+    if (
+        args.delegation_out is None
+        and args.validate_delegation is None
+        and args.pairing_out is None
+        and args.validate_pairing is None
+    ):
         raise ValueError("No action requested")
     if args.delegation_out is not None:
         manifest = build_delegation_manifest(root)
@@ -600,6 +976,15 @@ def main(argv: list[str] | None = None) -> int:
         manifest = _load_json(args.validate_delegation)
         validate_delegation_manifest(manifest, root)
         print(f"Validated DelegationManifestV1 artifact {args.validate_delegation}.")
+    if args.pairing_out is not None:
+        pairing = build_creator_verifier_pairing(root)
+        validate_creator_verifier_pairing(pairing, root)
+        _write_json(args.pairing_out, pairing)
+        print(f"Wrote CreatorVerifierPairingV1 artifact to {args.pairing_out}.")
+    if args.validate_pairing is not None:
+        pairing = _load_json(args.validate_pairing)
+        validate_creator_verifier_pairing(pairing, root)
+        print(f"Validated CreatorVerifierPairingV1 artifact {args.validate_pairing}.")
     return 0
 
 
