@@ -7062,6 +7062,95 @@ Build vs Integrate：
 为 OS kernel 抽象一个 workload-independent 的 IntentV1 ArtifactV1 子类型，定义 intentId / intentNarrative / intentOriginAgent / intentOriginChannel / requestedWorkloadType / requestedCapabilityClasses / requestedArtifactKinds / requestedVerifierClass / requestedDeliveryClass / requestedPolicyClass / intentLifecycleState / acceptedTaskSpecRef 等 workload-independent 字段；绑定 TestExecutionTaskSpecV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 与 Agent Coordination Layer 五件套；IntentV1.acceptedTaskSpecRef 必须解析到 TestExecutionTaskSpecV1.id；requestedCapabilityClasses 必须是 [read_only_inspection, evidence_collection, artifact_writing, verifier_check, human_approval_request] 的子集；字段不得依赖 regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1。
 ```
 
+### 2026-05-14 12:40 UTC Automation Sprint：IntentV1 Workload-Independent Intent Primitive Gate
+
+Active phase：post-MVP Kernel Generalization / Multi-Workload Expansion（Phase 1a-9 contract-only MVP 已满足，Agent Coordination Layer 五件套 contract 完成，第二 workload 的 TaskSpec envelope、TestExecutionResultV1、FailureTriageReportV1、VerifierResultV1、CapabilityManifestV1、RunEventLogV1、DeliveryManifestV1、PolicyManifestV1、EvidenceListV1、ObservationListV1、RunV1、StepListV1、ToolCallListV1 均已 land，正在闭合 OS kernel 的 Intent 原语：把「触发某次工作负载运行的人类/代理意图」从 first-workload regression 的隐式 prompt 抽象为 workload-independent ArtifactV1 子类型 `IntentV1` / `intent-v1`，并把 (Intent → TaskSpec → Run → Step → ToolCall → RunEvent → Observation) 七层因果链显式化）。
+
+Selected slice：
+
+```text
+Add IntentV1 ArtifactV1 subtype contract artifact at artifacts/intents/post_mvp_test_execution_intent.json so /usr/bin/python3 scripts/validate_repo.py verifies a workload-independent Intent primitive for Test Execution / Failure Triage, declaring intent-v1 schema distinct from the first-workload regression task spec / regression run, partitioning intentLifecycleStateDomain into [drafted, refined, accepted_into_task_spec, rejected, withdrawn], partitioning requestedCapabilityClassDomain into the workload-independent set [read_only_inspection, evidence_collection, artifact_writing, verifier_check, human_approval_request] and forbiddenRequestedCapabilityClasses [external_communication, repository_mutation, release_or_deploy, gui_or_browser_or_desktop_call, public_access], enforcing the six permission flags to false, binding TestExecutionTaskSpecV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 by content hash plus the five Agent Coordination Layer contracts, requiring IntentV1.acceptedTaskSpecRef to resolve into TestExecutionTaskSpecV1.id with workloadType=test_execution_failure_triage, declaring verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true, and explicitly forbidding regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 / reusesRegressionIntentArtifact=false.
+```
+
+为什么这是下一步：
+
+- 上一轮 `EvaluationReportV1.nextRecommendedSlice` 明确要求新增 workload-independent `IntentV1 / TaskSpecEnvelopeV1` ArtifactV1 subtype，把 OS kernel 的 Intent 原语在第二 workload 上独立抽象出来。
+- Post-MVP slice priority #1（generalize workload-independent kernel primitive：`IntentV1`）与 #2（add second workload：`Test Execution / Failure Triage`）继续叠加：在 `ArtifactV1` envelope 上引入第十四个具体 subtype `intent-v1`，与既有十三个 subtype 并列。
+- 这是 OS kernel 的 `Intent` 抽象第一次以 workload-independent 形式独立成 ArtifactV1 子类型。在没有 IntentV1 之前，工作负载的发起只有 TaskSpec 形式，而 TaskSpec 已经是「执行规范」，无法回答「这个执行是谁、为什么、通过什么 channel 发起的」。新 artifact 在显式 `regressionWorkloadIsolation.reusesRegressionIntentArtifact=false` 的前提下，用新的 `intent-v1` envelope，把 intent → taskSpec 的接受关系显式化（`intentLifecycleState=accepted_into_task_spec` 与 `acceptedTaskSpecRef`），并与 `TestExecutionTaskSpecV1` / `RunV1` / `StepListV1` / `ToolCallListV1` 等 12 件套 + 5 件套 coordination contract 一起做内容哈希绑定。
+- `.github/workflows/validate.yml` 与 `.github/workflows/auto-merge-cursor-pr.yml` 均存在；本轮 baseline `/usr/bin/python3 scripts/validate_repo.py` 已通过。
+
+OS kernel primitive advanced：
+
+- 在 `ArtifactV1` envelope 上引入第十四个 subtype `intent-v1`；`artifactEnvelopeSchemaVersion=artifact-v1` 显式声明 envelope 复用。未来 `CodePatchIntentV1`、`PRReviewIntentV1`、`DocumentationUpdateIntentV1`、`IncidentAnalysisIntentV1` 等可以复用同一 envelope。
+- `IntentV1` / `intent-v1`：第一次把 OS kernel 中的 `Intent` 抽象作为独立 schema 落地；intentLifecycleStateDomain（`drafted` / `refined` / `accepted_into_task_spec` / `rejected` / `withdrawn`）、requestedCapabilityClassDomain（`read_only_inspection` / `evidence_collection` / `artifact_writing` / `verifier_check` / `human_approval_request`）、forbiddenRequestedCapabilityClasses（`external_communication` / `repository_mutation` / `release_or_deploy` / `gui_or_browser_or_desktop_call` / `public_access`）、intentOriginAgentDomain（`human_principal_agent` / `creator_agent` / `verifier-runtime-v1`）、intentOriginChannelDomain（`human_review` / `automation_run` / `delegation_protocol` / `broadcast_topic`）、intent → taskSpec / run / step / tool-call / capability / runEvent / observation / evidence / verifier / delivery / policy / approval 12 向绑定全部 workload-independent。
+- `Intent → TaskSpec → Run → Step → ToolCall → RunEvent → Observation` 因果链：7 层 (Intent → TaskSpec → Run → Step → ToolCall → RunEvent → Observation → Evidence) 现在第一次在 ArtifactV1 envelope 上由 content hash 一站绑定；validator 强制 intent.acceptedTaskSpecRef → TestExecutionTaskSpecV1.id 一一对齐。
+- `Intent ↔ Verifier ↔ Policy` 三重门：`promotionConditions` 把 `intentLifecycleState==accepted_into_task_spec` / `VerifierResultV1.verdict==passed` / `RunEventLogV1.terminalState==completed` / `PolicyManifestV1.unlockConditions.unlocked==true` 钉为 intent promotion 条件；任何一个 gate 失败 → `promoted=false`。
+
+Non-regression workload reuse path：
+
+- `Test Execution / Failure Triage`：本 artifact 直接覆盖；intent envelope 覆盖完整 12 件套 + 5 coordination contract binding。
+- `Code Patch / Review Loop`：未来 `CodePatchIntentV1` 可复用同一 `intent-v1` envelope、`intentLifecycleStateDomain`、`requestedCapabilityClassDomain`、`forbiddenRequestedCapabilityClasses`、`intentOriginAgentDomain`、`intentOriginChannelDomain`；只需要替换上游 12 件套 contract artifact，并把 requestedCapabilityClasses 串成 patch_generate / patch_lint / patch_test 链对应的 read_only_inspection / artifact_writing / verifier_check 子集。
+- `PR Review` / `Documentation Update` / `Incident / Log Analysis`：同理。本 artifact 的 `nonRegressionReusePath` 字段已声明 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review` 三条路径。
+
+Coordination protocol / invariant clarified：
+
+- `coordinationBinding` 字段强制 IntentV1 绑定 Agent Coordination Layer 五件套 contract artifact，并通过 `sourceArtifacts[].contentHash` 把上游 12 件套 contract 当作不可变前提；任何一个上游 contract 漂移都会让本 artifact validate 失败。
+- `verifierVerdictOwner=verifier-runtime-v1` 与 `verifierExpectations.creatorMustNotOwnVerdict=true` 把 CreatorVerifierPairingV1 不变量延伸到 Intent 层：creator 写入 intent draft，但 verifier 拥有 acceptance；envelope 的 `promotionConditions.promoted=true` 不能由 creator 单方面声明。`intentLifecycleState=accepted_into_task_spec` 是 creator → verifier handshake 的状态字段。
+- `permissionFlagDomain` / `permissionFlags` 对 6 个 workload-independent 权限位全部强制为 `false`；`forbiddenRequestedCapabilityClasses` 显式禁止 `external_communication` / `repository_mutation` / `release_or_deploy` / `gui_or_browser_or_desktop_call` / `public_access` 5 类副作用类的 capability 出现在 Intent 的 requestedCapabilityClasses 中。这让 IntentV1 与既有 BroadcastSubscriptionManifestV1 / NegotiationRecordV1 / DelegationManifestV1 / TestExecutionTaskSpecV1 / VerifierResultV1 / CapabilityManifestV1 / RunEventLogV1 / DeliveryManifestV1 / PolicyManifestV1 / EvidenceListV1 / ObservationListV1 / RunV1 / StepListV1 / ToolCallListV1 的 policy invariant 对齐：Intent 原语自身不允许请求任何 side effect / external communication / public access。
+
+为什么这不是另一个 regression/email fixture：
+
+- artifact 路径为 `artifacts/intents/post_mvp_test_execution_intent.json`（独立于 `artifacts/runs/<fixture>/` 与 `artifacts/task_specs/` 这些 first-workload regression run/task spec 目录），scope 为 `test_execution_failure_triage_intent_contract`，不是 regression run、email draft、approval lifecycle、delivery unlock 或 policy unlock。
+- `workloadType` 必须等于 `test_execution_failure_triage`，validator 显式拒绝把它改成 `read_only_regression_evidence_demo` 或任何 regression workload；`kind` 必须为 `IntentV1`，`schemaVersion` 必须为 `intent-v1`（区别于任何 first-workload schema）。
+- `regressionWorkloadIsolation.forbiddenFields` 包含 `regression_result` / `regression_result.json` / `email_draft` / `email_draft.md` / `send_email` / `regression-task-spec-v1` / `regression-result-artifact-v1`；新增 `reusesRegressionIntentArtifact=false` / `reusesRegressionTaskSpec=false` / `reusesRegressionResultArtifact=false` / `reusesSendEmailCapability=false` 把本 artifact 与 first-workload regression intent / task spec / result / send_email capability 显式隔离。defensive scan 拒绝这些 token 在 forbiddenFields 之外再次出现。
+- `nonRegressionReusePath` 必须包含 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review`，强制本 artifact 至少有两个 non-regression 复用路径。
+
+Acceptance criteria：
+
+- `scripts/intent_artifact.py` 提供 `build_intent_artifact` / `validate_intent_artifact` 与 CLI（`--out` / `--validate`）。
+- 新增 committed `artifacts/intents/post_mvp_test_execution_intent.json`，schemaVersion 为 `intent-v1`，artifactEnvelopeSchemaVersion 为 `artifact-v1`，kind 为 `IntentV1`。
+- `scripts/validate_repo.py` 验证 committed artifact、deterministic builder output 与约 45 条 forced-failure case（workload_type / kind / schema / envelope / verdict ownership / permission flags / permission flag domain / lifecycle state / lifecycle state domain / accepted task spec ref / requested workload type / requested capability classes (forbidden / outside-domain / empty) / forbidden requested capability classes drift / requested capability class domain drift / requested artifact kinds outside domain / requested verifier class / requested delivery class / requested policy class / intent origin agent / intent origin channel / intent origin agent domain / 12 个 binding pair regression-schema reuse / hash drift / unlocked drift / approvalGranted drift / promotion gates / coordination binding (missing / wrong path) / regression isolation (3 flags) / non-regression reuse path / 13 source hash mismatches）。
+- `EvaluationReportV1` 把 IntentV1 artifact 纳入 source hash，并把下一推荐切片推进为 workload-independent `CapabilityV1` ArtifactV1 subtype。
+
+实现摘要：
+
+- 新增 `scripts/intent_artifact.py`，包含 schema 常量、deterministic intent payload、builder、validator、deterministic CLI（`--out` / `--validate`），以及 ArtifactV1 envelope / 12 向 binding（含 TaskSpec + Run + StepList + ToolCallList + CapabilityManifest + RunEventLog + ObservationList + EvidenceList + VerifierResult + DeliveryManifest + PolicyManifest + HumanApprovalDecision）/ 五件套 coordination binding 逻辑；`promotionConditions` 由 lifecycleState / verdict / run terminal state / policy unlock 四重门派生。
+- 新增 committed `artifacts/intents/post_mvp_test_execution_intent.json`，intentLifecycleState=`accepted_into_task_spec`，acceptedTaskSpecRef 解析到 TestExecutionTaskSpecV1.id，requestedCapabilityClasses=[`read_only_inspection`, `evidence_collection`, `artifact_writing`, `verifier_check`, `human_approval_request`]。
+- 更新 `scripts/validate_repo.py`：REQUIRED_FILES 增加 `scripts/intent_artifact.py` 与 `artifacts/intents/post_mvp_test_execution_intent.json`，PLAN markers 增加 `IntentV1` / `intent-v1` / `post_mvp_test_execution_intent.json`，新增 committed artifact 校验、deterministic CLI replay 与约 45 条 forced-failure case。
+- 更新 `scripts/evaluation_report.py` 与 `artifacts/evaluation/phase9_mvp_evaluation_report.json`：把 IntentV1 加入 source hash，并把 `nextRecommendedSlice` 推进为 workload-independent `CapabilityV1` ArtifactV1 subtype。
+
+Build vs Integrate：
+
+- Build：`IntentV1` schema、deterministic builder / validator / CLI、committed artifact、约 45 条 forced-failure case、`EvaluationReportV1` source hash 集成、(Intent → TaskSpec → Run → Step → ToolCall → RunEvent → Observation) 七层因果链显式化、Intent ↔ TaskSpec ↔ Verifier ↔ RunEventLog ↔ Policy 四重 promotion 门、12 向 binding、`intentLifecycleState` 不变量。
+- Integrate later：真实 Intent 解析 runtime / intent → spec 自动 refinement / 真实 human review channel / 跨 workload `IntentV1` catalogue；`ArtifactV1` envelope 抽取为独立 schema 文件；workload-independent `CapabilityV1` / 真实 capability registry runtime 等下一批 OS kernel primitive。
+
+验证计划 / 结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline /usr/bin/python3 scripts/validate_repo.py before edits：通过。
+- /usr/bin/python3 -m py_compile scripts/*.py：通过。
+- /usr/bin/python3 scripts/intent_artifact.py --out artifacts/intents/post_mvp_test_execution_intent.json：通过。
+- /usr/bin/python3 scripts/intent_artifact.py --validate artifacts/intents/post_mvp_test_execution_intent.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --report-out artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/validate_repo.py：通过，覆盖 IntentV1 committed artifact、deterministic builder output 与约 45 条 forced-failure case。
+- git diff --check：通过。
+```
+
+剩余风险：
+
+- `IntentV1` 仍是 static contract artifact，不驱动任何真实 Intent → Spec 解析 runtime / human review channel / 真实 negotiation runtime；下一切片应给出 workload-independent `CapabilityV1` ArtifactV1 subtype，把 OS kernel 的 Capability 原语从工作负载特定的 `CapabilityManifestV1` 中抽出来，并显式表达 ToolCallListV1.toolCallItems[*].capabilityRef → CapabilityV1.capabilityId 的解析关系。
+- 当前 artifact 复用 first workload 的 5 件套 coordination contract artifact 与 phase9 human approval decision fixture 作为 source fixture；`Code Patch / Review Loop` 与 `PR Review` 的 IntentV1 subtype 仍未实现。
+- `ArtifactV1` envelope 目前仍通过 `artifactEnvelopeSchemaVersion` 字段表达；未来需要把所有 14 个 subtype（`regression-result-artifact-v1` / `test-execution-result-v1` / `failure-triage-report-v1` / `verifier-result-v1` / `capability-manifest-v1` / `run-event-log-v1` / `delivery-manifest-v1` / `policy-manifest-v1` / `evidence-list-artifact-v1` / `observation-list-artifact-v1` / `run-artifact-v1` / `step-list-artifact-v1` / `tool-call-list-artifact-v1` / `intent-v1`）抽出共同 base schema（真正的 `artifact-v1` envelope）。
+
+下一轮建议：
+
+```text
+新增 workload-independent CapabilityV1 ArtifactV1 subtype contract artifact：
+为 OS kernel 抽象一个 workload-independent 的 CapabilityV1 ArtifactV1 子类型，区别于既有的 workload-specific CapabilityManifestV1。定义 capabilityId / capabilityClass / sideEffectClass / inputSchemaRef / outputSchemaRef / sourceAgentDomain / permissionFlagOverrides / verifierVerdictOwner / capabilityLifecycleState (drafted / registered / deprecated / withdrawn) 等 workload-independent 字段；绑定 TestExecutionTaskSpecV1 / IntentV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 与 Agent Coordination Layer 五件套；capabilityClass 必须是 [read_only_inspection, evidence_collection, artifact_writing, verifier_check, human_approval_request] 的子集；ToolCallListV1.toolCallItems[*].capabilityRef 必须解析到 CapabilityV1.capabilityId；字段不得依赖 regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1。
+```
+
 ## 22. Parking Lot
 
 以下内容仍然重要，但不进入第一版 MVP：
