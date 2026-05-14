@@ -56,7 +56,7 @@
   "nextRecommendedSlice": {
     "mustRemainMachineVerifiable": true,
     "phase": "post_mvp",
-    "slice": "Add a workload-independent FailureTriageReportV1 artifact contract bound to TestExecutionResultV1 and TestExecutionTaskSpecV1 so Test Execution / Failure Triage produces a workload-independent triage ArtifactV1 subtype reusable by Code Patch / Review Loop and PR Review, without depending on regression_result / email_draft / send_email fields."
+    "slice": "Add a workload-independent VerifierResultV1 ArtifactV1 subtype contract artifact for the Test Execution / Failure Triage workload, owned by verifier-runtime-v1 and bound to TestExecutionResultV1, FailureTriageReportV1, TestExecutionTaskSpecV1, and the five Agent Coordination Layer manifests, with regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 explicitly forbidden so the OS kernel gains a workload-independent VerifierResult primitive reusable by Code Patch / Review Loop and PR Review."
   },
   "outOfScope": [
     {
@@ -263,7 +263,7 @@
   "scope": "read_only_regression_evidence_demo_mvp_completion",
   "sourceArtifacts": [
     {
-      "contentHash": "83526906efafda1a252490894b54e216fe4226564b946eca045c0f4d3a8b2a1f",
+      "contentHash": "2b06abe180bee74dd0bfe314d92d7123663043833de47eda44577ccef66d0de0",
       "path": "scripts/validate_repo.py",
       "role": "validation_script"
     },
@@ -446,6 +446,11 @@
       "contentHash": "10260acfded87f746bb8b86684e8b4c77bc5ffbc6a2e8f440ba8c5262fc7c56c",
       "path": "artifacts/test_execution/post_mvp_test_execution_result.json",
       "role": "post_mvp_test_execution_result"
+    },
+    {
+      "contentHash": "0d3e69dba8fbdcb98860c22adb3cd4832fe764d084c0cbabe146d15170207956",
+      "path": "artifacts/test_execution/post_mvp_failure_triage_report.json",
+      "role": "post_mvp_failure_triage_report"
     },
     {
       "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",

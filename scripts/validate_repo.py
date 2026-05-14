@@ -125,6 +125,11 @@ from test_execution_result import (
     build_test_execution_result,
     validate_test_execution_result,
 )
+from failure_triage_report import (
+    FAILURE_TRIAGE_REPORT_ARTIFACT_PATH,
+    build_failure_triage_report,
+    validate_failure_triage_report,
+)
 from verifier_runtime import (
     REQUIRED_ARTIFACT_CHECK_IDS,
     REQUIRED_VERIFIER_RULE_IDS,
@@ -166,6 +171,7 @@ NEGOTIATION_RECORD_PATH = ROOT / NEGOTIATION_RECORD_ARTIFACT_PATH
 BROADCAST_SUBSCRIPTION_MANIFEST_PATH = ROOT / BROADCAST_SUBSCRIPTION_MANIFEST_ARTIFACT_PATH
 TEST_EXECUTION_TASK_SPEC_PATH = ROOT / TEST_EXECUTION_TASK_SPEC_ARTIFACT_PATH
 TEST_EXECUTION_RESULT_PATH = ROOT / TEST_EXECUTION_RESULT_ARTIFACT_PATH
+FAILURE_TRIAGE_REPORT_PATH = ROOT / FAILURE_TRIAGE_REPORT_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -231,6 +237,7 @@ REQUIRED_FILES = [
     "scripts/coordination_contract.py",
     "scripts/test_execution_task_spec.py",
     "scripts/test_execution_result.py",
+    "scripts/failure_triage_report.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
     "artifacts/recovery/interrupted_after_extract/run.json",
@@ -258,6 +265,7 @@ REQUIRED_FILES = [
     "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
     "artifacts/task_specs/post_mvp_test_execution_task_spec.json",
     "artifacts/test_execution/post_mvp_test_execution_result.json",
+    "artifacts/test_execution/post_mvp_failure_triage_report.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -362,6 +370,9 @@ PLAN_REQUIRED_MARKERS = [
     "TestExecutionResultV1",
     "test-execution-result-v1",
     "post_mvp_test_execution_result.json",
+    "FailureTriageReportV1",
+    "failure-triage-report-v1",
+    "post_mvp_failure_triage_report.json",
     "Agentic Engineering OS Kernel",
     "workload-independent primitives",
     "first workload: Read-only Regression Evidence Demo",
@@ -3636,6 +3647,299 @@ def run_test_execution_result_builder(artifact_out: Path) -> None:
         )
 
 
+def expect_failure_triage_report_validation_failure(
+    label: str,
+    report: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_failure_triage_report(report, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"FailureTriageReportV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(
+        f"FailureTriageReportV1 forced-failure case {label} unexpectedly passed validation"
+    )
+
+
+def validate_committed_failure_triage_report_artifact() -> None:
+    artifact = load_json(FAILURE_TRIAGE_REPORT_PATH)
+    try:
+        validate_failure_triage_report(artifact, ROOT)
+    except ValueError as exc:
+        raise AssertionError(
+            f"Committed FailureTriageReportV1 artifact failed validation: {exc}"
+        ) from exc
+
+    expected_artifact = build_failure_triage_report(ROOT)
+    if artifact != expected_artifact:
+        raise AssertionError(
+            "Committed FailureTriageReportV1 artifact differs from deterministic builder output"
+        )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["workloadType"] = "read_only_regression_evidence_demo"
+    expect_failure_triage_report_validation_failure(
+        "workload_type_regression_reuse",
+        tampered,
+        "workloadType must be test_execution_failure_triage",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["kind"] = "TestExecutionResultV1"
+    expect_failure_triage_report_validation_failure(
+        "kind_reuses_test_execution_result",
+        tampered,
+        "kind must be FailureTriageReportV1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["schemaVersion"] = "regression-result-artifact-v1"
+    expect_failure_triage_report_validation_failure(
+        "schema_regression_reuse",
+        tampered,
+        "schemaVersion must be failure-triage-report-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["artifactEnvelopeSchemaVersion"] = "regression-result-artifact-v1"
+    expect_failure_triage_report_validation_failure(
+        "envelope_schema_regression_reuse",
+        tampered,
+        "artifactEnvelopeSchemaVersion must be artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierVerdictOwner"] = "creator_agent"
+    expect_failure_triage_report_validation_failure(
+        "creator_owns_verdict",
+        tampered,
+        "verifierVerdictOwner must be verifier-runtime-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierExpectations"]["creatorMustNotOwnVerdict"] = False
+    expect_failure_triage_report_validation_failure(
+        "creator_must_not_own_verdict_disabled",
+        tampered,
+        "verifierExpectations.creatorMustNotOwnVerdict must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["taskSpecBinding"]["taskSpecSchemaVersion"] = "regression-task-spec-v1"
+    expect_failure_triage_report_validation_failure(
+        "task_spec_binding_regression_schema_reuse",
+        tampered,
+        "taskSpecSchemaVersion must equal test-execution-task-spec-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["testExecutionResultBinding"]["testExecutionResultSchemaVersion"] = (
+        "regression-result-artifact-v1"
+    )
+    expect_failure_triage_report_validation_failure(
+        "test_execution_result_binding_regression_schema_reuse",
+        tampered,
+        "testExecutionResultSchemaVersion must equal test-execution-result-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["testExecutionResultBinding"]["testExecutionResultContentHash"] = "0" * 64
+    expect_failure_triage_report_validation_failure(
+        "test_execution_result_binding_hash_drift",
+        tampered,
+        "testExecutionResultContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyBoundary"]["externalSideEffectsAllowed"] = True
+    expect_failure_triage_report_validation_failure(
+        "policy_external_side_effects_allowed",
+        tampered,
+        "policyBoundary.externalSideEffectsAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyBoundary"]["externalCommunicationAllowed"] = True
+    expect_failure_triage_report_validation_failure(
+        "policy_external_communication_allowed",
+        tampered,
+        "policyBoundary.externalCommunicationAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["triageFindings"] = []
+    expect_failure_triage_report_validation_failure(
+        "triage_findings_empty",
+        tampered,
+        "triageFindings must be a non-empty list",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for finding in tampered["triageFindings"]:
+        if finding["caseRef"] == "case-002":
+            finding["caseRef"] = "case-001"
+            break
+    expect_failure_triage_report_validation_failure(
+        "triages_passed_case",
+        tampered,
+        "must not triage a passed case",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for finding in tampered["triageFindings"]:
+        if finding["caseRef"] == "case-002":
+            finding["observedStatus"] = "passed"
+            break
+    expect_failure_triage_report_validation_failure(
+        "finding_observed_status_drift",
+        tampered,
+        "observedStatus must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for finding in tampered["triageFindings"]:
+        if finding["caseRef"] == "case-002":
+            finding["supportingEvidenceIds"] = ["ev-case-001-outcome"]
+            break
+    expect_failure_triage_report_validation_failure(
+        "finding_evidence_belongs_to_other_case",
+        tampered,
+        "belongs to another case",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for finding in tampered["triageFindings"]:
+        if finding["caseRef"] == "case-002":
+            finding["supportingEvidenceIds"] = []
+            break
+    expect_failure_triage_report_validation_failure(
+        "finding_missing_evidence",
+        tampered,
+        "at least one supporting evidence id",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for finding in tampered["triageFindings"]:
+        if finding["caseRef"] == "case-002":
+            finding["refinedFailureClassification"] = "send_email"
+            break
+    expect_failure_triage_report_validation_failure(
+        "finding_refined_classification_invalid",
+        tampered,
+        "refinedFailureClassification must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for finding in tampered["triageFindings"]:
+        if finding["caseRef"] == "case-002":
+            finding["remediationCategory"] = "send_external_communication"
+            break
+    expect_failure_triage_report_validation_failure(
+        "finding_remediation_invalid",
+        tampered,
+        "remediationCategory must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for finding in tampered["triageFindings"]:
+        if finding["caseRef"] == "case-002":
+            finding["mayBroadcastDownstream"] = True
+            break
+    expect_failure_triage_report_validation_failure(
+        "finding_broadcast_downstream_allowed",
+        tampered,
+        "mayBroadcastDownstream must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["summary"]["totalFindings"] = 0
+    expect_failure_triage_report_validation_failure(
+        "summary_count_drift",
+        tampered,
+        "summary must equal computed counts",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    del tampered["coordinationBinding"]["broadcastSubscriptionManifestRef"]
+    expect_failure_triage_report_validation_failure(
+        "coordination_binding_missing_broadcast",
+        tampered,
+        "coordinationBinding must include",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["coordinationBinding"]["delegationManifestRef"] = (
+        "artifacts/runs/all_passed/run.json"
+    )
+    expect_failure_triage_report_validation_failure(
+        "coordination_binding_wrong_path",
+        tampered,
+        "coordinationBinding.delegationManifestRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["nonRegressionReusePath"] = ["read_only_regression_evidence_demo"]
+    expect_failure_triage_report_validation_failure(
+        "non_regression_reuse_path_missing",
+        tampered,
+        "nonRegressionReusePath must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesTestExecutionResultArtifactSchema"] = True
+    expect_failure_triage_report_validation_failure(
+        "reuses_test_execution_result_schema",
+        tampered,
+        "must not reuse the TestExecutionResultV1 schema",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for source in tampered["sourceArtifacts"]:
+        if source.get("role") == "test_execution_result":
+            source["contentHash"] = "0" * 64
+            break
+    expect_failure_triage_report_validation_failure(
+        "source_hash_mismatch_test_execution_result",
+        tampered,
+        "source hash mismatch",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for source in tampered["sourceArtifacts"]:
+        if source.get("role") == "broadcast_subscription_manifest":
+            source["contentHash"] = "0" * 64
+            break
+    expect_failure_triage_report_validation_failure(
+        "source_hash_mismatch_broadcast",
+        tampered,
+        "source hash mismatch",
+    )
+
+
+def run_failure_triage_report_builder(artifact_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/failure_triage_report.py"),
+        "--out",
+        str(artifact_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "FailureTriageReportV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -4040,6 +4344,7 @@ def main() -> None:
     validate_committed_broadcast_subscription_manifest_artifact()
     validate_committed_test_execution_task_spec_artifact()
     validate_committed_test_execution_result_artifact()
+    validate_committed_failure_triage_report_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -4166,6 +4471,12 @@ def main() -> None:
         if load_json(generated_test_execution_result) != load_json(TEST_EXECUTION_RESULT_PATH):
             raise AssertionError(
                 "Committed TestExecutionResultV1 artifact differs from deterministic CLI output"
+            )
+        generated_failure_triage_report = temp_root / "post_mvp_failure_triage_report.json"
+        run_failure_triage_report_builder(generated_failure_triage_report)
+        if load_json(generated_failure_triage_report) != load_json(FAILURE_TRIAGE_REPORT_PATH):
+            raise AssertionError(
+                "Committed FailureTriageReportV1 artifact differs from deterministic CLI output"
             )
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)
