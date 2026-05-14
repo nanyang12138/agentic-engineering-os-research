@@ -74,6 +74,10 @@ from policy_manifest import (
     POLICY_MANIFEST_ARTIFACT_PATH as POST_MVP_POLICY_MANIFEST_ARTIFACT_PATH,
     validate_policy_manifest,
 )
+from evidence_artifact import (
+    EVIDENCE_LIST_ARTIFACT_PATH as POST_MVP_EVIDENCE_LIST_ARTIFACT_PATH,
+    validate_evidence_list_artifact,
+)
 
 
 EVALUATION_REPORT_SCHEMA_VERSION = "mvp-evaluation-report-v1"
@@ -205,6 +209,7 @@ def _source_specs() -> list[tuple[str, str]]:
         ("post_mvp_test_execution_run_event_log", RUN_EVENT_LOG_ARTIFACT_PATH),
         ("post_mvp_test_execution_delivery_manifest", DELIVERY_MANIFEST_ARTIFACT_PATH),
         ("post_mvp_test_execution_policy_manifest", POST_MVP_POLICY_MANIFEST_ARTIFACT_PATH),
+        ("post_mvp_test_execution_evidence_list", POST_MVP_EVIDENCE_LIST_ARTIFACT_PATH),
     ]
     for fixture_id in FIXTURE_IDS:
         specs.append((f"phase1a_{fixture_id}_run", f"artifacts/runs/{fixture_id}/run.json"))
@@ -355,6 +360,8 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
     validate_delivery_manifest(delivery_manifest, root)
     policy_manifest = _load_json(root / POST_MVP_POLICY_MANIFEST_ARTIFACT_PATH)
     validate_policy_manifest(policy_manifest, root)
+    evidence_list_artifact = _load_json(root / POST_MVP_EVIDENCE_LIST_ARTIFACT_PATH)
+    validate_evidence_list_artifact(evidence_list_artifact, root)
     delivery_readiness = delivery_report["readiness"]
     delivery_blocker_ids = [blocker["id"] for blocker in delivery_report["blockers"]]
     phase_coverage = _phase_coverage()
@@ -437,7 +444,7 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
         ],
         "nextRecommendedSlice": {
             "phase": "post_mvp",
-            "slice": "Add a workload-independent EvidenceV1 (or EvidenceListV1) ArtifactV1 subtype contract artifact that defines the canonical OS-kernel evidence primitive for any workload: enumerate workload-independent evidence kinds (test_case_outcome_record, stack_trace_record, log_excerpt, diff_snippet, build_log_excerpt, screenshot_redaction_record, etc.) plus an EvidenceItemV1 envelope with stable evidenceId / source / contentHash / redactionPolicyRef / capabilityRef fields, and bind it by content hash to TestExecutionTaskSpecV1, CapabilityManifestV1, RunEventLogV1, VerifierResultV1, DeliveryManifestV1, PolicyManifestV1, and the five Agent Coordination Layer manifests. Declare verifier-runtime-v1 as the verdict owner, forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1, and require every VerifierResultV1.requiredEvidenceRefs and FailureTriageReportV1.evidenceRefs to point into the EvidenceListV1 envelope, so the OS kernel gains a workload-independent evidence primitive reusable by Code Patch / Review Loop, PR Review, Documentation Update, and Incident / Log Analysis.",
+            "slice": "Add a workload-independent ObservationV1 ArtifactV1 subtype contract artifact that defines the canonical OS-kernel observation primitive for any workload: enumerate workload-independent observation kinds (capability_invocation_record, tool_call_record, artifact_write_record, verifier_rule_evaluation_record, run_state_transition_record, redaction_overlay_record), define an ObservationItemV1 envelope with stable observationId / observationKind / capturedAt / capabilityRef / runEventLogRef / evidenceRefs fields, and bind it by content hash to TestExecutionTaskSpecV1, CapabilityManifestV1, RunEventLogV1, EvidenceListV1, VerifierResultV1, DeliveryManifestV1, PolicyManifestV1 and the five Agent Coordination Layer manifests. Declare verifier-runtime-v1 as the verdict owner, force the six workload-independent permission flags to false, require every ObservationItemV1.runEventLogRef to resolve into RunEventLogV1.events and every ObservationItemV1.evidenceRefs to resolve into EvidenceListV1.evidenceItems, and forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1.",
             "mustRemainMachineVerifiable": True,
         },
         "invariants": [

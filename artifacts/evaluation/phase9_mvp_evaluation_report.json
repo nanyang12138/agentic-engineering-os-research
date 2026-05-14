@@ -56,7 +56,7 @@
   "nextRecommendedSlice": {
     "mustRemainMachineVerifiable": true,
     "phase": "post_mvp",
-    "slice": "Add a workload-independent EvidenceV1 (or EvidenceListV1) ArtifactV1 subtype contract artifact that defines the canonical OS-kernel evidence primitive for any workload: enumerate workload-independent evidence kinds (test_case_outcome_record, stack_trace_record, log_excerpt, diff_snippet, build_log_excerpt, screenshot_redaction_record, etc.) plus an EvidenceItemV1 envelope with stable evidenceId / source / contentHash / redactionPolicyRef / capabilityRef fields, and bind it by content hash to TestExecutionTaskSpecV1, CapabilityManifestV1, RunEventLogV1, VerifierResultV1, DeliveryManifestV1, PolicyManifestV1, and the five Agent Coordination Layer manifests. Declare verifier-runtime-v1 as the verdict owner, forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1, and require every VerifierResultV1.requiredEvidenceRefs and FailureTriageReportV1.evidenceRefs to point into the EvidenceListV1 envelope, so the OS kernel gains a workload-independent evidence primitive reusable by Code Patch / Review Loop, PR Review, Documentation Update, and Incident / Log Analysis."
+    "slice": "Add a workload-independent ObservationV1 ArtifactV1 subtype contract artifact that defines the canonical OS-kernel observation primitive for any workload: enumerate workload-independent observation kinds (capability_invocation_record, tool_call_record, artifact_write_record, verifier_rule_evaluation_record, run_state_transition_record, redaction_overlay_record), define an ObservationItemV1 envelope with stable observationId / observationKind / capturedAt / capabilityRef / runEventLogRef / evidenceRefs fields, and bind it by content hash to TestExecutionTaskSpecV1, CapabilityManifestV1, RunEventLogV1, EvidenceListV1, VerifierResultV1, DeliveryManifestV1, PolicyManifestV1 and the five Agent Coordination Layer manifests. Declare verifier-runtime-v1 as the verdict owner, force the six workload-independent permission flags to false, require every ObservationItemV1.runEventLogRef to resolve into RunEventLogV1.events and every ObservationItemV1.evidenceRefs to resolve into EvidenceListV1.evidenceItems, and forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1."
   },
   "outOfScope": [
     {
@@ -263,7 +263,7 @@
   "scope": "read_only_regression_evidence_demo_mvp_completion",
   "sourceArtifacts": [
     {
-      "contentHash": "7a860faa38929eafb14bf7eec2f33d610c09dfa3f41615493f657143a5711edc",
+      "contentHash": "06a86dc6dabab0978a4f334249c463f06a2702592f563dc27fc94bab3cecaa53",
       "path": "scripts/validate_repo.py",
       "role": "validation_script"
     },
@@ -476,6 +476,11 @@
       "contentHash": "1c95304f5b2ef724737cc980bdc5df85305d56ad4cb484e27025ab8fe5764054",
       "path": "artifacts/policy/post_mvp_test_execution_policy_manifest.json",
       "role": "post_mvp_test_execution_policy_manifest"
+    },
+    {
+      "contentHash": "b6bbb11ba37751a02ae7554c0c2dd182beda8d939f833ef81dbdb03fa38657bb",
+      "path": "artifacts/evidence/post_mvp_test_execution_evidence_list.json",
+      "role": "post_mvp_test_execution_evidence_list"
     },
     {
       "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",

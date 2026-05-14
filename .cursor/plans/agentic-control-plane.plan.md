@@ -6613,6 +6613,96 @@ Build vs Integrate：
 为 OS kernel 抽象一个 workload-independent 的 EvidenceV1 / EvidenceListV1 ArtifactV1 子类型，定义 evidenceId / evidenceKind / source / contentHash / capabilityRef / redactionPolicyRef 等 workload-independent 字段，绑定 TestExecutionTaskSpecV1 / CapabilityManifestV1 / RunEventLogV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 与 Agent Coordination Layer 五件套；要求 VerifierResultV1.requiredEvidenceRefs 与 FailureTriageReportV1.evidenceRefs 全部指向本 EvidenceListV1 envelope；字段不得依赖 regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1。
 ```
 
+### 2026-05-14 11:00 UTC Automation Sprint：EvidenceListV1 Workload-Independent Evidence Primitive Gate
+
+Active phase：post-MVP Kernel Generalization / Multi-Workload Expansion（Phase 1a-9 contract-only MVP 已满足，Agent Coordination Layer 五件套 contract 完成，第二 workload 的 TaskSpec envelope、TestExecutionResultV1、FailureTriageReportV1、VerifierResultV1、CapabilityManifestV1、RunEventLogV1、DeliveryManifestV1、PolicyManifestV1 均已 land，正在闭合 OS kernel 的 Evidence 原语，把「证据」从 first-workload regression `evidence.json` (`evidence-list-v1`) 抽象为 workload-independent ArtifactV1 子类型）。
+
+Selected slice：
+
+```text
+Add EvidenceListV1 ArtifactV1 subtype contract artifact at artifacts/evidence/post_mvp_test_execution_evidence_list.json so /usr/bin/python3 scripts/validate_repo.py verifies a workload-independent Evidence primitive for Test Execution / Failure Triage, declaring evidence-list-artifact-v1 / evidence-item-v1 / evidence-source-v1 schemas distinct from the first-workload regression evidence-list-v1, partitioning the evidenceKindDomain into a workload-independent set (test_case_outcome_record / stack_trace_record / log_excerpt / diff_snippet / build_log_excerpt / screenshot_redaction_record / triage_finding_excerpt / evidence_metadata_record), enforcing the six permission flags to false, binding TestExecutionTaskSpecV1 / CapabilityManifestV1 / RunEventLogV1 / TestExecutionResultV1 / FailureTriageReportV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 by content hash plus the five Agent Coordination Layer contracts, mirroring TestExecutionResultV1.evidenceList by id / kind / contentHash, requiring every FailureTriageReportV1 supportingEvidenceId to resolve into the envelope, declaring verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true, and explicitly forbidding regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 / reusesRegressionEvidenceList=false / reusesSendEmailCapability=false.
+```
+
+为什么这是下一步：
+
+- 上一轮 `EvaluationReportV1.nextRecommendedSlice` 明确要求新增 workload-independent `EvidenceV1 / EvidenceListV1` ArtifactV1 subtype，把 OS kernel 的证据原语在第二 workload 上独立抽象出来。
+- Post-MVP slice priority #1（generalize workload-independent kernel primitive：`EvidenceV1`）与 #2（add second workload：`Test Execution / Failure Triage`）继续叠加：在 `ArtifactV1` envelope 上引入第九个具体 subtype `evidence-list-artifact-v1`，与 `regression-result-artifact-v1` / `test-execution-result-v1` / `failure-triage-report-v1` / `verifier-result-v1` / `capability-manifest-v1` / `run-event-log-v1` / `delivery-manifest-v1` / `policy-manifest-v1` 并列。
+- 这是 OS kernel 的 `Evidence` 抽象第一次以 workload-independent 形式独立成 ArtifactV1 子类型。既有的 `artifacts/runs/*/evidence.json`（schemaVersion `evidence-list-v1`）是 first-workload regression demo 的内嵌 evidence；既有的 `TestExecutionResultV1.evidenceList` 仅是 result artifact 内的子数组。新 artifact 在显式 `regressionWorkloadIsolation.reusesRegressionEvidenceList=false` 的前提下，用新的 `evidence-list-artifact-v1` envelope、`evidence-item-v1` / `evidence-source-v1` 子 schema，把每一条证据抽出来成为独立可绑定 / 可审计 / 可校验的 workload-independent 对象，并与 `TestExecutionResultV1.evidenceList` 通过 id / kind / contentHash 一一对齐。
+- `.github/workflows/validate.yml` 与 `.github/workflows/auto-merge-cursor-pr.yml` 均存在；本轮 baseline `/usr/bin/python3 scripts/validate_repo.py` 已通过。
+
+OS kernel primitive advanced：
+
+- 在 `ArtifactV1` envelope 上引入第九个 subtype `evidence-list-artifact-v1`；`artifactEnvelopeSchemaVersion=artifact-v1` 显式声明 envelope 复用。未来 `CodePatchEvidenceListV1`、`PRReviewEvidenceListV1`、`DocumentationUpdateEvidenceListV1`、`IncidentAnalysisEvidenceListV1` 等可以复用同一 envelope。
+- `EvidenceV1` / `evidence-item-v1` / `evidence-source-v1`：第一次把 OS kernel 中的 `Evidence` 抽象作为独立 schema 落地；evidenceKindDomain、evidenceSourceKindDomain、evidence → capability 绑定、redaction policy 绑定全部 workload-independent。
+- `TestExecutionResult ↔ EvidenceList` 一致性：每个 `EvidenceItemV1.evidenceId` 必须与 `TestExecutionResultV1.evidenceList[*].id` 一一对应，`evidenceKind` 与 `contentHash` 必须严格匹配；validator 显式拒绝增删、id drift、hash drift。
+- `FailureTriageReport ↔ EvidenceList` 一致性：`failureTriageEvidenceCoverage` 字段把 `FailureTriageReportV1.triageFindings[*].supportingEvidenceIds` 全集合解析到 evidence envelope，`evidenceListCoversTriage=true` 是 invariant；validator 显式拒绝 unresolved triage evidence。
+- `Verifier ↔ RunEvent ↔ Policy ↔ Evidence` 三重门：`promotionConditions` 把 `VerifierResultV1.verdict==passed` / `RunEventLogV1.terminalState==completed` / `PolicyManifestV1.unlockConditions.unlocked==true` 钉为 evidence promotion 条件。任何一个 gate 失败 → `promoted=false`。
+
+Non-regression workload reuse path：
+
+- `Test Execution / Failure Triage`：本 artifact 直接覆盖；4 条 evidence item + 1 条 redaction policy binding + 完整 9 件套 binding。
+- `Code Patch / Review Loop`：未来 `CodePatchEvidenceListV1` 可复用同一 `evidence-list-artifact-v1` envelope、`evidence-item-v1` / `evidence-source-v1` 子 schema、evidenceKind → capability 一致性约束；evidenceKind 切换到 `diff_snippet` / `build_log_excerpt` 等仍然 workload-independent 的名字。
+- `PR Review` / `Documentation Update` / `Incident / Log Analysis`：同理。本 artifact 的 `nonRegressionReusePath` 字段已声明 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review` 三条路径。
+
+Coordination protocol / invariant clarified：
+
+- `coordinationBinding` 字段强制 EvidenceListV1 绑定 Agent Coordination Layer 五件套 contract artifact，并通过 `sourceArtifacts[].contentHash` 把上游 coordination / task spec / capability manifest / run event log / test execution result / failure triage report / verifier result / delivery manifest / policy manifest / approval decision contract 当作不可变前提；任何一个上游 contract 漂移都会让本 artifact validate 失败。
+- `verifierVerdictOwner=verifier-runtime-v1` 与 `verifierExpectations.creatorMustNotOwnVerdict=true` 把 CreatorVerifierPairingV1 不变量延伸到证据层：creator 写入 evidence draft，但 verifier 拥有 acceptance；envelope 的 `promotionConditions.promoted=true` 不能由 creator 单方面声明。
+- `permissionFlagDomain` / `permissionFlags` 对 6 个 workload-independent 权限位全部强制为 `false`，与既有 BroadcastSubscriptionManifestV1 / NegotiationRecordV1 / DelegationManifestV1 / TestExecutionTaskSpecV1 / TestExecutionResultV1 / FailureTriageReportV1 / VerifierResultV1 / CapabilityManifestV1 / RunEventLogV1 / DeliveryManifestV1 / PolicyManifestV1 的 policy invariant 对齐：证据原语自身不允许触发任何 side effect / external communication / public access。
+
+为什么这不是另一个 regression/email fixture：
+
+- artifact 路径为 `artifacts/evidence/post_mvp_test_execution_evidence_list.json`（独立于 `artifacts/runs/*/evidence.json` 这些 first-workload regression evidence artifact），scope 为 `test_execution_failure_triage_evidence_list_contract`，不是 regression evidence、email draft、approval lifecycle、delivery unlock 或 policy unlock。
+- `workloadType` 必须等于 `test_execution_failure_triage`，validator 显式拒绝把它改成 `read_only_regression_evidence_demo` 或任何 regression workload；`kind` 必须为 `EvidenceListV1`，`schemaVersion` 必须为 `evidence-list-artifact-v1`（区别于 first-workload `evidence-list-v1`），每条 item 的 `schemaVersion` 必须为 `evidence-item-v1`，每个 source 的 `schemaVersion` 必须为 `evidence-source-v1`。
+- `regressionWorkloadIsolation.forbiddenFields` 包含 `regression_result` / `regression_result.json` / `email_draft` / `email_draft.md` / `send_email` / `regression-task-spec-v1` / `regression-result-artifact-v1`；新增 `reusesRegressionEvidenceList=false` / `reusesRegressionResultArtifact=false` / `reusesSendEmailCapability=false` 把本 artifact 与 first-workload regression evidence artifact 显式隔离。defensive scan 拒绝这些 token 在 forbiddenFields 之外再次出现。
+- `nonRegressionReusePath` 必须包含 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review`，强制本 artifact 至少有两个 non-regression 复用路径。
+
+Acceptance criteria：
+
+- `scripts/evidence_artifact.py` 提供 `build_evidence_list_artifact` / `validate_evidence_list_artifact` 与 CLI（`--out` / `--validate`）。
+- 新增 committed `artifacts/evidence/post_mvp_test_execution_evidence_list.json`，schemaVersion 为 `evidence-list-artifact-v1`，artifactEnvelopeSchemaVersion 为 `artifact-v1`，每条 item 的 `schemaVersion` 为 `evidence-item-v1`，每个 source 的 `schemaVersion` 为 `evidence-source-v1`。
+- `scripts/validate_repo.py` 验证 committed artifact、deterministic builder output 与约 50 条 forced-failure case（workload_type / kind / schema / envelope / verdict ownership / permission flags / domain drift / evidence item schema / kind / capability / source / hash / id / count / 9 binding pair / promotion gates / failure triage coverage / coordination binding / regression isolation / non-regression reuse path / source hash mismatches）。
+- `EvaluationReportV1` 把 EvidenceListV1 artifact 纳入 source hash，并把下一推荐切片推进为 workload-independent `ObservationV1` ArtifactV1 subtype。
+
+实现摘要：
+
+- 新增 `scripts/evidence_artifact.py`，包含 schema 常量、4 条 synthetic deterministic evidence item（mirror TestExecutionResultV1.evidenceList）、builder、validator、deterministic CLI（`--out` / `--validate`），以及 ArtifactV1 envelope / 9 向 binding / 五件套 coordination binding 逻辑；`failureTriageEvidenceCoverage` 自动计算 triage cited ↔ envelope 交集；`promotionConditions` 由 verdict / run terminal state / policy unlock 三重门派生。
+- 新增 committed `artifacts/evidence/post_mvp_test_execution_evidence_list.json`。
+- 更新 `scripts/validate_repo.py`：REQUIRED_FILES 增加 `scripts/evidence_artifact.py` 与 `artifacts/evidence/post_mvp_test_execution_evidence_list.json`，PLAN markers 增加 `evidence-list-artifact-v1` / `evidence-item-v1` / `evidence-source-v1` / `post_mvp_test_execution_evidence_list.json`，新增 committed artifact 校验、deterministic CLI replay 与约 50 条 forced-failure case。
+- 更新 `scripts/evaluation_report.py` 与 `artifacts/evaluation/phase9_mvp_evaluation_report.json`：把 EvidenceListV1 加入 source hash，并把 `nextRecommendedSlice` 推进为 workload-independent `ObservationV1` ArtifactV1 subtype。
+
+Build vs Integrate：
+
+- Build：`EvidenceListV1` schema、deterministic builder / validator / CLI、committed artifact、50 条 forced-failure case、`EvaluationReportV1` source hash 集成、TestExecutionResult ↔ EvidenceList 一致性约束、FailureTriageReport ↔ EvidenceList 覆盖率约束、Verifier ↔ RunEventLog ↔ Policy 三重 promotion 门、9 向 binding。
+- Integrate later：真实证据存储（Evidence Graph 数据库 / artifact registry）、跨 workload `EvidenceListV1` catalogue、`ArtifactV1` envelope 抽取为独立 schema 文件、`ObservationV1` / `StepV1` / `RunV1` 等下一批 OS kernel primitive。
+
+验证计划 / 结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline /usr/bin/python3 scripts/validate_repo.py before edits：通过。
+- /usr/bin/python3 -m py_compile scripts/*.py：通过。
+- /usr/bin/python3 scripts/evidence_artifact.py --out artifacts/evidence/post_mvp_test_execution_evidence_list.json：通过。
+- /usr/bin/python3 scripts/evidence_artifact.py --validate artifacts/evidence/post_mvp_test_execution_evidence_list.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --report-out artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/validate_repo.py：通过，覆盖 EvidenceListV1 committed artifact、deterministic builder output 与约 50 条 forced-failure case。
+- git diff --check：通过。
+```
+
+剩余风险：
+
+- `EvidenceListV1` 仍是 static contract artifact，不驱动任何真实证据存储 / Evidence Graph runtime；下一切片应给出 workload-independent `ObservationV1` ArtifactV1 subtype，把 OS kernel 的观察原语在第二 workload 上独立抽象出来。
+- 当前 artifact 复用 first workload 的 5 件套 coordination contract artifact 与 phase9 human approval decision fixture 作为 source fixture；`Code Patch / Review Loop` 与 `PR Review` 的 TaskSpec / Artifact / EvidenceList subtype 仍未实现。
+- `ArtifactV1` envelope 目前仍通过 `artifactEnvelopeSchemaVersion` 字段表达；未来需要把所有 9 个 subtype（`regression-result-artifact-v1` / `test-execution-result-v1` / `failure-triage-report-v1` / `verifier-result-v1` / `capability-manifest-v1` / `run-event-log-v1` / `delivery-manifest-v1` / `policy-manifest-v1` / `evidence-list-artifact-v1`）抽出共同 base schema（真正的 `artifact-v1` envelope）。
+
+下一轮建议：
+
+```text
+新增 workload-independent ObservationV1 ArtifactV1 subtype contract artifact：
+为 OS kernel 抽象一个 workload-independent 的 ObservationV1 / ObservationListV1 ArtifactV1 子类型，定义 observationId / observationKind / capturedAt / capabilityRef / runEventLogRef / evidenceRefs 等 workload-independent 字段；绑定 TestExecutionTaskSpecV1 / CapabilityManifestV1 / RunEventLogV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 与 Agent Coordination Layer 五件套；要求每条 observation 的 runEventLogRef 解析到 RunEventLogV1.events，每条 evidenceRefs 解析到 EvidenceListV1.evidenceItems；字段不得依赖 regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1。
+```
+
 ## 22. Parking Lot
 
 以下内容仍然重要，但不进入第一版 MVP：
