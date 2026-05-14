@@ -5993,6 +5993,94 @@ Build vs Integrate：
 为第二 workload Test Execution / Failure Triage 提供 ArtifactV1 子类型，绑定 TestExecutionTaskSpecV1 envelope、声明 framework / runId / per-case 字段、强制 evidence 引用与 verifier-runtime-v1 verdict 所有权，并复用 DelegationManifestV1 / CreatorVerifierPairingV1 / AgentMessageManifestV1 / NegotiationRecordV1 / BroadcastSubscriptionManifestV1 的 coordination contract；字段不得依赖 regression_result / email_draft / send_email。
 ```
 
+### 2026-05-14 08:40 UTC Automation Sprint：TestExecutionResultV1 ArtifactV1 Subtype Contract Gate
+
+Active phase：post-MVP Kernel Generalization / Multi-Workload Expansion（Phase 1a-9 contract-only MVP 已满足，Agent Coordination Layer 五件套 contract 完成，第二 workload 的 TaskSpec envelope 已 land，正在闭合第二 workload 的 ArtifactV1 子类型）。
+
+Selected slice：
+
+```text
+Add TestExecutionResultV1 ArtifactV1 subtype contract artifact at artifacts/test_execution/post_mvp_test_execution_result.json so /usr/bin/python3 scripts/validate_repo.py verifies a workload-independent ArtifactV1 subtype for Test Execution / Failure Triage, bound to TestExecutionTaskSpecV1 (test-execution-task-spec-v1) by content hash and to DelegationManifestV1 / CreatorVerifierPairingV1 / AgentMessageManifestV1 / NegotiationRecordV1 / BroadcastSubscriptionManifestV1 by ref and source content hash, with regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 explicitly forbidden.
+```
+
+为什么这是下一步：
+
+- 上一轮 `EvaluationReportV1` 的 `nextRecommendedSlice` 明确要求新增 workload-independent `TestExecutionResultV1` ArtifactV1 subtype，把 (TaskSpecV1 envelope, ArtifactV1 envelope, EvidenceListV1, VerifierResultV1) 的 OS kernel 闭环延伸到第二 workload。
+- Post-MVP slice priority #1（generalize workload-independent kernel primitive：`ArtifactV1`）与 #2（add second workload：`Test Execution / Failure Triage`）正好叠加在同一切片：把 `ArtifactV1` envelope 从单一 `regression-result-artifact-v1` 推广到第二 subtype `test-execution-result-v1`。
+- `.github/workflows/validate.yml` 和 `.github/workflows/auto-merge-cursor-pr.yml` 均存在；本轮 baseline `/usr/bin/python3 scripts/validate_repo.py` 已通过。
+
+OS kernel primitive advanced：
+
+- 在 `ArtifactV1` envelope 上引入第二个具体 subtype `test-execution-result-v1`，与既有的 `regression-result-artifact-v1` 并列。`artifactEnvelopeSchemaVersion` 字段使 envelope 在 schema 层显式存在，未来 `PatchArtifactV1`、`ReviewFindingArtifactV1`、`FailureTriageReportV1` 等可以复用同一 envelope。
+- `EvidenceListV1`：在 ArtifactV1 子类型中以 inline、content-hash bound 的 evidence record 形式表现，不允许 creator 绕过 evidence 直接断言 case 状态；每个 case 必须至少绑定一个 evidence 且 evidence.caseId 必须匹配。
+- `Artifact` / `TaskSpec` 绑定：`taskSpecBinding` 用 `taskSpecRef` + `taskSpecSchemaVersion` + `taskSpecEnvelopeSchemaVersion` + `taskSpecId` + `taskSpecContentHash` 把 ArtifactV1 实例钉死到 TestExecutionTaskSpecV1 envelope，保证 (TaskSpec → Artifact) 绑定是机器可验证的。
+
+Non-regression workload reuse path：
+
+- `Test Execution / Failure Triage`：本 artifact 直接覆盖；framework / runIdentifier / per-case status / evidence / diagnostics 字段均 workload-independent。
+- `Code Patch / Review Loop`：未来 `PatchArtifactV1` 可复用同样的 `artifactEnvelopeSchemaVersion=artifact-v1`、相同的 5 件套 coordination binding、相同的 `regressionWorkloadIsolation` 守护与 evidence-by-case 模型；patch/review hunk 替换 test case。
+- `PR Review`：未来 `ReviewFindingArtifactV1` 同理；本 artifact 的 `nonRegressionReusePath` 字段已声明 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review` 三条路径。
+
+Coordination protocol / invariant clarified：
+
+- `creatorAgent` 必须为 `creator_agent`，`verifierVerdictOwner` 必须为 `verifier-runtime-v1`，并且 `verifierExpectations.creatorMustNotOwnVerdict=true`：creator-verifier 不变量延伸到 ArtifactV1 子类型，creator output 不能自证 acceptance。
+- `coordinationBinding` 字段强制 ArtifactV1 子类型绑定 Agent Coordination Layer 五件套 contract artifact，并通过 `sourceArtifacts[].contentHash` 把上游 coordination 与 task spec contract 当作不可变前提；任何一个上游 contract 漂移都会让本 artifact validate 失败。
+- `policyBoundary` 对 `externalSideEffectsAllowed` / `repositoryMutationAllowed` / `externalCommunicationAllowed` / `releaseOrDeploymentAllowed` / `guiOrBrowserOrDesktopCallAllowed` / `publicAccessAllowed` 全部强制为 `false`，与既有 BroadcastSubscriptionManifestV1 / NegotiationRecordV1 / DelegationManifestV1 / TestExecutionTaskSpecV1 的 policy invariant 对齐。
+
+为什么这不是另一个 regression/email fixture：
+
+- artifact 路径为 `artifacts/test_execution/post_mvp_test_execution_result.json`，scope 为 `test_execution_failure_triage_artifact_contract`，不是 regression result、email draft、approval lifecycle、delivery unlock 或 policy unlock。
+- `workloadType` 必须等于 `test_execution_failure_triage`，validator 显式拒绝把它改成 `read_only_regression_evidence_demo` 或任何 regression workload；`kind` 必须为 `TestExecutionResultV1`，`schemaVersion` 必须为 `test-execution-result-v1`。
+- `regressionWorkloadIsolation.forbiddenFields` 包含 `regression_result` / `regression_result.json` / `email_draft` / `email_draft.md` / `send_email` / `regression-task-spec-v1` / `regression-result-artifact-v1`；defensive scan 拒绝这些 token 在 forbiddenFields 之外再次出现。
+- `nonRegressionReusePath` 必须包含 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review`，强制本 artifact 至少有 2 个 non-regression 复用路径。
+- artifact 内的 evidence、case、diagnostic 全部为 synthetic `synthetic.module.test_pass` / `test_fail` / `test_skipped` 数据，与 m2b_lec_regr regression log 解耦。
+
+Acceptance criteria：
+
+- `scripts/test_execution_result.py` 提供 `build_test_execution_result` / `validate_test_execution_result` 与 CLI（`--out` / `--validate`）。
+- 新增 committed `artifacts/test_execution/post_mvp_test_execution_result.json`，schemaVersion 为 `test-execution-result-v1`，artifactEnvelopeSchemaVersion 为 `artifact-v1`。
+- `scripts/validate_repo.py` 验证 committed artifact、deterministic builder output 与多条 forced-failure case：workload_type_regression_reuse / kind_regression_reuse / envelope_schema_regression_reuse / creator_owns_verdict / creator_must_not_own_verdict_disabled / task_spec_binding_regression_schema_reuse / task_spec_binding_hash_drift / policy_external_side_effects_allowed / policy_external_communication_allowed / case_missing_evidence / evidence_content_hash_drift / failed_case_missing_classification / summary_count_drift / coordination_binding_missing_broadcast / coordination_binding_wrong_path / non_regression_reuse_path_missing / regression_email_draft_reuse_allowed / source_hash_mismatch_task_spec / source_hash_mismatch_broadcast。
+- `EvaluationReportV1` 把 TestExecutionResultV1 artifact 纳入 source hash，并把下一推荐切片推进为 workload-independent `FailureTriageReportV1` ArtifactV1 subtype。
+
+实现摘要：
+
+- 新增 `scripts/test_execution_result.py`，包含 schema 常量、builder、validator、deterministic CLI（`--out` / `--validate`）和 ArtifactV1 envelope / TaskSpec binding / 五件套 coordination binding 逻辑。
+- 新增 committed `artifacts/test_execution/post_mvp_test_execution_result.json`。
+- 更新 `scripts/validate_repo.py`：REQUIRED_FILES 增加 `scripts/test_execution_result.py` 与 `artifacts/test_execution/post_mvp_test_execution_result.json`，PLAN markers 增加 `TestExecutionResultV1` / `test-execution-result-v1` / `post_mvp_test_execution_result.json`，新增 committed artifact 校验、deterministic CLI replay 与 19 条 forced-failure case。
+- 更新 `scripts/evaluation_report.py` 与 `artifacts/evaluation/phase9_mvp_evaluation_report.json`：把 TestExecutionResultV1 加入 source hash，并把 `nextRecommendedSlice` 推进为 workload-independent `FailureTriageReportV1` ArtifactV1 subtype。
+
+Build vs Integrate：
+
+- Build：`TestExecutionResultV1` schema、deterministic builder / validator / CLI、committed artifact、19 条 forced-failure case、`EvaluationReportV1` source hash 集成。
+- Integrate later：真实 test framework（pytest / jest / go test / cargo test 等）驱动、真实 TestExecutionResultV1 fixture 数据接入、failure triage rule engine、ArtifactV1 envelope 抽取为独立 schema 文件、跨 workload ArtifactV1 catalogue。
+
+验证计划 / 结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline /usr/bin/python3 scripts/validate_repo.py before edits：通过。
+- /usr/bin/python3 -m py_compile scripts/*.py：通过。
+- /usr/bin/python3 scripts/test_execution_result.py --out artifacts/test_execution/post_mvp_test_execution_result.json：通过。
+- /usr/bin/python3 scripts/test_execution_result.py --validate artifacts/test_execution/post_mvp_test_execution_result.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --report-out artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/validate_repo.py：通过，覆盖 TestExecutionResultV1 committed artifact、deterministic builder output 与 19 条 forced-failure case。
+- git diff --check：通过。
+```
+
+剩余风险：
+
+- `TestExecutionResultV1` 仍是 static contract artifact，不驱动任何真实 test framework；下一切片应给出 workload-independent `FailureTriageReportV1` ArtifactV1 subtype 或开始抽取 ArtifactV1 envelope 为独立 schema 文件。
+- 当前 artifact 复用 first workload 的 5 件套 coordination contract artifact 作为 source fixture；`Code Patch / Review Loop` 与 `PR Review` 的 TaskSpec / Artifact subtype 仍未实现。
+- `ArtifactV1` envelope 目前只通过 `artifactEnvelopeSchemaVersion` 字段表达；未来需要把 `regression-result-artifact-v1` 与 `test-execution-result-v1` 抽出共同 base schema（真正的 `artifact-v1` envelope）。
+
+下一轮建议：
+
+```text
+新增 workload-independent FailureTriageReportV1 ArtifactV1 subtype contract artifact：
+为第二 workload Test Execution / Failure Triage 提供独立的 triage ArtifactV1 子类型，绑定 TestExecutionResultV1 与 TestExecutionTaskSpecV1，声明 failure_classification / root_cause_hypothesis / evidence_refs / verifier-runtime-v1 verdict ownership，并复用 DelegationManifestV1 / CreatorVerifierPairingV1 / AgentMessageManifestV1 / NegotiationRecordV1 / BroadcastSubscriptionManifestV1 的 coordination contract；字段不得依赖 regression_result / email_draft / send_email。
+```
+
 ## 22. Parking Lot
 
 以下内容仍然重要，但不进入第一版 MVP：

@@ -120,6 +120,11 @@ from test_execution_task_spec import (
     build_test_execution_task_spec,
     validate_test_execution_task_spec,
 )
+from test_execution_result import (
+    TEST_EXECUTION_RESULT_ARTIFACT_PATH,
+    build_test_execution_result,
+    validate_test_execution_result,
+)
 from verifier_runtime import (
     REQUIRED_ARTIFACT_CHECK_IDS,
     REQUIRED_VERIFIER_RULE_IDS,
@@ -160,6 +165,7 @@ AGENT_MESSAGE_MANIFEST_PATH = ROOT / AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH
 NEGOTIATION_RECORD_PATH = ROOT / NEGOTIATION_RECORD_ARTIFACT_PATH
 BROADCAST_SUBSCRIPTION_MANIFEST_PATH = ROOT / BROADCAST_SUBSCRIPTION_MANIFEST_ARTIFACT_PATH
 TEST_EXECUTION_TASK_SPEC_PATH = ROOT / TEST_EXECUTION_TASK_SPEC_ARTIFACT_PATH
+TEST_EXECUTION_RESULT_PATH = ROOT / TEST_EXECUTION_RESULT_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -224,6 +230,7 @@ REQUIRED_FILES = [
     "scripts/policy_unlock_denial.py",
     "scripts/coordination_contract.py",
     "scripts/test_execution_task_spec.py",
+    "scripts/test_execution_result.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
     "artifacts/recovery/interrupted_after_extract/run.json",
@@ -250,6 +257,7 @@ REQUIRED_FILES = [
     "artifacts/coordination/post_mvp_negotiation_record.json",
     "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
     "artifacts/task_specs/post_mvp_test_execution_task_spec.json",
+    "artifacts/test_execution/post_mvp_test_execution_result.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -351,6 +359,9 @@ PLAN_REQUIRED_MARKERS = [
     "test-execution-task-spec-v1",
     "test_execution_failure_triage",
     "post_mvp_test_execution_task_spec.json",
+    "TestExecutionResultV1",
+    "test-execution-result-v1",
+    "post_mvp_test_execution_result.json",
     "Agentic Engineering OS Kernel",
     "workload-independent primitives",
     "first workload: Read-only Regression Evidence Demo",
@@ -3402,6 +3413,229 @@ def run_test_execution_task_spec_builder(spec_out: Path) -> None:
         )
 
 
+def expect_test_execution_result_validation_failure(
+    label: str,
+    artifact: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_test_execution_result(artifact, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"TestExecutionResultV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(
+        f"TestExecutionResultV1 forced-failure case {label} unexpectedly passed validation"
+    )
+
+
+def validate_committed_test_execution_result_artifact() -> None:
+    artifact = load_json(TEST_EXECUTION_RESULT_PATH)
+    try:
+        validate_test_execution_result(artifact, ROOT)
+    except ValueError as exc:
+        raise AssertionError(
+            f"Committed TestExecutionResultV1 artifact failed validation: {exc}"
+        ) from exc
+
+    expected_artifact = build_test_execution_result(ROOT)
+    if artifact != expected_artifact:
+        raise AssertionError(
+            "Committed TestExecutionResultV1 artifact differs from deterministic builder output"
+        )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["workloadType"] = "read_only_regression_evidence_demo"
+    expect_test_execution_result_validation_failure(
+        "workload_type_regression_reuse",
+        tampered,
+        "workloadType must be test_execution_failure_triage",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["kind"] = "RegressionResultArtifactV1"
+    expect_test_execution_result_validation_failure(
+        "kind_regression_reuse",
+        tampered,
+        "kind must be TestExecutionResultV1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["artifactEnvelopeSchemaVersion"] = "regression-result-artifact-v1"
+    expect_test_execution_result_validation_failure(
+        "envelope_schema_regression_reuse",
+        tampered,
+        "artifactEnvelopeSchemaVersion must be artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierVerdictOwner"] = "creator_agent"
+    expect_test_execution_result_validation_failure(
+        "creator_owns_verdict",
+        tampered,
+        "verifierVerdictOwner must be verifier-runtime-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierExpectations"]["creatorMustNotOwnVerdict"] = False
+    expect_test_execution_result_validation_failure(
+        "creator_must_not_own_verdict_disabled",
+        tampered,
+        "verifierExpectations.creatorMustNotOwnVerdict must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["taskSpecBinding"]["taskSpecSchemaVersion"] = "regression-task-spec-v1"
+    expect_test_execution_result_validation_failure(
+        "task_spec_binding_regression_schema_reuse",
+        tampered,
+        "taskSpecSchemaVersion must equal test-execution-task-spec-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["taskSpecBinding"]["taskSpecContentHash"] = "0" * 64
+    expect_test_execution_result_validation_failure(
+        "task_spec_binding_hash_drift",
+        tampered,
+        "taskSpecBinding.taskSpecContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyBoundary"]["externalSideEffectsAllowed"] = True
+    expect_test_execution_result_validation_failure(
+        "policy_external_side_effects_allowed",
+        tampered,
+        "policyBoundary.externalSideEffectsAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyBoundary"]["externalCommunicationAllowed"] = True
+    expect_test_execution_result_validation_failure(
+        "policy_external_communication_allowed",
+        tampered,
+        "policyBoundary.externalCommunicationAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for case in tampered["cases"]:
+        if case["id"] == "case-002":
+            case["evidenceIds"] = []
+            break
+    expect_test_execution_result_validation_failure(
+        "case_missing_evidence",
+        tampered,
+        "must reference at least one evidence id",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for evidence in tampered["evidenceList"]:
+        if evidence["id"] == "ev-case-001-outcome":
+            evidence["payload"] = "tampered payload"
+            break
+    expect_test_execution_result_validation_failure(
+        "evidence_content_hash_drift",
+        tampered,
+        "contentHash must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for case in tampered["cases"]:
+        if case["id"] == "case-002":
+            case["failureClassification"] = None
+            break
+    expect_test_execution_result_validation_failure(
+        "failed_case_missing_classification",
+        tampered,
+        "failed case case-002 must declare a failureClassification",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["summary"]["failedCases"] = 0
+    expect_test_execution_result_validation_failure(
+        "summary_count_drift",
+        tampered,
+        "summary must equal computed counts",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    del tampered["coordinationBinding"]["broadcastSubscriptionManifestRef"]
+    expect_test_execution_result_validation_failure(
+        "coordination_binding_missing_broadcast",
+        tampered,
+        "coordinationBinding must include",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["coordinationBinding"]["delegationManifestRef"] = (
+        "artifacts/runs/all_passed/run.json"
+    )
+    expect_test_execution_result_validation_failure(
+        "coordination_binding_wrong_path",
+        tampered,
+        "coordinationBinding.delegationManifestRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["nonRegressionReusePath"] = ["read_only_regression_evidence_demo"]
+    expect_test_execution_result_validation_failure(
+        "non_regression_reuse_path_missing",
+        tampered,
+        "nonRegressionReusePath must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesEmailDraftArtifact"] = True
+    expect_test_execution_result_validation_failure(
+        "regression_email_draft_reuse_allowed",
+        tampered,
+        "must not reuse EmailDraftArtifactV1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for source in tampered["sourceArtifacts"]:
+        if source.get("role") == "test_execution_task_spec":
+            source["contentHash"] = "0" * 64
+            break
+    expect_test_execution_result_validation_failure(
+        "source_hash_mismatch_task_spec",
+        tampered,
+        "source hash mismatch",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    for source in tampered["sourceArtifacts"]:
+        if source.get("role") == "broadcast_subscription_manifest":
+            source["contentHash"] = "0" * 64
+            break
+    expect_test_execution_result_validation_failure(
+        "source_hash_mismatch_broadcast",
+        tampered,
+        "source hash mismatch",
+    )
+
+
+def run_test_execution_result_builder(artifact_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/test_execution_result.py"),
+        "--out",
+        str(artifact_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "TestExecutionResultV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -3805,6 +4039,7 @@ def main() -> None:
     validate_committed_negotiation_record_artifact()
     validate_committed_broadcast_subscription_manifest_artifact()
     validate_committed_test_execution_task_spec_artifact()
+    validate_committed_test_execution_result_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -3925,6 +4160,12 @@ def main() -> None:
         if load_json(generated_test_execution_task_spec) != load_json(TEST_EXECUTION_TASK_SPEC_PATH):
             raise AssertionError(
                 "Committed TestExecutionTaskSpecV1 artifact differs from deterministic CLI output"
+            )
+        generated_test_execution_result = temp_root / "post_mvp_test_execution_result.json"
+        run_test_execution_result_builder(generated_test_execution_result)
+        if load_json(generated_test_execution_result) != load_json(TEST_EXECUTION_RESULT_PATH):
+            raise AssertionError(
+                "Committed TestExecutionResultV1 artifact differs from deterministic CLI output"
             )
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)

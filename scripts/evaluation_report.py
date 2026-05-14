@@ -46,6 +46,10 @@ from test_execution_task_spec import (
     TASK_SPEC_ARTIFACT_PATH as TEST_EXECUTION_TASK_SPEC_ARTIFACT_PATH,
     validate_test_execution_task_spec,
 )
+from test_execution_result import (
+    TEST_EXECUTION_RESULT_ARTIFACT_PATH,
+    validate_test_execution_result,
+)
 
 
 EVALUATION_REPORT_SCHEMA_VERSION = "mvp-evaluation-report-v1"
@@ -170,6 +174,7 @@ def _source_specs() -> list[tuple[str, str]]:
         ("post_mvp_negotiation_record", NEGOTIATION_RECORD_ARTIFACT_PATH),
         ("post_mvp_broadcast_subscription_manifest", BROADCAST_SUBSCRIPTION_MANIFEST_ARTIFACT_PATH),
         ("post_mvp_test_execution_task_spec", TEST_EXECUTION_TASK_SPEC_ARTIFACT_PATH),
+        ("post_mvp_test_execution_result", TEST_EXECUTION_RESULT_ARTIFACT_PATH),
     ]
     for fixture_id in FIXTURE_IDS:
         specs.append((f"phase1a_{fixture_id}_run", f"artifacts/runs/{fixture_id}/run.json"))
@@ -306,6 +311,8 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
     validate_broadcast_subscription_manifest(broadcast_subscription_manifest, root)
     test_execution_task_spec = _load_json(root / TEST_EXECUTION_TASK_SPEC_ARTIFACT_PATH)
     validate_test_execution_task_spec(test_execution_task_spec, root)
+    test_execution_result = _load_json(root / TEST_EXECUTION_RESULT_ARTIFACT_PATH)
+    validate_test_execution_result(test_execution_result, root)
     delivery_readiness = delivery_report["readiness"]
     delivery_blocker_ids = [blocker["id"] for blocker in delivery_report["blockers"]]
     phase_coverage = _phase_coverage()
@@ -388,7 +395,7 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
         ],
         "nextRecommendedSlice": {
             "phase": "post_mvp",
-            "slice": "Add a workload-independent TestExecutionResultV1 artifact contract bound to the existing TestExecutionTaskSpecV1 envelope so that Test Execution / Failure Triage produces a workload-independent ArtifactV1 subtype reusable by Code Patch / Review Loop and PR Review, without depending on regression_result / email_draft / send_email fields.",
+            "slice": "Add a workload-independent FailureTriageReportV1 artifact contract bound to TestExecutionResultV1 and TestExecutionTaskSpecV1 so Test Execution / Failure Triage produces a workload-independent triage ArtifactV1 subtype reusable by Code Patch / Review Loop and PR Review, without depending on regression_result / email_draft / send_email fields.",
             "mustRemainMachineVerifiable": True,
         },
         "invariants": [
