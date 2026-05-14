@@ -185,6 +185,11 @@ from intent_artifact import (
     build_intent_artifact,
     validate_intent_artifact,
 )
+from capability_kernel import (
+    CAPABILITY_KERNEL_ARTIFACT_PATH as POST_MVP_CAPABILITY_KERNEL_ARTIFACT_PATH,
+    build_capability_kernel_artifact,
+    validate_capability_kernel_artifact,
+)
 from verifier_runtime import (
     REQUIRED_ARTIFACT_CHECK_IDS,
     REQUIRED_VERIFIER_RULE_IDS,
@@ -238,6 +243,7 @@ RUN_ARTIFACT_PATH = ROOT / POST_MVP_RUN_ARTIFACT_PATH
 STEP_LIST_ARTIFACT_PATH = ROOT / POST_MVP_STEP_LIST_ARTIFACT_PATH
 TOOL_CALL_LIST_ARTIFACT_PATH = ROOT / POST_MVP_TOOL_CALL_LIST_ARTIFACT_PATH
 INTENT_ARTIFACT_PATH = ROOT / POST_MVP_INTENT_ARTIFACT_PATH
+CAPABILITY_KERNEL_ARTIFACT_PATH = ROOT / POST_MVP_CAPABILITY_KERNEL_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -315,8 +321,10 @@ REQUIRED_FILES = [
     "scripts/step_list_artifact.py",
     "scripts/tool_call_list_artifact.py",
     "scripts/intent_artifact.py",
+    "scripts/capability_kernel.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
+    "artifacts/capabilities/post_mvp_capability_v1_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
     "artifacts/recovery/interrupted_after_extract/run.json",
     "artifacts/recovery/interrupted_after_extract/events.jsonl",
@@ -506,6 +514,10 @@ PLAN_REQUIRED_MARKERS = [
     "IntentV1",
     "intent-v1",
     "post_mvp_test_execution_intent.json",
+    "CapabilityV1",
+    "capability-v1",
+    "capability-item-v1",
+    "post_mvp_capability_v1_catalog.json",
     "Agentic Engineering OS Kernel",
     "workload-independent primitives",
     "first workload: Read-only Regression Evidence Demo",
@@ -9329,6 +9341,535 @@ def run_intent_artifact_builder(artifact_out: Path) -> None:
         )
 
 
+def expect_capability_kernel_validation_failure(
+    label: str,
+    manifest: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_capability_kernel_artifact(manifest, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"CapabilityV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(
+        f"CapabilityV1 forced-failure case {label} unexpectedly passed validation"
+    )
+
+
+def validate_committed_capability_kernel_artifact() -> None:
+    artifact = load_json(CAPABILITY_KERNEL_ARTIFACT_PATH)
+    try:
+        validate_capability_kernel_artifact(artifact, ROOT)
+    except ValueError as exc:
+        raise AssertionError(
+            f"Committed CapabilityV1 artifact failed validation: {exc}"
+        ) from exc
+
+    expected_artifact = build_capability_kernel_artifact(ROOT)
+    if artifact != expected_artifact:
+        raise AssertionError(
+            "Committed CapabilityV1 artifact differs from deterministic builder output"
+        )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["workloadType"] = "read_only_regression_evidence_demo"
+    expect_capability_kernel_validation_failure(
+        "workload_type_regression_reuse",
+        tampered,
+        "workloadType must be test_execution_failure_triage",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["kind"] = "RegressionResultArtifactV1"
+    expect_capability_kernel_validation_failure(
+        "kind_regression_reuse",
+        tampered,
+        "kind must be CapabilityV1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["schemaVersion"] = "capability-manifest-v1"
+    expect_capability_kernel_validation_failure(
+        "schema_capability_manifest_reuse",
+        tampered,
+        "schemaVersion must be capability-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["artifactEnvelopeSchemaVersion"] = "capability-envelope-v1"
+    expect_capability_kernel_validation_failure(
+        "envelope_schema_capability_envelope_reuse",
+        tampered,
+        "artifactEnvelopeSchemaVersion must be artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityItemSchemaVersion"] = "capability-definition-v1"
+    expect_capability_kernel_validation_failure(
+        "item_schema_capability_definition_reuse",
+        tampered,
+        "capabilityItemSchemaVersion must be capability-item-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierVerdictOwner"] = "creator_agent"
+    expect_capability_kernel_validation_failure(
+        "creator_owns_verdict",
+        tampered,
+        "verifierVerdictOwner must be verifier-runtime-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierExpectations"]["creatorMustNotOwnVerdict"] = False
+    expect_capability_kernel_validation_failure(
+        "creator_must_not_own_verdict_disabled",
+        tampered,
+        "verifierExpectations.creatorMustNotOwnVerdict must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["permissionFlags"]["externalCommunicationAllowed"] = True
+    expect_capability_kernel_validation_failure(
+        "permission_flag_external_communication_true",
+        tampered,
+        "permissionFlags.externalCommunicationAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["permissionFlagDomain"] = ["externalSideEffectsAllowed"]
+    expect_capability_kernel_validation_failure(
+        "permission_flag_domain_drift",
+        tampered,
+        "permissionFlagDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityCount"] = 99
+    expect_capability_kernel_validation_failure(
+        "capability_count_drift",
+        tampered,
+        "capabilityCount must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityItems"][0]["capabilityClass"] = "external_communication"
+    expect_capability_kernel_validation_failure(
+        "capability_item_class_forbidden",
+        tampered,
+        "must not intersect declared capabilityItems",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityItems"][0]["capabilityClass"] = "unknown_class"
+    expect_capability_kernel_validation_failure(
+        "capability_item_class_outside_domain",
+        tampered,
+        "capabilityClass outside workload-independent domain",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityClassDomain"] = ["read_only_inspection"]
+    expect_capability_kernel_validation_failure(
+        "capability_class_domain_drift",
+        tampered,
+        "capabilityClassDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["forbiddenCapabilityClasses"] = ["external_communication"]
+    expect_capability_kernel_validation_failure(
+        "forbidden_capability_classes_drift",
+        tampered,
+        "forbiddenCapabilityClasses must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityItems"][0]["sideEffectClass"] = "email_send_call"
+    expect_capability_kernel_validation_failure(
+        "side_effect_class_forbidden",
+        tampered,
+        "sideEffectClass is forbidden",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityItems"][0]["sideEffectClass"] = "unknown_side_effect"
+    expect_capability_kernel_validation_failure(
+        "side_effect_class_outside_domain",
+        tampered,
+        "sideEffectClass outside workload-independent domain",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["sideEffectClassDomain"] = ["read_only"]
+    expect_capability_kernel_validation_failure(
+        "side_effect_class_domain_drift",
+        tampered,
+        "sideEffectClassDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["forbiddenSideEffectClasses"] = ["external"]
+    expect_capability_kernel_validation_failure(
+        "forbidden_side_effect_classes_drift",
+        tampered,
+        "forbiddenSideEffectClasses must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["sourceAgentDomain"] = ["creator_agent"]
+    expect_capability_kernel_validation_failure(
+        "source_agent_domain_drift",
+        tampered,
+        "sourceAgentDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityLifecycleStateDomain"] = ["drafted"]
+    expect_capability_kernel_validation_failure(
+        "lifecycle_state_domain_drift",
+        tampered,
+        "capabilityLifecycleStateDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["requiredCapabilityLifecycleState"] = "drafted"
+    expect_capability_kernel_validation_failure(
+        "required_lifecycle_state_drift",
+        tampered,
+        "requiredCapabilityLifecycleState must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityItems"][0]["capabilityLifecycleState"] = "drafted"
+    expect_capability_kernel_validation_failure(
+        "capability_item_lifecycle_state_drift",
+        tampered,
+        "capabilityLifecycleState must equal registered",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityItems"][0]["capabilityLifecycleState"] = "unknown_state"
+    expect_capability_kernel_validation_failure(
+        "capability_item_lifecycle_state_outside_domain",
+        tampered,
+        "capabilityLifecycleState must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityItems"][0]["permissionFlagOverrides"]["externalSideEffectsAllowed"] = True
+    expect_capability_kernel_validation_failure(
+        "capability_item_permission_override_true",
+        tampered,
+        "permissionFlagOverrides.externalSideEffectsAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityItems"][0]["sourceAgentDomain"] = ["unknown_agent"]
+    expect_capability_kernel_validation_failure(
+        "capability_item_source_agent_outside_domain",
+        tampered,
+        "sourceAgentDomain contains agent outside",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityItems"][0]["sourceAgentDomain"] = ["verifier-runtime-v1"]
+    expect_capability_kernel_validation_failure(
+        "capability_item_source_agent_drift",
+        tampered,
+        "sourceAgentDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityItems"][0]["verifierVerdictOwner"] = "creator_agent"
+    expect_capability_kernel_validation_failure(
+        "capability_item_verifier_owner_drift",
+        tampered,
+        "verifierVerdictOwner must equal verifier-runtime-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityItems"][0]["inputSchemaRef"] = "UnknownInputSchemaV1"
+    expect_capability_kernel_validation_failure(
+        "capability_item_input_schema_ref_drift",
+        tampered,
+        "inputSchemaRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityItems"][0]["outputSchemaRef"] = "UnknownOutputSchemaV1"
+    expect_capability_kernel_validation_failure(
+        "capability_item_output_schema_ref_drift",
+        tampered,
+        "outputSchemaRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityItems"][0]["capabilityId"] = "unexpected_capability"
+    expect_capability_kernel_validation_failure(
+        "capability_item_id_drift",
+        tampered,
+        "capabilityId must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityItems"][0]["sequence"] = 99
+    expect_capability_kernel_validation_failure(
+        "capability_item_sequence_drift",
+        tampered,
+        "sequence must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityItems"] = tampered["capabilityItems"][:-1]
+    expect_capability_kernel_validation_failure(
+        "capability_items_count_drift",
+        tampered,
+        "capabilityItems must contain exactly",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["taskSpecBinding"]["taskSpecSchemaVersion"] = "regression-task-spec-v1"
+    expect_capability_kernel_validation_failure(
+        "task_spec_binding_regression_schema_reuse",
+        tampered,
+        "taskSpecSchemaVersion must equal test-execution-task-spec-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["taskSpecBinding"]["taskSpecContentHash"] = "0" * 64
+    expect_capability_kernel_validation_failure(
+        "task_spec_binding_hash_drift",
+        tampered,
+        "taskSpecBinding.taskSpecContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["intentBinding"]["intentSchemaVersion"] = "regression-intent-v1"
+    expect_capability_kernel_validation_failure(
+        "intent_binding_regression_schema_reuse",
+        tampered,
+        "intentBinding.intentSchemaVersion must equal intent-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["intentBinding"]["intentLifecycleState"] = "drafted"
+    expect_capability_kernel_validation_failure(
+        "intent_binding_lifecycle_state_drift",
+        tampered,
+        "intentBinding.intentLifecycleState must equal IntentV1.intentLifecycleState",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runBinding"]["runState"] = "failed"
+    expect_capability_kernel_validation_failure(
+        "run_binding_state_drift",
+        tampered,
+        "runBinding.runState must equal RunV1.runState",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepListBinding"]["stepCount"] = 99
+    expect_capability_kernel_validation_failure(
+        "step_list_binding_count_drift",
+        tampered,
+        "stepListBinding.stepCount must equal StepListV1.stepCount",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallListBinding"]["toolCallCount"] = 99
+    expect_capability_kernel_validation_failure(
+        "tool_call_list_binding_count_drift",
+        tampered,
+        "toolCallListBinding.toolCallCount must equal ToolCallListV1.toolCallCount",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityManifestBinding"]["capabilityManifestSchemaVersion"] = "capability-envelope-v1"
+    expect_capability_kernel_validation_failure(
+        "capability_manifest_binding_envelope_reuse",
+        tampered,
+        "capabilityManifestBinding.capabilityManifestSchemaVersion must equal capability-manifest-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventLogBinding"]["terminalState"] = "failed"
+    expect_capability_kernel_validation_failure(
+        "run_event_log_binding_terminal_state_drift",
+        tampered,
+        "runEventLogBinding.terminalState must equal RunEventLogV1.terminalState",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["observationListBinding"]["observationItemCount"] = 99
+    expect_capability_kernel_validation_failure(
+        "observation_list_binding_count_drift",
+        tampered,
+        "observationListBinding.observationItemCount must equal ObservationListV1.observationItemCount",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["evidenceListBinding"]["evidenceItemCount"] = 99
+    expect_capability_kernel_validation_failure(
+        "evidence_list_binding_count_drift",
+        tampered,
+        "evidenceListBinding.evidenceItemCount must equal EvidenceListV1.evidenceItemCount",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierResultBinding"]["verdict"] = "failed"
+    expect_capability_kernel_validation_failure(
+        "verifier_result_binding_verdict_drift",
+        tampered,
+        "verifierResultBinding.verdict must equal VerifierResultV1.verdict",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyManifestBinding"]["unlocked"] = not tampered["policyManifestBinding"]["unlocked"]
+    expect_capability_kernel_validation_failure(
+        "policy_manifest_binding_unlocked_drift",
+        tampered,
+        "policyManifestBinding.unlocked must equal PolicyManifestV1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["approvalDecisionBinding"]["approvalGranted"] = True
+    expect_capability_kernel_validation_failure(
+        "approval_decision_binding_granted_drift",
+        tampered,
+        "approvalGranted must equal HumanApprovalDecisionV1.decision.approvalGranted",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallCoverage"]["everyToolCallRefResolved"] = False
+    expect_capability_kernel_validation_failure(
+        "tool_call_coverage_unresolved_ref",
+        tampered,
+        "toolCallCoverage.everyToolCallRefResolved must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallCoverage"]["everyCapabilityItemUsed"] = False
+    expect_capability_kernel_validation_failure(
+        "tool_call_coverage_unused_capability",
+        tampered,
+        "toolCallCoverage.everyCapabilityItemUsed must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallCoverage"]["capabilityIdsCovered"] = ["read_test_execution_result"]
+    expect_capability_kernel_validation_failure(
+        "tool_call_coverage_capability_ids_drift",
+        tampered,
+        "toolCallCoverage.capabilityIdsCovered must mirror capabilityItems order",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["promotionConditions"]["requiredVerdict"] = "needs_human_check"
+    expect_capability_kernel_validation_failure(
+        "promotion_required_verdict_not_passed",
+        tampered,
+        "promotionConditions.requiredVerdict must be passed",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["promotionConditions"]["promoted"] = True
+    expect_capability_kernel_validation_failure(
+        "promotion_unlocked_when_blocked",
+        tampered,
+        "promotionConditions.promoted must be true only when",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["coordinationBinding"].pop("broadcastSubscriptionManifestRef")
+    expect_capability_kernel_validation_failure(
+        "coordination_binding_missing_broadcast",
+        tampered,
+        "coordinationBinding must include",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["coordinationBinding"]["delegationManifestRef"] = "artifacts/runs/all_passed/run.json"
+    expect_capability_kernel_validation_failure(
+        "coordination_binding_wrong_path",
+        tampered,
+        "coordinationBinding.delegationManifestRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesRegressionCapabilityArtifact"] = True
+    expect_capability_kernel_validation_failure(
+        "reuses_regression_capability_artifact",
+        tampered,
+        "must not reuse any first-workload regression capability artifact",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesSendEmailCapability"] = True
+    expect_capability_kernel_validation_failure(
+        "reuses_send_email_capability",
+        tampered,
+        "must not reuse the send_email capability",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["nonRegressionReusePath"] = ["read_only_regression_evidence_demo"]
+    expect_capability_kernel_validation_failure(
+        "non_regression_reuse_path_drift",
+        tampered,
+        "nonRegressionReusePath must equal",
+    )
+
+    for hash_role, label in [
+        ("test_execution_task_spec", "source_hash_mismatch_task_spec"),
+        ("test_execution_intent", "source_hash_mismatch_intent"),
+        ("test_execution_capability_manifest", "source_hash_mismatch_capability_manifest"),
+        ("test_execution_run_event_log", "source_hash_mismatch_run_event_log"),
+        ("test_execution_observation_list", "source_hash_mismatch_observation_list"),
+        ("test_execution_evidence_list", "source_hash_mismatch_evidence_list"),
+        ("test_execution_verifier_result", "source_hash_mismatch_verifier_result"),
+        ("test_execution_delivery_manifest", "source_hash_mismatch_delivery_manifest"),
+        ("test_execution_policy_manifest", "source_hash_mismatch_policy_manifest"),
+        ("test_execution_run_artifact", "source_hash_mismatch_run_artifact"),
+        ("test_execution_step_list", "source_hash_mismatch_step_list"),
+        ("test_execution_tool_call_list", "source_hash_mismatch_tool_call_list"),
+        ("human_approval_decision", "source_hash_mismatch_human_approval_decision"),
+        ("broadcast_subscription_manifest", "source_hash_mismatch_broadcast"),
+    ]:
+        tampered = json.loads(json.dumps(artifact))
+        for source in tampered["sourceArtifacts"]:
+            if source.get("role") == hash_role:
+                source["contentHash"] = "0" * 64
+                break
+        expect_capability_kernel_validation_failure(
+            label,
+            tampered,
+            "source hash mismatch",
+        )
+
+
+def run_capability_kernel_builder(artifact_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/capability_kernel.py"),
+        "--out",
+        str(artifact_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "CapabilityV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -9745,6 +10286,7 @@ def main() -> None:
     validate_committed_step_list_artifact()
     validate_committed_tool_call_list_artifact()
     validate_committed_intent_artifact()
+    validate_committed_capability_kernel_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -9943,6 +10485,12 @@ def main() -> None:
         if load_json(generated_intent_artifact) != load_json(INTENT_ARTIFACT_PATH):
             raise AssertionError(
                 "Committed IntentV1 artifact differs from deterministic CLI output"
+            )
+        generated_capability_kernel_artifact = temp_root / "post_mvp_capability_v1_catalog.json"
+        run_capability_kernel_builder(generated_capability_kernel_artifact)
+        if load_json(generated_capability_kernel_artifact) != load_json(CAPABILITY_KERNEL_ARTIFACT_PATH):
+            raise AssertionError(
+                "Committed CapabilityV1 artifact differs from deterministic CLI output"
             )
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)
