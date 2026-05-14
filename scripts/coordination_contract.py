@@ -19,6 +19,10 @@ AGENT_MESSAGE_SCHEMA_VERSION = "agent-message-v1"
 NEGOTIATION_RECORD_SCHEMA_VERSION = "negotiation-record-v1"
 NEGOTIATION_PROPOSAL_SCHEMA_VERSION = "negotiation-proposal-v1"
 NEGOTIATION_AGREEMENT_SCHEMA_VERSION = "negotiation-agreement-v1"
+BROADCAST_SUBSCRIPTION_MANIFEST_SCHEMA_VERSION = "broadcast-subscription-manifest-v1"
+BROADCAST_TOPIC_SCHEMA_VERSION = "broadcast-topic-v1"
+BROADCAST_SUBSCRIPTION_SCHEMA_VERSION = "broadcast-subscription-v1"
+BROADCAST_FAN_OUT_SCHEMA_VERSION = "broadcast-fan-out-v1"
 TASK_SPEC_ENVELOPE_SCHEMA_VERSION = "task-spec-v1"
 GENERATED_AT = "2026-05-12T14:39:00Z"
 
@@ -34,6 +38,33 @@ NEGOTIATION_PROPOSAL_ROOT_ID = "negotiation-proposal-acceptance-criteria-clarifi
 NEGOTIATION_PROPOSAL_COUNTER_ID = "negotiation-proposal-acceptance-criteria-counter"
 NEGOTIATION_PROPOSAL_AGREEMENT_ID = "negotiation-proposal-acceptance-criteria-agreement"
 NEGOTIATION_AGREEMENT_ID = "negotiation-agreement-acceptance-criteria-source-bound"
+BROADCAST_SUBSCRIPTION_MANIFEST_ID = "post-mvp-broadcast-subscription-kernel-contract"
+BROADCAST_SUBSCRIPTION_MANIFEST_ARTIFACT_PATH = "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json"
+
+BROADCAST_TOPIC_DELEGATION_LIFECYCLE = "coordination.delegation_lifecycle"
+BROADCAST_TOPIC_NEGOTIATION_LIFECYCLE = "coordination.negotiation_lifecycle"
+BROADCAST_TOPIC_IDS = [
+    BROADCAST_TOPIC_DELEGATION_LIFECYCLE,
+    BROADCAST_TOPIC_NEGOTIATION_LIFECYCLE,
+]
+BROADCAST_DELEGATION_LIFECYCLE_EVENT_TYPES = [
+    "delegation.created",
+    "delegation.accepted",
+    "verification.requested",
+]
+BROADCAST_NEGOTIATION_LIFECYCLE_EVENT_TYPES = [
+    "negotiation.proposal",
+    "negotiation.counter_proposal",
+    "negotiation.agreement",
+]
+BROADCAST_NEGOTIATION_PROPOSAL_TYPE_TO_EVENT = {
+    "proposal": "negotiation.proposal",
+    "counter_proposal": "negotiation.counter_proposal",
+    "agreement": "negotiation.agreement",
+}
+BROADCAST_OBSERVER_AGENT_ID = "auditor_agent"
+BROADCAST_SUBSCRIBER_ROLES = ["planner", "verifier", "auditor"]
+BROADCAST_SUBSCRIBER_AGENT_IDS = ["planner_agent", "verifier_agent", BROADCAST_OBSERVER_AGENT_ID]
 
 NEGOTIATION_TOPICS = ["scope", "risk", "policy", "acceptance_criteria"]
 NEGOTIATION_PROPOSAL_TYPES = ["proposal", "counter_proposal", "agreement", "withdrawal"]
@@ -2270,6 +2301,923 @@ def validate_negotiation_record(record: dict[str, Any], root: Path) -> None:
         raise ValueError("NegotiationRecordV1 must include non-regression workload reuse paths")
 
 
+def _negotiation_record_ref() -> str:
+    return f"{NEGOTIATION_RECORD_ARTIFACT_PATH}#id/{NEGOTIATION_RECORD_ID}"
+
+
+def _negotiation_proposal_ref(proposal_id: str) -> str:
+    return f"{NEGOTIATION_RECORD_ARTIFACT_PATH}#proposals/{proposal_id}"
+
+
+def _negotiation_agreement_ref(agreement_id: str) -> str:
+    return f"{NEGOTIATION_RECORD_ARTIFACT_PATH}#agreement/{agreement_id}"
+
+
+def _build_broadcast_source_artifacts(root: Path) -> list[dict[str, Any]]:
+    return [
+        _artifact_source("delegation_manifest", DELEGATION_MANIFEST_ARTIFACT_PATH, root),
+        _artifact_source("creator_verifier_pairing", CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH, root),
+        _artifact_source("agent_message_manifest", AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH, root),
+        _artifact_source("negotiation_record", NEGOTIATION_RECORD_ARTIFACT_PATH, root),
+    ]
+
+
+def _expected_broadcast_source_paths() -> dict[str, str]:
+    return {
+        "delegation_manifest": DELEGATION_MANIFEST_ARTIFACT_PATH,
+        "creator_verifier_pairing": CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH,
+        "agent_message_manifest": AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH,
+        "negotiation_record": NEGOTIATION_RECORD_ARTIFACT_PATH,
+    }
+
+
+def _build_broadcast_subscriber_bindings(delegation: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "agentId": "planner_agent",
+            "role": "planner",
+            "owns": ["delegation_lifecycle_observation", "negotiation_lifecycle_observation"],
+            "mayPublish": False,
+            "mayAcknowledgeWithSideEffects": False,
+            "mayOverrideVerifierResult": False,
+            "mayBroadcastDownstream": False,
+            "mayMutateDelegationArtifacts": False,
+        },
+        {
+            "agentId": delegation["verifierAgent"],
+            "role": "verifier",
+            "owns": ["delegation_lifecycle_observation"],
+            "mayPublish": False,
+            "mayAcknowledgeWithSideEffects": False,
+            "mayOverrideVerifierResult": False,
+            "mayBroadcastDownstream": False,
+            "mayMutateDelegationArtifacts": False,
+        },
+        {
+            "agentId": BROADCAST_OBSERVER_AGENT_ID,
+            "role": "auditor",
+            "owns": ["read_only_audit_observation"],
+            "mayPublish": False,
+            "mayAcknowledgeWithSideEffects": False,
+            "mayOverrideVerifierResult": False,
+            "mayBroadcastDownstream": False,
+            "mayMutateDelegationArtifacts": False,
+        },
+    ]
+
+
+def _delegation_topic_subscriber_ids() -> list[str]:
+    return ["planner_agent", "verifier_agent", BROADCAST_OBSERVER_AGENT_ID]
+
+
+def _negotiation_topic_subscriber_ids() -> list[str]:
+    return ["planner_agent", BROADCAST_OBSERVER_AGENT_ID]
+
+
+def _build_broadcast_topics() -> list[dict[str, Any]]:
+    return [
+        {
+            "schemaVersion": BROADCAST_TOPIC_SCHEMA_VERSION,
+            "topicId": BROADCAST_TOPIC_DELEGATION_LIFECYCLE,
+            "kind": "coordination_event_fan_out",
+            "allowedEventTypes": list(BROADCAST_DELEGATION_LIFECYCLE_EVENT_TYPES),
+            "subscriberAllowList": _delegation_topic_subscriber_ids(),
+            "publicAccessAllowed": False,
+            "fanOutMayCarrySideEffects": False,
+            "fanOutMayOverrideVerifierResult": False,
+            "subscribersMayBroadcastDownstream": False,
+            "deliveryMode": "read_only_fan_out",
+            "ordering": "causal",
+        },
+        {
+            "schemaVersion": BROADCAST_TOPIC_SCHEMA_VERSION,
+            "topicId": BROADCAST_TOPIC_NEGOTIATION_LIFECYCLE,
+            "kind": "negotiation_event_fan_out",
+            "allowedEventTypes": list(BROADCAST_NEGOTIATION_LIFECYCLE_EVENT_TYPES),
+            "subscriberAllowList": _negotiation_topic_subscriber_ids(),
+            "publicAccessAllowed": False,
+            "fanOutMayCarrySideEffects": False,
+            "fanOutMayOverrideVerifierResult": False,
+            "subscribersMayBroadcastDownstream": False,
+            "deliveryMode": "read_only_fan_out",
+            "ordering": "causal",
+        },
+    ]
+
+
+def _build_broadcast_subscriptions() -> list[dict[str, Any]]:
+    subscriptions: list[dict[str, Any]] = []
+    for subscriber in _delegation_topic_subscriber_ids():
+        subscriptions.append(
+            {
+                "schemaVersion": BROADCAST_SUBSCRIPTION_SCHEMA_VERSION,
+                "id": f"subscription-{subscriber.replace('_', '-')}-delegation-lifecycle",
+                "subscriberAgent": subscriber,
+                "topicId": BROADCAST_TOPIC_DELEGATION_LIFECYCLE,
+                "deliveryMode": "read_only_fan_out",
+                "ordering": "causal",
+                "mayPublish": False,
+                "mayAcknowledgeWithSideEffects": False,
+                "mayOverrideVerifierResult": False,
+                "mayBroadcastDownstream": False,
+            }
+        )
+    for subscriber in _negotiation_topic_subscriber_ids():
+        subscriptions.append(
+            {
+                "schemaVersion": BROADCAST_SUBSCRIPTION_SCHEMA_VERSION,
+                "id": f"subscription-{subscriber.replace('_', '-')}-negotiation-lifecycle",
+                "subscriberAgent": subscriber,
+                "topicId": BROADCAST_TOPIC_NEGOTIATION_LIFECYCLE,
+                "deliveryMode": "read_only_fan_out",
+                "ordering": "causal",
+                "mayPublish": False,
+                "mayAcknowledgeWithSideEffects": False,
+                "mayOverrideVerifierResult": False,
+                "mayBroadcastDownstream": False,
+            }
+        )
+    return subscriptions
+
+
+def _build_broadcast_fan_out_events(
+    delegation_manifest: dict[str, Any],
+    negotiation_record: dict[str, Any],
+) -> list[dict[str, Any]]:
+    fan_outs: list[dict[str, Any]] = []
+    delegation_events = delegation_manifest["coordinationEvents"]
+    previous_event_id: str | None = None
+    for event in delegation_events:
+        event_id = event["id"]
+        causal_refs = [_coord_event_ref(event_id)]
+        if previous_event_id is not None:
+            causal_refs.append(_broadcast_fan_out_id_for_coord_event(previous_event_id))
+        fan_outs.append(
+            {
+                "schemaVersion": BROADCAST_FAN_OUT_SCHEMA_VERSION,
+                "id": _broadcast_fan_out_id_for_coord_event(event_id),
+                "topicId": BROADCAST_TOPIC_DELEGATION_LIFECYCLE,
+                "eventType": event["type"],
+                "eventRef": _coord_event_ref(event_id),
+                "subscriberAgentIds": _delegation_topic_subscriber_ids(),
+                "causalRefs": causal_refs,
+                "carriesSideEffects": False,
+                "mayOverrideVerifierResult": False,
+                "broadcastTopicMatches": True,
+                "broadcastAllowedByTopic": True,
+            }
+        )
+        previous_event_id = event_id
+
+    proposals = negotiation_record["proposals"]
+    agreement = negotiation_record["agreement"]
+    previous_negotiation_fan_out_id: str | None = None
+    for proposal in proposals:
+        proposal_type = proposal["proposalType"]
+        if proposal_type not in BROADCAST_NEGOTIATION_PROPOSAL_TYPE_TO_EVENT:
+            continue
+        proposal_id = proposal["id"]
+        event_type = BROADCAST_NEGOTIATION_PROPOSAL_TYPE_TO_EVENT[proposal_type]
+        fan_out_id = _broadcast_fan_out_id_for_proposal(proposal_id)
+        causal_refs = [_negotiation_proposal_ref(proposal_id)]
+        if previous_negotiation_fan_out_id is not None:
+            causal_refs.append(previous_negotiation_fan_out_id)
+        else:
+            causal_refs.append(_broadcast_fan_out_id_for_coord_event(delegation_events[-1]["id"]))
+        fan_outs.append(
+            {
+                "schemaVersion": BROADCAST_FAN_OUT_SCHEMA_VERSION,
+                "id": fan_out_id,
+                "topicId": BROADCAST_TOPIC_NEGOTIATION_LIFECYCLE,
+                "eventType": event_type,
+                "eventRef": _negotiation_proposal_ref(proposal_id),
+                "subscriberAgentIds": _negotiation_topic_subscriber_ids(),
+                "causalRefs": causal_refs,
+                "carriesSideEffects": False,
+                "mayOverrideVerifierResult": False,
+                "broadcastTopicMatches": True,
+                "broadcastAllowedByTopic": True,
+            }
+        )
+        previous_negotiation_fan_out_id = fan_out_id
+    return fan_outs
+
+
+def _broadcast_fan_out_id_for_coord_event(event_id: str) -> str:
+    return f"broadcast-fan-out-{event_id}"
+
+
+def _broadcast_fan_out_id_for_proposal(proposal_id: str) -> str:
+    return f"broadcast-fan-out-{proposal_id}"
+
+
+def build_broadcast_subscription_manifest(root: Path) -> dict[str, Any]:
+    delegation_manifest = _load_json(root / DELEGATION_MANIFEST_ARTIFACT_PATH)
+    validate_delegation_manifest(delegation_manifest, root)
+    pairing = _load_json(root / CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH)
+    validate_creator_verifier_pairing(pairing, root)
+    agent_message_manifest = _load_json(root / AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH)
+    validate_agent_message_manifest(agent_message_manifest, root)
+    negotiation_record = _load_json(root / NEGOTIATION_RECORD_ARTIFACT_PATH)
+    validate_negotiation_record(negotiation_record, root)
+    delegation = delegation_manifest["delegations"][0]
+    paths_by_kind = _artifact_paths_by_kind(delegation)
+    delegation_ref = _delegation_ref(delegation["id"])
+    pairing_ref = _pairing_ref()
+
+    return {
+        "schemaVersion": BROADCAST_SUBSCRIPTION_MANIFEST_SCHEMA_VERSION,
+        "id": BROADCAST_SUBSCRIPTION_MANIFEST_ID,
+        "generatedAt": GENERATED_AT,
+        "phase": "post_mvp",
+        "scope": "agent_coordination_broadcast_contract",
+        "mode": "static_contract_only",
+        "kernelPrimitive": "BroadcastSubscription",
+        "coordinationProtocols": [
+            "broadcast",
+            "negotiation",
+            "direct_communication",
+            "creator_verifier",
+            "delegation",
+        ],
+        "sourceArtifacts": _build_broadcast_source_artifacts(root),
+        "delegationBinding": {
+            "delegationManifestRef": DELEGATION_MANIFEST_ARTIFACT_PATH,
+            "delegationRef": delegation_ref,
+            "pairingManifestRef": CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH,
+            "pairingRef": pairing_ref,
+            "agentMessageManifestRef": AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH,
+            "agentMessageManifestId": _agent_message_manifest_ref(),
+            "negotiationRecordRef": NEGOTIATION_RECORD_ARTIFACT_PATH,
+            "negotiationRecordId": _negotiation_record_ref(),
+            "parentTaskSpecRef": delegation["parentTaskSpecRef"],
+            "parentRunRef": delegation["parentRunRef"],
+            "workloadIndependentObjective": delegation["workloadIndependentObjective"],
+        },
+        "subscriberBindings": _build_broadcast_subscriber_bindings(delegation),
+        "topics": _build_broadcast_topics(),
+        "subscriptions": _build_broadcast_subscriptions(),
+        "fanOutEvents": _build_broadcast_fan_out_events(delegation_manifest, negotiation_record),
+        "broadcastInvariant": {
+            "verifierResultOwner": "verifier-runtime-v1",
+            "publishersMustBeAuthorized": True,
+            "subscribersMustBeOnAllowList": True,
+            "fanOutMustReferenceDeclaredEvent": True,
+            "fanOutMayCarrySideEffects": False,
+            "fanOutMayOverrideVerifierResult": False,
+            "subscribersMayBroadcastDownstream": False,
+            "publicAccessAllowed": False,
+            "creatorAndVerifierMustBeDistinct": True,
+        },
+        "policyBoundary": {
+            "policySchemaVersion": "policy-v1",
+            "externalSideEffectsAllowed": False,
+            "workspaceMutationAllowed": False,
+            "deliverySendAllowed": False,
+            "realMultiAgentRuntimeAllowed": False,
+            "providerExecutionAllowed": False,
+            "publicAccessAllowed": False,
+            "broadcastAllowed": True,
+        },
+        "coordinationEventRefs": [
+            _coord_event_ref(event["id"])
+            for event in delegation_manifest["coordinationEvents"]
+        ],
+        "messageRefs": {
+            "verificationRequest": _agent_message_ref(AGENT_MESSAGE_REQUEST_ID),
+            "verificationResponse": _agent_message_ref(AGENT_MESSAGE_RESPONSE_ID),
+        },
+        "negotiationBinding": {
+            "negotiationRecordRef": NEGOTIATION_RECORD_ARTIFACT_PATH,
+            "negotiationRecordId": _negotiation_record_ref(),
+            "negotiationAgreementRef": _negotiation_agreement_ref(negotiation_record["agreement"]["id"]),
+            "negotiationProposalRefs": [
+                _negotiation_proposal_ref(proposal["id"])
+                for proposal in negotiation_record["proposals"]
+            ],
+        },
+        "expectedDelegationArtifactRefs": {
+            "ArtifactV1": paths_by_kind["ArtifactV1"],
+            "EvidenceListV1": paths_by_kind["EvidenceListV1"],
+            "VerifierResultV1": paths_by_kind["VerifierResultV1"],
+        },
+        "nonRegressionReusePath": list(NON_REGRESSION_REUSE_PATHS),
+        "invariants": [
+            "BroadcastSubscriptionManifestV1 is workload-independent: it fans out CoordinationEventV1 and NegotiationRecordV1 events to declared subscribers without adding regression/email behavior.",
+            "Subscriber agents must be on the topic allow-list; broadcast must not reach unauthorized agents or public consumers.",
+            "Fan-out events must reference declared coordination events or negotiation proposals/agreements and must not carry side effects.",
+            "Subscribers must not publish, acknowledge with side effects, override verifier results, or broadcast downstream.",
+            "The manifest is a static contract artifact and does not run a real event bus, broker, blackboard, queue, or external delivery channel.",
+        ],
+    }
+
+
+def _validate_broadcast_source_artifacts(source_artifacts: list[Any], root: Path) -> dict[str, dict[str, Any]]:
+    if not isinstance(source_artifacts, list) or not source_artifacts:
+        raise ValueError("BroadcastSubscriptionManifestV1 sourceArtifacts must be a non-empty list")
+    expected_paths = _expected_broadcast_source_paths()
+    sources_by_role: dict[str, dict[str, Any]] = {}
+    for source in source_artifacts:
+        if not isinstance(source, dict):
+            raise ValueError("BroadcastSubscriptionManifestV1 sourceArtifacts must be objects")
+        _require_fields("BroadcastSubscriptionManifestV1 source artifact", source, ["role", "path", "contentHash"])
+        role = source["role"]
+        path = source["path"]
+        _validate_relative_posix_path(path)
+        if role not in expected_paths:
+            raise ValueError(f"Unexpected BroadcastSubscriptionManifestV1 source role: {role}")
+        if path != expected_paths[role]:
+            raise ValueError(f"BroadcastSubscriptionManifestV1 source role {role} must point to {expected_paths[role]}")
+        source_path = root / path
+        if not source_path.is_file():
+            raise ValueError(f"BroadcastSubscriptionManifestV1 source artifact does not exist: {path}")
+        if _stable_file_hash(source_path) != source["contentHash"]:
+            raise ValueError(f"BroadcastSubscriptionManifestV1 source hash mismatch for {path}")
+        sources_by_role[role] = source
+    if set(sources_by_role) != set(expected_paths):
+        raise ValueError(f"BroadcastSubscriptionManifestV1 source roles must equal {sorted(expected_paths)}")
+    return sources_by_role
+
+
+def _validate_broadcast_subscriber_bindings(
+    subscriber_bindings: list[Any],
+    delegation: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    if not isinstance(subscriber_bindings, list) or len(subscriber_bindings) != len(BROADCAST_SUBSCRIBER_AGENT_IDS):
+        raise ValueError(
+            f"BroadcastSubscriptionManifestV1 subscriberBindings must cover {BROADCAST_SUBSCRIBER_AGENT_IDS}"
+        )
+    bindings_by_agent: dict[str, dict[str, Any]] = {}
+    for binding in subscriber_bindings:
+        if not isinstance(binding, dict):
+            raise ValueError("BroadcastSubscriptionManifestV1 subscriberBindings must be objects")
+        _require_fields(
+            "BroadcastSubscriptionManifestV1 subscriber binding",
+            binding,
+            [
+                "agentId",
+                "role",
+                "owns",
+                "mayPublish",
+                "mayAcknowledgeWithSideEffects",
+                "mayOverrideVerifierResult",
+                "mayBroadcastDownstream",
+                "mayMutateDelegationArtifacts",
+            ],
+        )
+        if binding["role"] not in BROADCAST_SUBSCRIBER_ROLES:
+            raise ValueError(
+                f"BroadcastSubscriptionManifestV1 subscriber role must be one of {BROADCAST_SUBSCRIBER_ROLES}"
+            )
+        for field in (
+            "mayPublish",
+            "mayAcknowledgeWithSideEffects",
+            "mayOverrideVerifierResult",
+            "mayBroadcastDownstream",
+            "mayMutateDelegationArtifacts",
+        ):
+            if binding[field] is not False:
+                raise ValueError(
+                    f"BroadcastSubscriptionManifestV1 subscriber binding must keep {field} false"
+                )
+        bindings_by_agent[binding["agentId"]] = binding
+    if set(bindings_by_agent) != set(BROADCAST_SUBSCRIBER_AGENT_IDS):
+        raise ValueError(
+            f"BroadcastSubscriptionManifestV1 subscriberBindings must cover agents {BROADCAST_SUBSCRIBER_AGENT_IDS}"
+        )
+    if delegation["verifierAgent"] not in bindings_by_agent:
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 subscriberBindings must include DelegationManifestV1 verifier"
+        )
+    if "planner_agent" not in bindings_by_agent:
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 subscriberBindings must include planner_agent"
+        )
+    if BROADCAST_OBSERVER_AGENT_ID not in bindings_by_agent:
+        raise ValueError(
+            f"BroadcastSubscriptionManifestV1 subscriberBindings must include observer agent {BROADCAST_OBSERVER_AGENT_ID}"
+        )
+    return bindings_by_agent
+
+
+def _validate_broadcast_topic(topic: dict[str, Any]) -> None:
+    _require_fields(
+        "BroadcastSubscriptionManifestV1 topic",
+        topic,
+        [
+            "schemaVersion",
+            "topicId",
+            "kind",
+            "allowedEventTypes",
+            "subscriberAllowList",
+            "publicAccessAllowed",
+            "fanOutMayCarrySideEffects",
+            "fanOutMayOverrideVerifierResult",
+            "subscribersMayBroadcastDownstream",
+            "deliveryMode",
+            "ordering",
+        ],
+    )
+    if topic["schemaVersion"] != BROADCAST_TOPIC_SCHEMA_VERSION:
+        raise ValueError(
+            f"BroadcastSubscriptionManifestV1 topic schemaVersion must be {BROADCAST_TOPIC_SCHEMA_VERSION}"
+        )
+    if topic["topicId"] not in BROADCAST_TOPIC_IDS:
+        raise ValueError(
+            f"BroadcastSubscriptionManifestV1 topic topicId must be one of {BROADCAST_TOPIC_IDS}"
+        )
+    if topic["deliveryMode"] != "read_only_fan_out":
+        raise ValueError("BroadcastSubscriptionManifestV1 topic deliveryMode must be read_only_fan_out")
+    if topic["ordering"] != "causal":
+        raise ValueError("BroadcastSubscriptionManifestV1 topic ordering must be causal")
+    if topic["publicAccessAllowed"] is not False:
+        raise ValueError("BroadcastSubscriptionManifestV1 topic must keep publicAccessAllowed false")
+    if topic["fanOutMayCarrySideEffects"] is not False:
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 topic must keep fanOutMayCarrySideEffects false"
+        )
+    if topic["fanOutMayOverrideVerifierResult"] is not False:
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 topic must keep fanOutMayOverrideVerifierResult false"
+        )
+    if topic["subscribersMayBroadcastDownstream"] is not False:
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 topic must keep subscribersMayBroadcastDownstream false"
+        )
+    expected_event_types: list[str]
+    expected_subscribers: list[str]
+    if topic["topicId"] == BROADCAST_TOPIC_DELEGATION_LIFECYCLE:
+        expected_event_types = list(BROADCAST_DELEGATION_LIFECYCLE_EVENT_TYPES)
+        expected_subscribers = _delegation_topic_subscriber_ids()
+    else:
+        expected_event_types = list(BROADCAST_NEGOTIATION_LIFECYCLE_EVENT_TYPES)
+        expected_subscribers = _negotiation_topic_subscriber_ids()
+    if list(topic["allowedEventTypes"]) != expected_event_types:
+        raise ValueError(
+            f"BroadcastSubscriptionManifestV1 topic allowedEventTypes for {topic['topicId']} must equal {expected_event_types}"
+        )
+    if list(topic["subscriberAllowList"]) != expected_subscribers:
+        raise ValueError(
+            f"BroadcastSubscriptionManifestV1 topic subscriberAllowList for {topic['topicId']} must equal {expected_subscribers}"
+        )
+
+
+def _validate_broadcast_topics(topics: list[Any]) -> dict[str, dict[str, Any]]:
+    if not isinstance(topics, list) or len(topics) != len(BROADCAST_TOPIC_IDS):
+        raise ValueError(
+            f"BroadcastSubscriptionManifestV1 topics must declare exactly {len(BROADCAST_TOPIC_IDS)} topics"
+        )
+    topics_by_id: dict[str, dict[str, Any]] = {}
+    for topic in topics:
+        if not isinstance(topic, dict):
+            raise ValueError("BroadcastSubscriptionManifestV1 topics must be objects")
+        _validate_broadcast_topic(topic)
+        topics_by_id[topic["topicId"]] = topic
+    if set(topics_by_id) != set(BROADCAST_TOPIC_IDS):
+        raise ValueError(
+            f"BroadcastSubscriptionManifestV1 topics must equal {BROADCAST_TOPIC_IDS}"
+        )
+    return topics_by_id
+
+
+def _validate_broadcast_subscriptions(
+    subscriptions: list[Any],
+    topics_by_id: dict[str, dict[str, Any]],
+) -> None:
+    if not isinstance(subscriptions, list) or not subscriptions:
+        raise ValueError("BroadcastSubscriptionManifestV1 subscriptions must be a non-empty list")
+    seen_ids: set[str] = set()
+    expected_pairs: set[tuple[str, str]] = set()
+    for topic_id, topic in topics_by_id.items():
+        for subscriber in topic["subscriberAllowList"]:
+            expected_pairs.add((subscriber, topic_id))
+    actual_pairs: set[tuple[str, str]] = set()
+    for subscription in subscriptions:
+        if not isinstance(subscription, dict):
+            raise ValueError("BroadcastSubscriptionManifestV1 subscriptions must be objects")
+        _require_fields(
+            "BroadcastSubscriptionManifestV1 subscription",
+            subscription,
+            [
+                "schemaVersion",
+                "id",
+                "subscriberAgent",
+                "topicId",
+                "deliveryMode",
+                "ordering",
+                "mayPublish",
+                "mayAcknowledgeWithSideEffects",
+                "mayOverrideVerifierResult",
+                "mayBroadcastDownstream",
+            ],
+        )
+        if subscription["schemaVersion"] != BROADCAST_SUBSCRIPTION_SCHEMA_VERSION:
+            raise ValueError(
+                f"BroadcastSubscriptionManifestV1 subscription schemaVersion must be {BROADCAST_SUBSCRIPTION_SCHEMA_VERSION}"
+            )
+        if subscription["id"] in seen_ids:
+            raise ValueError("BroadcastSubscriptionManifestV1 subscription ids must be unique")
+        seen_ids.add(subscription["id"])
+        topic_id = subscription["topicId"]
+        if topic_id not in topics_by_id:
+            raise ValueError(
+                f"BroadcastSubscriptionManifestV1 subscription topicId {topic_id} must reference a declared topic"
+            )
+        topic = topics_by_id[topic_id]
+        subscriber = subscription["subscriberAgent"]
+        if subscriber not in topic["subscriberAllowList"]:
+            raise ValueError(
+                f"BroadcastSubscriptionManifestV1 subscriber {subscriber} must be on topic {topic_id} allow-list"
+            )
+        if subscription["deliveryMode"] != "read_only_fan_out":
+            raise ValueError(
+                "BroadcastSubscriptionManifestV1 subscription deliveryMode must be read_only_fan_out"
+            )
+        if subscription["ordering"] != "causal":
+            raise ValueError("BroadcastSubscriptionManifestV1 subscription ordering must be causal")
+        for field in (
+            "mayPublish",
+            "mayAcknowledgeWithSideEffects",
+            "mayOverrideVerifierResult",
+            "mayBroadcastDownstream",
+        ):
+            if subscription[field] is not False:
+                raise ValueError(
+                    f"BroadcastSubscriptionManifestV1 subscription must keep {field} false"
+                )
+        actual_pairs.add((subscriber, topic_id))
+    if actual_pairs != expected_pairs:
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 subscriptions must cover every (subscriber, topic) pair from topic allow-lists"
+        )
+
+
+def _validate_broadcast_fan_out_events(
+    fan_out_events: list[Any],
+    topics_by_id: dict[str, dict[str, Any]],
+    delegation_manifest: dict[str, Any],
+    negotiation_record: dict[str, Any],
+) -> None:
+    if not isinstance(fan_out_events, list) or not fan_out_events:
+        raise ValueError("BroadcastSubscriptionManifestV1 fanOutEvents must be a non-empty list")
+    coord_events = delegation_manifest["coordinationEvents"]
+    expected_delegation_event_refs = [_coord_event_ref(event["id"]) for event in coord_events]
+    proposals = negotiation_record["proposals"]
+    expected_negotiation_event_refs = [_negotiation_proposal_ref(proposal["id"]) for proposal in proposals]
+    expected_event_refs = expected_delegation_event_refs + expected_negotiation_event_refs
+    actual_event_refs = [event.get("eventRef") if isinstance(event, dict) else None for event in fan_out_events]
+    if actual_event_refs != expected_event_refs:
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 fanOutEvents must fan out every declared coordination event and negotiation proposal in causal order"
+        )
+    seen_ids: set[str] = set()
+    previous_delegation_fan_out_id: str | None = None
+    previous_negotiation_fan_out_id: str | None = None
+    for index, fan_out in enumerate(fan_out_events):
+        if not isinstance(fan_out, dict):
+            raise ValueError("BroadcastSubscriptionManifestV1 fanOutEvents must be objects")
+        _require_fields(
+            "BroadcastSubscriptionManifestV1 fan-out",
+            fan_out,
+            [
+                "schemaVersion",
+                "id",
+                "topicId",
+                "eventType",
+                "eventRef",
+                "subscriberAgentIds",
+                "causalRefs",
+                "carriesSideEffects",
+                "mayOverrideVerifierResult",
+                "broadcastTopicMatches",
+                "broadcastAllowedByTopic",
+            ],
+        )
+        if fan_out["schemaVersion"] != BROADCAST_FAN_OUT_SCHEMA_VERSION:
+            raise ValueError(
+                f"BroadcastSubscriptionManifestV1 fan-out schemaVersion must be {BROADCAST_FAN_OUT_SCHEMA_VERSION}"
+            )
+        if fan_out["id"] in seen_ids:
+            raise ValueError("BroadcastSubscriptionManifestV1 fan-out ids must be unique")
+        seen_ids.add(fan_out["id"])
+        if fan_out["carriesSideEffects"] is not False:
+            raise ValueError("BroadcastSubscriptionManifestV1 fan-out must not carry side effects")
+        if fan_out["mayOverrideVerifierResult"] is not False:
+            raise ValueError("BroadcastSubscriptionManifestV1 fan-out must not override verifier results")
+        if fan_out["broadcastTopicMatches"] is not True:
+            raise ValueError(
+                "BroadcastSubscriptionManifestV1 fan-out broadcastTopicMatches must be true"
+            )
+        if fan_out["broadcastAllowedByTopic"] is not True:
+            raise ValueError(
+                "BroadcastSubscriptionManifestV1 fan-out broadcastAllowedByTopic must be true"
+            )
+        topic_id = fan_out["topicId"]
+        if topic_id not in topics_by_id:
+            raise ValueError(
+                f"BroadcastSubscriptionManifestV1 fan-out topicId {topic_id} must reference a declared topic"
+            )
+        topic = topics_by_id[topic_id]
+        if fan_out["eventType"] not in topic["allowedEventTypes"]:
+            raise ValueError(
+                f"BroadcastSubscriptionManifestV1 fan-out eventType {fan_out['eventType']} must be allowed by topic {topic_id}"
+            )
+        subscriber_ids = list(fan_out["subscriberAgentIds"])
+        if subscriber_ids != list(topic["subscriberAllowList"]):
+            raise ValueError(
+                f"BroadcastSubscriptionManifestV1 fan-out subscriberAgentIds must equal topic {topic_id} subscriberAllowList"
+            )
+        causal_refs = fan_out["causalRefs"]
+        if not isinstance(causal_refs, list) or not causal_refs:
+            raise ValueError("BroadcastSubscriptionManifestV1 fan-out causalRefs must be a non-empty list")
+        event_ref = fan_out["eventRef"]
+        if event_ref not in causal_refs:
+            raise ValueError(
+                "BroadcastSubscriptionManifestV1 fan-out causalRefs must include the broadcast eventRef"
+            )
+        if topic_id == BROADCAST_TOPIC_DELEGATION_LIFECYCLE:
+            expected_event_type = coord_events[index]["type"]
+            if fan_out["eventType"] != expected_event_type:
+                raise ValueError(
+                    f"BroadcastSubscriptionManifestV1 fan-out eventType for delegation lifecycle index {index} must equal {expected_event_type}"
+                )
+            if previous_delegation_fan_out_id is not None and previous_delegation_fan_out_id not in causal_refs:
+                raise ValueError(
+                    "BroadcastSubscriptionManifestV1 delegation lifecycle fan-out causalRefs must include the previous delegation fan-out id"
+                )
+            previous_delegation_fan_out_id = fan_out["id"]
+        else:
+            negotiation_index = index - len(coord_events)
+            proposal = proposals[negotiation_index]
+            expected_event_type = BROADCAST_NEGOTIATION_PROPOSAL_TYPE_TO_EVENT[proposal["proposalType"]]
+            if fan_out["eventType"] != expected_event_type:
+                raise ValueError(
+                    f"BroadcastSubscriptionManifestV1 fan-out eventType for negotiation index {negotiation_index} must equal {expected_event_type}"
+                )
+            if previous_negotiation_fan_out_id is None:
+                if previous_delegation_fan_out_id is not None and previous_delegation_fan_out_id not in causal_refs:
+                    raise ValueError(
+                        "BroadcastSubscriptionManifestV1 first negotiation fan-out causalRefs must reference the last delegation fan-out id"
+                    )
+            else:
+                if previous_negotiation_fan_out_id not in causal_refs:
+                    raise ValueError(
+                        "BroadcastSubscriptionManifestV1 negotiation fan-out causalRefs must include the previous negotiation fan-out id"
+                    )
+            previous_negotiation_fan_out_id = fan_out["id"]
+
+
+def validate_broadcast_subscription_manifest(manifest: dict[str, Any], root: Path) -> None:
+    _require_fields(
+        "BroadcastSubscriptionManifestV1",
+        manifest,
+        [
+            "schemaVersion",
+            "id",
+            "generatedAt",
+            "phase",
+            "scope",
+            "mode",
+            "kernelPrimitive",
+            "coordinationProtocols",
+            "sourceArtifacts",
+            "delegationBinding",
+            "subscriberBindings",
+            "topics",
+            "subscriptions",
+            "fanOutEvents",
+            "broadcastInvariant",
+            "policyBoundary",
+            "coordinationEventRefs",
+            "messageRefs",
+            "negotiationBinding",
+            "expectedDelegationArtifactRefs",
+            "nonRegressionReusePath",
+            "invariants",
+        ],
+    )
+    if manifest["schemaVersion"] != BROADCAST_SUBSCRIPTION_MANIFEST_SCHEMA_VERSION:
+        raise ValueError(
+            f"BroadcastSubscriptionManifestV1 schemaVersion must be {BROADCAST_SUBSCRIPTION_MANIFEST_SCHEMA_VERSION}"
+        )
+    if manifest["id"] != BROADCAST_SUBSCRIPTION_MANIFEST_ID:
+        raise ValueError(f"BroadcastSubscriptionManifestV1 id must be {BROADCAST_SUBSCRIPTION_MANIFEST_ID}")
+    if manifest["phase"] != "post_mvp":
+        raise ValueError("BroadcastSubscriptionManifestV1 phase must be post_mvp")
+    if manifest["scope"] != "agent_coordination_broadcast_contract":
+        raise ValueError("BroadcastSubscriptionManifestV1 scope must be agent_coordination_broadcast_contract")
+    if manifest["mode"] != "static_contract_only":
+        raise ValueError("BroadcastSubscriptionManifestV1 mode must be static_contract_only")
+    if manifest["kernelPrimitive"] != "BroadcastSubscription":
+        raise ValueError("BroadcastSubscriptionManifestV1 kernelPrimitive must be BroadcastSubscription")
+    if "broadcast" not in manifest["coordinationProtocols"]:
+        raise ValueError("BroadcastSubscriptionManifestV1 coordinationProtocols must include broadcast")
+
+    delegation_manifest = _load_json(root / DELEGATION_MANIFEST_ARTIFACT_PATH)
+    validate_delegation_manifest(delegation_manifest, root)
+    pairing = _load_json(root / CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH)
+    validate_creator_verifier_pairing(pairing, root)
+    agent_message_manifest = _load_json(root / AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH)
+    validate_agent_message_manifest(agent_message_manifest, root)
+    negotiation_record = _load_json(root / NEGOTIATION_RECORD_ARTIFACT_PATH)
+    validate_negotiation_record(negotiation_record, root)
+    delegation = delegation_manifest["delegations"][0]
+    paths_by_kind = _artifact_paths_by_kind(delegation)
+    delegation_ref = _delegation_ref(delegation["id"])
+    pairing_ref = _pairing_ref()
+
+    _validate_broadcast_source_artifacts(manifest["sourceArtifacts"], root)
+
+    binding = manifest["delegationBinding"]
+    _require_fields(
+        "BroadcastSubscriptionManifestV1 delegationBinding",
+        binding,
+        [
+            "delegationManifestRef",
+            "delegationRef",
+            "pairingManifestRef",
+            "pairingRef",
+            "agentMessageManifestRef",
+            "agentMessageManifestId",
+            "negotiationRecordRef",
+            "negotiationRecordId",
+            "parentTaskSpecRef",
+            "parentRunRef",
+            "workloadIndependentObjective",
+        ],
+    )
+    if binding["delegationManifestRef"] != DELEGATION_MANIFEST_ARTIFACT_PATH or binding["delegationRef"] != delegation_ref:
+        raise ValueError("BroadcastSubscriptionManifestV1 delegationBinding must reference DelegationManifestV1")
+    if binding["pairingManifestRef"] != CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH or binding["pairingRef"] != pairing_ref:
+        raise ValueError("BroadcastSubscriptionManifestV1 delegationBinding must reference CreatorVerifierPairingV1")
+    if binding["agentMessageManifestRef"] != AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH:
+        raise ValueError("BroadcastSubscriptionManifestV1 delegationBinding must reference AgentMessageManifestV1")
+    if binding["agentMessageManifestId"] != _agent_message_manifest_ref():
+        raise ValueError("BroadcastSubscriptionManifestV1 delegationBinding must bind AgentMessageManifestV1 id")
+    if binding["negotiationRecordRef"] != NEGOTIATION_RECORD_ARTIFACT_PATH:
+        raise ValueError("BroadcastSubscriptionManifestV1 delegationBinding must reference NegotiationRecordV1")
+    if binding["negotiationRecordId"] != _negotiation_record_ref():
+        raise ValueError("BroadcastSubscriptionManifestV1 delegationBinding must bind NegotiationRecordV1 id")
+    if binding["parentTaskSpecRef"] != delegation["parentTaskSpecRef"] or binding["parentRunRef"] != delegation["parentRunRef"]:
+        raise ValueError("BroadcastSubscriptionManifestV1 delegationBinding must inherit parent TaskSpec and Run refs")
+
+    _validate_broadcast_subscriber_bindings(manifest["subscriberBindings"], delegation)
+    topics_by_id = _validate_broadcast_topics(manifest["topics"])
+    _validate_broadcast_subscriptions(manifest["subscriptions"], topics_by_id)
+    _validate_broadcast_fan_out_events(
+        manifest["fanOutEvents"],
+        topics_by_id,
+        delegation_manifest,
+        negotiation_record,
+    )
+
+    invariant = manifest["broadcastInvariant"]
+    _require_fields(
+        "BroadcastSubscriptionManifestV1 broadcastInvariant",
+        invariant,
+        [
+            "verifierResultOwner",
+            "publishersMustBeAuthorized",
+            "subscribersMustBeOnAllowList",
+            "fanOutMustReferenceDeclaredEvent",
+            "fanOutMayCarrySideEffects",
+            "fanOutMayOverrideVerifierResult",
+            "subscribersMayBroadcastDownstream",
+            "publicAccessAllowed",
+            "creatorAndVerifierMustBeDistinct",
+        ],
+    )
+    if invariant["verifierResultOwner"] != "verifier-runtime-v1":
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 broadcastInvariant verifierResultOwner must be verifier-runtime-v1"
+        )
+    if invariant["publishersMustBeAuthorized"] is not True:
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 broadcastInvariant must require authorized publishers"
+        )
+    if invariant["subscribersMustBeOnAllowList"] is not True:
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 broadcastInvariant must keep subscribersMustBeOnAllowList true"
+        )
+    if invariant["fanOutMustReferenceDeclaredEvent"] is not True:
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 broadcastInvariant must keep fanOutMustReferenceDeclaredEvent true"
+        )
+    for field in (
+        "fanOutMayCarrySideEffects",
+        "fanOutMayOverrideVerifierResult",
+        "subscribersMayBroadcastDownstream",
+        "publicAccessAllowed",
+    ):
+        if invariant[field] is not False:
+            raise ValueError(
+                f"BroadcastSubscriptionManifestV1 broadcastInvariant must keep {field} false"
+            )
+    if invariant["creatorAndVerifierMustBeDistinct"] is not True:
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 broadcastInvariant must keep creatorAndVerifierMustBeDistinct true"
+        )
+
+    policy = manifest["policyBoundary"]
+    _require_fields(
+        "BroadcastSubscriptionManifestV1 policyBoundary",
+        policy,
+        [
+            "policySchemaVersion",
+            "externalSideEffectsAllowed",
+            "workspaceMutationAllowed",
+            "deliverySendAllowed",
+            "realMultiAgentRuntimeAllowed",
+            "providerExecutionAllowed",
+            "publicAccessAllowed",
+            "broadcastAllowed",
+        ],
+    )
+    if policy["policySchemaVersion"] != "policy-v1":
+        raise ValueError("BroadcastSubscriptionManifestV1 policyBoundary must use policy-v1")
+    for field in (
+        "externalSideEffectsAllowed",
+        "workspaceMutationAllowed",
+        "deliverySendAllowed",
+        "realMultiAgentRuntimeAllowed",
+        "providerExecutionAllowed",
+        "publicAccessAllowed",
+    ):
+        if policy[field] is not False:
+            raise ValueError(f"BroadcastSubscriptionManifestV1 policyBoundary must keep {field} false")
+    if policy["broadcastAllowed"] is not True:
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 policyBoundary broadcastAllowed must be true within declared topic allow-lists"
+        )
+
+    expected_event_refs = [
+        _coord_event_ref(event["id"])
+        for event in delegation_manifest["coordinationEvents"]
+    ]
+    if list(manifest["coordinationEventRefs"]) != expected_event_refs:
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 coordinationEventRefs must bind DelegationManifestV1 coordination events"
+        )
+
+    message_refs = manifest["messageRefs"]
+    _require_fields(
+        "BroadcastSubscriptionManifestV1 messageRefs",
+        message_refs,
+        ["verificationRequest", "verificationResponse"],
+    )
+    if message_refs["verificationRequest"] != _agent_message_ref(AGENT_MESSAGE_REQUEST_ID):
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 messageRefs.verificationRequest must bind AgentMessageManifestV1 verification.request"
+        )
+    if message_refs["verificationResponse"] != _agent_message_ref(AGENT_MESSAGE_RESPONSE_ID):
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 messageRefs.verificationResponse must bind AgentMessageManifestV1 verification.response"
+        )
+
+    negotiation_binding = manifest["negotiationBinding"]
+    _require_fields(
+        "BroadcastSubscriptionManifestV1 negotiationBinding",
+        negotiation_binding,
+        ["negotiationRecordRef", "negotiationRecordId", "negotiationAgreementRef", "negotiationProposalRefs"],
+    )
+    if negotiation_binding["negotiationRecordRef"] != NEGOTIATION_RECORD_ARTIFACT_PATH:
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 negotiationBinding.negotiationRecordRef must bind NegotiationRecordV1"
+        )
+    if negotiation_binding["negotiationRecordId"] != _negotiation_record_ref():
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 negotiationBinding.negotiationRecordId must bind NegotiationRecordV1 id"
+        )
+    expected_agreement_ref = _negotiation_agreement_ref(negotiation_record["agreement"]["id"])
+    if negotiation_binding["negotiationAgreementRef"] != expected_agreement_ref:
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 negotiationBinding.negotiationAgreementRef must bind NegotiationRecordV1 agreement"
+        )
+    expected_proposal_refs = [
+        _negotiation_proposal_ref(proposal["id"])
+        for proposal in negotiation_record["proposals"]
+    ]
+    if list(negotiation_binding["negotiationProposalRefs"]) != expected_proposal_refs:
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 negotiationBinding.negotiationProposalRefs must bind all NegotiationRecordV1 proposals"
+        )
+
+    expected_artifact_refs = {
+        "ArtifactV1": paths_by_kind["ArtifactV1"],
+        "EvidenceListV1": paths_by_kind["EvidenceListV1"],
+        "VerifierResultV1": paths_by_kind["VerifierResultV1"],
+    }
+    if manifest["expectedDelegationArtifactRefs"] != expected_artifact_refs:
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 expectedDelegationArtifactRefs must bind DelegationManifestV1 artifact paths"
+        )
+
+    if not set(NON_REGRESSION_REUSE_PATHS).issubset(set(manifest["nonRegressionReusePath"])):
+        raise ValueError(
+            "BroadcastSubscriptionManifestV1 must include non-regression workload reuse paths"
+        )
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="coordination-contract")
     parser.add_argument("--delegation-out", type=Path)
@@ -2280,6 +3228,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--validate-agent-message", type=Path)
     parser.add_argument("--negotiation-out", type=Path)
     parser.add_argument("--validate-negotiation", type=Path)
+    parser.add_argument("--broadcast-subscription-out", type=Path)
+    parser.add_argument("--validate-broadcast-subscription", type=Path)
     return parser.parse_args(argv)
 
 
@@ -2295,6 +3245,8 @@ def main(argv: list[str] | None = None) -> int:
         and args.validate_agent_message is None
         and args.negotiation_out is None
         and args.validate_negotiation is None
+        and args.broadcast_subscription_out is None
+        and args.validate_broadcast_subscription is None
     ):
         raise ValueError("No action requested")
     if args.delegation_out is not None:
@@ -2333,6 +3285,15 @@ def main(argv: list[str] | None = None) -> int:
         record = _load_json(args.validate_negotiation)
         validate_negotiation_record(record, root)
         print(f"Validated NegotiationRecordV1 artifact {args.validate_negotiation}.")
+    if args.broadcast_subscription_out is not None:
+        manifest = build_broadcast_subscription_manifest(root)
+        validate_broadcast_subscription_manifest(manifest, root)
+        _write_json(args.broadcast_subscription_out, manifest)
+        print(f"Wrote BroadcastSubscriptionManifestV1 artifact to {args.broadcast_subscription_out}.")
+    if args.validate_broadcast_subscription is not None:
+        manifest = _load_json(args.validate_broadcast_subscription)
+        validate_broadcast_subscription_manifest(manifest, root)
+        print(f"Validated BroadcastSubscriptionManifestV1 artifact {args.validate_broadcast_subscription}.")
     return 0
 
 

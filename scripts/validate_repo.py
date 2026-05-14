@@ -73,14 +73,17 @@ from policy_unlock_denial import (
 )
 from coordination_contract import (
     AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH,
+    BROADCAST_SUBSCRIPTION_MANIFEST_ARTIFACT_PATH,
     CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH,
     DELEGATION_MANIFEST_ARTIFACT_PATH,
     NEGOTIATION_RECORD_ARTIFACT_PATH,
     build_agent_message_manifest,
+    build_broadcast_subscription_manifest,
     build_creator_verifier_pairing,
     build_delegation_manifest,
     build_negotiation_record,
     validate_agent_message_manifest,
+    validate_broadcast_subscription_manifest,
     validate_creator_verifier_pairing,
     validate_delegation_manifest,
     validate_negotiation_record,
@@ -150,6 +153,7 @@ DELEGATION_MANIFEST_PATH = ROOT / DELEGATION_MANIFEST_ARTIFACT_PATH
 CREATOR_VERIFIER_PAIRING_PATH = ROOT / CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH
 AGENT_MESSAGE_MANIFEST_PATH = ROOT / AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH
 NEGOTIATION_RECORD_PATH = ROOT / NEGOTIATION_RECORD_ARTIFACT_PATH
+BROADCAST_SUBSCRIPTION_MANIFEST_PATH = ROOT / BROADCAST_SUBSCRIPTION_MANIFEST_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -237,6 +241,7 @@ REQUIRED_FILES = [
     "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
     "artifacts/coordination/post_mvp_agent_message_manifest.json",
     "artifacts/coordination/post_mvp_negotiation_record.json",
+    "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -328,6 +333,12 @@ PLAN_REQUIRED_MARKERS = [
     "negotiation-proposal-v1",
     "negotiation-agreement-v1",
     "post_mvp_negotiation_record.json",
+    "BroadcastSubscriptionManifestV1",
+    "broadcast-subscription-manifest-v1",
+    "broadcast-topic-v1",
+    "broadcast-subscription-v1",
+    "broadcast-fan-out-v1",
+    "post_mvp_broadcast_subscription_manifest.json",
     "Agentic Engineering OS Kernel",
     "workload-independent primitives",
     "first workload: Read-only Regression Evidence Demo",
@@ -3042,6 +3053,172 @@ def run_negotiation_record_builder(record_out: Path) -> None:
         )
 
 
+def expect_broadcast_subscription_validation_failure(
+    label: str,
+    manifest: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_broadcast_subscription_manifest(manifest, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"BroadcastSubscriptionManifestV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(
+        f"BroadcastSubscriptionManifestV1 forced-failure case {label} unexpectedly passed validation"
+    )
+
+
+def validate_committed_broadcast_subscription_manifest_artifact() -> None:
+    manifest = load_json(BROADCAST_SUBSCRIPTION_MANIFEST_PATH)
+    try:
+        validate_broadcast_subscription_manifest(manifest, ROOT)
+    except ValueError as exc:
+        raise AssertionError(
+            f"Committed BroadcastSubscriptionManifestV1 artifact failed validation: {exc}"
+        ) from exc
+
+    expected_manifest = build_broadcast_subscription_manifest(ROOT)
+    if manifest != expected_manifest:
+        raise AssertionError(
+            "Committed BroadcastSubscriptionManifestV1 artifact differs from deterministic builder output"
+        )
+
+    tampered = json.loads(json.dumps(manifest))
+    for fan_out in tampered["fanOutEvents"]:
+        fan_out["carriesSideEffects"] = True
+    expect_broadcast_subscription_validation_failure(
+        "fan_out_carries_side_effects",
+        tampered,
+        "fan-out must not carry side effects",
+    )
+
+    tampered = json.loads(json.dumps(manifest))
+    for fan_out in tampered["fanOutEvents"]:
+        fan_out["mayOverrideVerifierResult"] = True
+    expect_broadcast_subscription_validation_failure(
+        "fan_out_overrides_verifier_result",
+        tampered,
+        "must not override verifier results",
+    )
+
+    tampered = json.loads(json.dumps(manifest))
+    for topic in tampered["topics"]:
+        if topic["topicId"] == "coordination.delegation_lifecycle":
+            topic["subscriberAllowList"] = topic["subscriberAllowList"] + ["unauthorized_agent"]
+            break
+    expect_broadcast_subscription_validation_failure(
+        "topic_allow_list_includes_unauthorized_agent",
+        tampered,
+        "subscriberAllowList for coordination.delegation_lifecycle must equal",
+    )
+
+    tampered = json.loads(json.dumps(manifest))
+    for topic in tampered["topics"]:
+        topic["publicAccessAllowed"] = True
+    expect_broadcast_subscription_validation_failure(
+        "topic_public_access_allowed",
+        tampered,
+        "must keep publicAccessAllowed false",
+    )
+
+    tampered = json.loads(json.dumps(manifest))
+    for subscription in tampered["subscriptions"]:
+        subscription["mayBroadcastDownstream"] = True
+    expect_broadcast_subscription_validation_failure(
+        "subscription_broadcast_downstream_allowed",
+        tampered,
+        "must keep mayBroadcastDownstream false",
+    )
+
+    tampered = json.loads(json.dumps(manifest))
+    tampered["subscriptions"] = [
+        subscription
+        for subscription in tampered["subscriptions"]
+        if subscription["topicId"] != "coordination.negotiation_lifecycle"
+    ]
+    expect_broadcast_subscription_validation_failure(
+        "subscriptions_missing_negotiation_topic",
+        tampered,
+        "must cover every (subscriber, topic) pair",
+    )
+
+    tampered = json.loads(json.dumps(manifest))
+    tampered["fanOutEvents"] = tampered["fanOutEvents"][:-1]
+    expect_broadcast_subscription_validation_failure(
+        "fan_out_missing_negotiation_agreement",
+        tampered,
+        "fan out every declared coordination event and negotiation proposal",
+    )
+
+    tampered = json.loads(json.dumps(manifest))
+    tampered["broadcastInvariant"]["publicAccessAllowed"] = True
+    expect_broadcast_subscription_validation_failure(
+        "broadcast_invariant_public_access_allowed",
+        tampered,
+        "broadcastInvariant must keep publicAccessAllowed false",
+    )
+
+    tampered = json.loads(json.dumps(manifest))
+    tampered["policyBoundary"]["externalSideEffectsAllowed"] = True
+    expect_broadcast_subscription_validation_failure(
+        "policy_external_side_effects_allowed",
+        tampered,
+        "policyBoundary must keep externalSideEffectsAllowed false",
+    )
+
+    tampered = json.loads(json.dumps(manifest))
+    tampered["nonRegressionReusePath"] = ["read_only_regression_evidence_demo"]
+    expect_broadcast_subscription_validation_failure(
+        "missing_non_regression_reuse_path",
+        tampered,
+        "non-regression workload reuse paths",
+    )
+
+    tampered = json.loads(json.dumps(manifest))
+    for source in tampered["sourceArtifacts"]:
+        if source.get("role") == "negotiation_record":
+            source["contentHash"] = "0" * 64
+            break
+    expect_broadcast_subscription_validation_failure(
+        "negotiation_record_source_hash_mismatch",
+        tampered,
+        "source hash mismatch",
+    )
+
+    tampered = json.loads(json.dumps(manifest))
+    tampered["negotiationBinding"]["negotiationAgreementRef"] = (
+        "artifacts/coordination/post_mvp_negotiation_record.json#agreement/unknown"
+    )
+    expect_broadcast_subscription_validation_failure(
+        "negotiation_agreement_ref_unbound",
+        tampered,
+        "negotiationAgreementRef must bind NegotiationRecordV1 agreement",
+    )
+
+
+def run_broadcast_subscription_manifest_builder(manifest_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/coordination_contract.py"),
+        "--broadcast-subscription-out",
+        str(manifest_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "BroadcastSubscriptionManifestV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -3443,6 +3620,7 @@ def main() -> None:
     validate_committed_creator_verifier_pairing_artifact()
     validate_committed_agent_message_manifest_artifact()
     validate_committed_negotiation_record_artifact()
+    validate_committed_broadcast_subscription_manifest_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -3552,6 +3730,12 @@ def main() -> None:
         run_negotiation_record_builder(generated_negotiation_record)
         if load_json(generated_negotiation_record) != load_json(NEGOTIATION_RECORD_PATH):
             raise AssertionError("Committed NegotiationRecordV1 artifact differs from deterministic CLI output")
+        generated_broadcast_subscription_manifest = temp_root / "post_mvp_broadcast_subscription_manifest.json"
+        run_broadcast_subscription_manifest_builder(generated_broadcast_subscription_manifest)
+        if load_json(generated_broadcast_subscription_manifest) != load_json(BROADCAST_SUBSCRIPTION_MANIFEST_PATH):
+            raise AssertionError(
+                "Committed BroadcastSubscriptionManifestV1 artifact differs from deterministic CLI output"
+            )
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)
         if load_json(generated_evaluation_report) != load_json(EVALUATION_REPORT_PATH):
