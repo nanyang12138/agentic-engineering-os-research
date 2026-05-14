@@ -263,7 +263,7 @@
   "scope": "read_only_regression_evidence_demo_mvp_completion",
   "sourceArtifacts": [
     {
-      "contentHash": "e26bcaec35c1bea9acf2d3ded09f1ce0f43655d6a15558f6cc4e7dbf76bb48fa",
+      "contentHash": "810b46b6f8f887239b14a6f8810899ea39bb3c68d0e05dbef7e357caaa6fa344",
       "path": "scripts/validate_repo.py",
       "role": "validation_script"
     },

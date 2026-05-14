@@ -40,10 +40,23 @@ Execution strategy:
 - Complete one verified slice per run.
 - Continue this loop until every phase is implemented, verified, or explicitly removed from scope by a recorded plan decision.
 
-Target MVP:
+Product boundary guardrail:
+Agentic Engineering OS is a workload-independent OS kernel, not a regression/email automation tool.
+
+The system must converge on:
+
+```text
+Agentic Engineering OS Kernel
+  -> workload-independent primitives
+  -> supports many engineering workload types
+  -> first workload: Read-only Regression Evidence Demo
+  -> coordination layer: delegation / creator-verifier / direct communication / negotiation / broadcast
+```
+
+First workload:
 Read-only Regression Evidence Demo.
 
-The MVP should implement the Phase 1a fixture runner described in:
+The first workload should implement the Phase 1a fixture runner described in:
 .cursor/plans/agentic-control-plane.plan.md
 
 The end-state is:
@@ -65,12 +78,37 @@ Expected fixtures:
 - passed_with_warning_or_waiver
 - ambiguous_summary
 
+Regression boundary rule:
+- Regression Evidence Demo is the first deterministic workload and kernel smoke test, not the product boundary.
+- After Phase 1a-9 contract-only MVP completion, do not keep adding regression/email-specific post-MVP artifacts unless they clearly generalize a workload-independent OS kernel primitive, coordination protocol, verifier invariant, or policy invariant.
+- Do not select a slice that only deepens `all_passed`, `email_draft`, `regression_result`, `send_email`, approval lifecycle, or delivery unlock behavior unless the implementation is explicitly reusable across non-regression workloads.
+- Prefer slices whose contracts can also apply to test execution, code patch generation, PR review, issue triage, documentation update, release readiness, incident analysis, IDE-assisted coding, or CUA/computer-runtime observation tasks.
+
+Post-MVP slice selection priority:
+After the contract-only Read-only Regression Evidence Demo is complete, select the next slice in this order:
+
+1. Generalize a workload-independent kernel primitive (`TaskSpecV1`, `ArtifactV1`, `VerifierResultV1`, `CapabilityV1`, `RunEventV1`, `PolicyV1`, `DeliveryV1`).
+2. Add or prepare a second workload, preferably Test Execution / Failure Triage, using the same kernel contracts.
+3. Add an Agent Coordination Layer protocol (`DelegationManifestV1`, `CreatorVerifierPairingV1`, `AgentMessageV1`, `NegotiationRecordV1`, `CoordinationEventV1` / broadcast event bus).
+4. Strengthen a verifier, evidence, policy, or delivery invariant that is workload-independent.
+5. Only then extend the first regression/email workload.
+
+Slice rejection rule:
+Reject or rewrite a candidate slice if it cannot answer:
+
+- Which OS kernel primitive does this advance?
+- Which non-regression workload could reuse it?
+- Which coordination protocol or creator-verifier invariant does it clarify?
+- Why is this not merely another regression/email fixture?
+
 Branch and merge policy:
 - Start each run from the latest main branch.
 - Create a new temporary branch for this run.
 - Open a PR targeting main.
 - Use squash merge.
-- Enable GitHub auto-merge only when the selected slice satisfies the Definition of Done.
+- Do not run `gh pr merge --auto --squash` from Cursor Automation.
+- Do not directly merge to main.
+- Auto-merge is delegated to `.github/workflows/auto-merge-cursor-pr.yml` after `validate` succeeds.
 - Never merge directly to main without a PR.
 
 Run procedure:
@@ -252,32 +290,21 @@ PR body:
 - Remaining risks
 - Suggested next slice
 
-11. Auto-merge
-After opening the PR, attempt to enable GitHub auto-merge using squash merge:
+11. Auto-merge delegation
+After opening the PR, do not attempt to mark it ready, enable auto-merge, or merge it from Cursor Automation.
 
-gh pr merge --auto --squash
+Auto-merge is delegated to:
 
-Only enable auto-merge when:
-- the selected slice satisfies the Definition of Done
-- local verification passed
-- required GitHub checks are passing or pending
-- no check has failed
-- no secrets or credentials were touched
-- no destructive operation was introduced
-- no human product decision is required
+```text
+.github/workflows/auto-merge-cursor-pr.yml
+```
 
-Never enable or perform auto-merge when:
-- tests/checks are failing
-- verification was not run
-- implementation is incomplete
-- the PR is only partial scaffolding
-- branch protection requires human approval
-- the change is risky, destructive, or irreversible
+The PR body must state:
+- Cursor Automation did not run auto-merge.
+- Auto-merge is delegated to `.github/workflows/auto-merge-cursor-pr.yml`.
+- After `validate` succeeds, that workflow should mark the PR ready if needed and enable squash auto-merge.
 
-If auto-merge cannot be enabled:
-- leave the PR open
-- explain why in the PR body or a PR comment
-- include the exact blocker
+If the auto-merge workflow is missing or failing, report it as an infrastructure blocker. Do not spend a product implementation run recreating it unless explicitly instructed.
 
 12. Final response
 At the end of the run, report:
