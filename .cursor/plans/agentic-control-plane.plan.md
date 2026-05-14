@@ -7151,6 +7151,96 @@ Build vs Integrate：
 为 OS kernel 抽象一个 workload-independent 的 CapabilityV1 ArtifactV1 子类型，区别于既有的 workload-specific CapabilityManifestV1。定义 capabilityId / capabilityClass / sideEffectClass / inputSchemaRef / outputSchemaRef / sourceAgentDomain / permissionFlagOverrides / verifierVerdictOwner / capabilityLifecycleState (drafted / registered / deprecated / withdrawn) 等 workload-independent 字段；绑定 TestExecutionTaskSpecV1 / IntentV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 与 Agent Coordination Layer 五件套；capabilityClass 必须是 [read_only_inspection, evidence_collection, artifact_writing, verifier_check, human_approval_request] 的子集；ToolCallListV1.toolCallItems[*].capabilityRef 必须解析到 CapabilityV1.capabilityId；字段不得依赖 regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1。
 ```
 
+### 2026-05-14 13:00 UTC Automation Sprint：CapabilityV1 Workload-Independent Capability Primitive Gate
+
+Active phase：post-MVP Kernel Generalization / Multi-Workload Expansion（Phase 1a-9 contract-only MVP 已满足，Agent Coordination Layer 五件套 contract 完成，第二 workload 的 TaskSpec envelope、TestExecutionResultV1、FailureTriageReportV1、VerifierResultV1、CapabilityManifestV1、RunEventLogV1、DeliveryManifestV1、PolicyManifestV1、EvidenceListV1、ObservationListV1、RunV1、StepListV1、ToolCallListV1、IntentV1 均已 land，正在闭合 OS kernel 的 Capability 原语：把「工具能力的注册条目」从 workload-specific `CapabilityManifestV1` 抽象为 workload-independent ArtifactV1 子类型 `CapabilityV1` / `capability-v1` / `capability-item-v1`，并把 ToolCallListV1.toolCallItems[*].capabilityRef → CapabilityV1.capabilityItems[*].capabilityId 的解析链路显式化）。
+
+Selected slice：
+
+```text
+Add CapabilityV1 / capability-v1 ArtifactV1 subtype contract artifact at artifacts/capabilities/post_mvp_capability_v1_catalog.json so /usr/bin/python3 scripts/validate_repo.py verifies a workload-independent Capability primitive distinct from workload-specific CapabilityManifestV1: declare capability-v1 / capability-item-v1 schemas, partition the capabilityClassDomain into the workload-independent set (read_only_inspection / evidence_collection / artifact_writing / verifier_check / human_approval_request) and forbiddenCapabilityClasses (external_communication / repository_mutation / release_or_deploy / gui_or_browser_or_desktop_call / public_access), partition the sideEffectClassDomain into (read_only / evidence_writer / artifact_writer / verifier_check) and forbiddenSideEffectClasses (external / email_send_call / release_or_deploy / repository_mutation / gui_or_browser_or_desktop_call / public_access), enforce the six permission flags and per-capability permissionFlagOverrides to false, force every capability item to capabilityLifecycleState=registered, bind TestExecutionTaskSpecV1 / IntentV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 by content hash plus the five Agent Coordination Layer contracts, require ToolCallListV1.toolCallItems[*].capabilityRef to resolve into CapabilityV1.capabilityItems[*].capabilityId with everyToolCallRefResolved=true and everyCapabilityItemUsed=true, declare verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true, and explicitly forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 / reusesRegressionCapabilityArtifact=false / reusesSendEmailCapability=false.
+```
+
+为什么这是下一步：
+
+- 上一轮 `EvaluationReportV1.nextRecommendedSlice` 明确要求新增 workload-independent `CapabilityV1` ArtifactV1 subtype，把 OS kernel 的 Capability 原语从工作负载特定的 `CapabilityManifestV1` 中抽出来，并显式表达 `ToolCallListV1.toolCallItems[*].capabilityRef → CapabilityV1.capabilityId` 的解析关系。
+- Post-MVP slice priority #1（generalize workload-independent kernel primitive：`CapabilityV1`）与 #2（add second workload：`Test Execution / Failure Triage`）继续叠加：在 `ArtifactV1` envelope 上引入第十四个具体 subtype `capability-v1`，与既有十三个 subtype 并列。
+- 这是 OS kernel 的 `Capability` 抽象第一次以 workload-independent 形式独立成 ArtifactV1 子类型。既有 `artifacts/capabilities/post_mvp_test_execution_capability_manifest.json` 把每个 capability 的运行参数（permission / sideEffect / timeoutMs / inputContract / outputContract / allowedEffectClasses / evidenceContract）封装成 workload-specific manifest；新 artifact 在显式 `regressionWorkloadIsolation.reusesRegressionCapabilityArtifact=false` 的前提下，用新的 `capability-v1` envelope、`capability-item-v1` 子 schema，把每一个 capability 注册项抽出来成为独立可绑定 / 可审计 / 可校验的 workload-independent 对象，并通过 `toolCallCoverage` 把 `ToolCallListV1.toolCallItems[*].capabilityRef` → `CapabilityV1.capabilityItems[*].capabilityId` 钉成不变量。
+- `.github/workflows/validate.yml` 与 `.github/workflows/auto-merge-cursor-pr.yml` 均存在；本轮 baseline `/usr/bin/python3 scripts/validate_repo.py` 已通过。
+
+OS kernel primitive advanced：
+
+- 在 `ArtifactV1` envelope 上引入第十四个 subtype `capability-v1`；`artifactEnvelopeSchemaVersion=artifact-v1` 显式声明 envelope 复用。未来 `CodePatchCapabilityV1`、`PRReviewCapabilityV1`、`DocumentationUpdateCapabilityV1`、`IncidentAnalysisCapabilityV1` 等可以复用同一 envelope。
+- `CapabilityV1` / `capability-v1`：第一次把 OS kernel 中的 `Capability` 抽象作为独立 schema 落地；capabilityClassDomain（`read_only_inspection` / `evidence_collection` / `artifact_writing` / `verifier_check` / `human_approval_request`）、sideEffectClassDomain（`read_only` / `evidence_writer` / `artifact_writer` / `verifier_check`）、forbiddenCapabilityClasses（`external_communication` / `repository_mutation` / `release_or_deploy` / `gui_or_browser_or_desktop_call` / `public_access`）、forbiddenSideEffectClasses（`external` / `email_send_call` / `release_or_deploy` / `repository_mutation` / `gui_or_browser_or_desktop_call` / `public_access`）、sourceAgentDomain（`creator_agent` / `verifier-runtime-v1`）、capabilityLifecycleStateDomain（`drafted` / `registered` / `deprecated` / `withdrawn`）全部 workload-independent。
+- `capability-item-v1`：每个 capability 注册条目都拥有独立的 `capabilityId` / `capabilityClass` / `sideEffectClass` / `inputSchemaRef` / `outputSchemaRef` / `sourceAgentDomain` / `permissionFlagOverrides` / `verifierVerdictOwner` / `capabilityLifecycleState` / `description`，与 workload-specific `CapabilityManifestV1.capabilities[*]` 完全解耦。
+- `ToolCallListV1 ↔ CapabilityV1` 一致性：`toolCallCoverage.everyToolCallRefResolved=true` 与 `everyCapabilityItemUsed=true` 钉为 invariant；`CapabilityV1.capabilityItems[*].capabilityId` 必须等于 `ToolCallListV1.toolCallItems[*].capabilityRef` 的唯一集合。OS kernel 第一次拥有「每一次 tool call 都能解析到一个 workload-independent capability 注册条目」的机器可验证证据。
+- `Verifier ↔ RunEvent ↔ Policy ↔ Capability` 三重门：`promotionConditions` 把 `VerifierResultV1.verdict==passed` / `RunEventLogV1.terminalState==completed` / `PolicyManifestV1.unlockConditions.unlocked==true` 钉为 capability registry promotion 条件；任何一个 gate 失败 → `promoted=false`。
+
+Non-regression workload reuse path：
+
+- `Test Execution / Failure Triage`：本 artifact 直接覆盖；5 个 capability item（`read_test_execution_result` / `collect_test_failure_evidence` / `classify_test_failure` / `write_artifact` / `__run_kernel__`）覆盖 ToolCallListV1 全部 5 次 tool call 的 capabilityRef 全集。
+- `Code Patch / Review Loop`：未来 `CodePatchCapabilityV1` 可复用同一 `capability-v1` envelope、`capability-item-v1` 子 schema、capabilityClassDomain、sideEffectClassDomain、sourceAgentDomain、capabilityLifecycleStateDomain；只需要替换 `capabilityItems` 内容并把 capabilityClass 落在同一 workload-independent 集合里。
+- `PR Review` / `Documentation Update` / `Incident / Log Analysis`：同理。本 artifact 的 `nonRegressionReusePath` 字段已声明 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review` 三条路径。
+
+Coordination protocol / invariant clarified：
+
+- `coordinationBinding` 字段强制 CapabilityV1 绑定 Agent Coordination Layer 五件套 contract artifact，并通过 `sourceArtifacts[].contentHash` 把上游 11 件套 + Run + StepList + ToolCallList + Intent contract 当作不可变前提；任何一个上游 contract 漂移都会让本 artifact validate 失败。
+- `verifierVerdictOwner=verifier-runtime-v1` 与 `verifierExpectations.creatorMustNotOwnVerdict=true` 把 CreatorVerifierPairingV1 不变量延伸到 Capability 层：creator 写入 capability draft，但 verifier 拥有 acceptance；envelope 的 `promotionConditions.promoted=true` 不能由 creator 单方面声明。
+- `permissionFlagDomain` / `permissionFlags` / 每个 capabilityItem 的 `permissionFlagOverrides` 都对 6 个 workload-independent 权限位强制为 `false`；`forbiddenSideEffectClasses` 显式禁止 `external` / `email_send_call` / `release_or_deploy` / `repository_mutation` / `gui_or_browser_or_desktop_call` / `public_access` 等 6 类副作用，与既有 BroadcastSubscriptionManifestV1 / NegotiationRecordV1 / DelegationManifestV1 / TestExecutionTaskSpecV1 / TestExecutionResultV1 / FailureTriageReportV1 / VerifierResultV1 / CapabilityManifestV1 / RunEventLogV1 / DeliveryManifestV1 / PolicyManifestV1 / EvidenceListV1 / ObservationListV1 / RunV1 / StepListV1 / ToolCallListV1 / IntentV1 的 policy invariant 对齐：Capability 原语自身不允许触发任何 side effect / external communication / public access。
+
+为什么这不是另一个 regression/email fixture：
+
+- artifact 路径为 `artifacts/capabilities/post_mvp_capability_v1_catalog.json`（独立于既有 `artifacts/capabilities/post_mvp_test_execution_capability_manifest.json` 这个 workload-specific manifest 与 `artifacts/capabilities/phase3_capability_catalog.json` 这个 first-workload regression read-only capability 目录），scope 为 `workload_independent_capability_v1_kernel_contract`，不是 regression run、email draft、approval lifecycle、delivery unlock 或 policy unlock。
+- `workloadType` 必须等于 `test_execution_failure_triage`，validator 显式拒绝把它改成 `read_only_regression_evidence_demo` 或任何 regression workload；`kind` 必须为 `CapabilityV1`，`schemaVersion` 必须为 `capability-v1`（区别于任何 first-workload `capability-envelope-v1` / `capability-metadata-v1` / `capability-catalog-v1` / `capability-manifest-v1` schema），每个 capabilityItem 的 `schemaVersion` 必须为 `capability-item-v1`。
+- `regressionWorkloadIsolation.forbiddenFields` 包含 `regression_result` / `regression_result.json` / `email_draft` / `email_draft.md` / `send_email` / `regression-task-spec-v1` / `regression-result-artifact-v1`；新增 `reusesRegressionCapabilityArtifact=false` / `reusesRegressionTaskSpec=false` / `reusesRegressionResultArtifact=false` / `reusesSendEmailCapability=false` 把本 artifact 与 first-workload regression capability / task spec / result / send_email 显式隔离。defensive scan 拒绝这些 token 在 forbiddenFields 之外再次出现。
+- `nonRegressionReusePath` 必须包含 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review`，强制本 artifact 至少有两个 non-regression 复用路径。
+
+Acceptance criteria：
+
+- `scripts/capability_kernel.py` 提供 `build_capability_kernel_artifact` / `validate_capability_kernel_artifact` 与 CLI（`--out` / `--validate`）。
+- 新增 committed `artifacts/capabilities/post_mvp_capability_v1_catalog.json`，schemaVersion 为 `capability-v1`，artifactEnvelopeSchemaVersion 为 `artifact-v1`，capabilityItemSchemaVersion 为 `capability-item-v1`，capabilityCount=5。
+- `scripts/validate_repo.py` 验证 committed artifact、deterministic builder output、deterministic CLI replay 与约 55 条 forced-failure case（workload_type / kind / schema / envelope / item schema / verdict ownership / permission flags / capability class domain / forbidden capability classes / side effect class domain / forbidden side effect classes / source agent domain / lifecycle state domain / required lifecycle state / per-item lifecycle state / per-item permission overrides / per-item source agent / per-item verifier owner / per-item input schema / per-item output schema / per-item capabilityId / per-item sequence / count drift / 13 binding pair / tool-call coverage everyResolved / tool-call coverage everyUsed / tool-call coverage capability ids drift / promotion gates / coordination binding / regression isolation / non-regression reuse path / 14 source hash mismatches）。
+- `EvaluationReportV1` 把 CapabilityV1 artifact 纳入 source hash，并把下一推荐切片推进为 workload-independent `PolicyV1` ArtifactV1 subtype。
+
+实现摘要：
+
+- 新增 `scripts/capability_kernel.py`，包含 schema 常量、5 条 deterministic CAPABILITY_BLUEPRINT、builder、validator、deterministic CLI（`--out` / `--validate`），以及 ArtifactV1 envelope / 13 向 binding（含 IntentV1 + RunV1 + StepList + ToolCallList）/ 五件套 coordination binding 逻辑；`toolCallCoverage` 自动从 capabilityItems 与上游 ToolCallListV1 推导；`promotionConditions` 由 verdict / run terminal state / policy unlock 三重门派生。
+- 新增 committed `artifacts/capabilities/post_mvp_capability_v1_catalog.json`，共 5 个 capability item：3 个 `read_only_inspection` / `evidence_collection` 类创建者能力 + 1 个 `artifact_writing` 类创建者能力 + 1 个 `verifier_check` 类验证者能力，全部 `capabilityLifecycleState=registered`。
+- 更新 `scripts/validate_repo.py`：REQUIRED_FILES 增加 `scripts/capability_kernel.py` 与 `artifacts/capabilities/post_mvp_capability_v1_catalog.json`，PLAN markers 增加 `CapabilityV1` / `capability-v1` / `capability-item-v1` / `post_mvp_capability_v1_catalog.json`，新增 committed artifact 校验、deterministic CLI replay 与约 55 条 forced-failure case。
+- 更新 `scripts/evaluation_report.py` 与 `artifacts/evaluation/phase9_mvp_evaluation_report.json`：把 CapabilityV1 加入 source hash，并把 `nextRecommendedSlice` 推进为 workload-independent `PolicyV1` ArtifactV1 subtype（policy-v1 / policy-item-v1，policyClass / policyScope / policyLifecycleState / unlockConditionRef）。
+
+Build vs Integrate：
+
+- Build：`CapabilityV1 / capability-item-v1` schema、deterministic builder / validator / CLI、committed artifact、约 55 条 forced-failure case、`EvaluationReportV1` source hash 集成、`ToolCallListV1.toolCallItems[*].capabilityRef → CapabilityV1.capabilityItems[*].capabilityId` 解析链路显式化、Verifier ↔ RunEventLog ↔ Policy 三重 promotion 门、13 向 binding、permissionFlagOverrides 不变量。
+- Integrate later：真实 Capability 注册 runtime / capability registry / 真实 capability lifecycle 调度 / capability versioning / capability deprecation runtime；跨 workload `CapabilityV1` catalogue；`ArtifactV1` envelope 抽取为独立 schema 文件；`PolicyV1` / 真实 policy lifecycle runtime / 真实 capability ↔ policy enforcement runtime 等下一批 OS kernel primitive。
+
+验证计划 / 结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline /usr/bin/python3 scripts/validate_repo.py before edits：通过。
+- /usr/bin/python3 -m py_compile scripts/*.py：通过。
+- /usr/bin/python3 scripts/capability_kernel.py --out artifacts/capabilities/post_mvp_capability_v1_catalog.json：通过。
+- /usr/bin/python3 scripts/capability_kernel.py --validate artifacts/capabilities/post_mvp_capability_v1_catalog.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --report-out artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/validate_repo.py：通过，覆盖 CapabilityV1 committed artifact、deterministic CLI replay 与约 55 条 forced-failure case。
+- git diff --check：通过。
+```
+
+剩余风险：
+
+- `CapabilityV1` 仍是 static contract artifact，不驱动任何真实 capability registry / 真实 capability lifecycle 调度 / capability versioning / capability deprecation runtime；下一切片应给出 workload-independent `PolicyV1` ArtifactV1 subtype，把 OS kernel 的 Policy 原语在第二 workload 上独立抽象出来，并把 `PolicyManifestV1.unlockConditions` 显式 binding 到 `PolicyV1.policyItems[*].unlockConditionRef`。
+- 当前 artifact 复用 first workload 的 5 件套 coordination contract artifact 与 phase9 human approval decision fixture 作为 source fixture；`Code Patch / Review Loop` 与 `PR Review` 的 CapabilityV1 subtype 仍未实现。
+- `ArtifactV1` envelope 目前仍通过 `artifactEnvelopeSchemaVersion` 字段表达；未来需要把所有 15 个 subtype（`regression-result-artifact-v1` / `test-execution-result-v1` / `failure-triage-report-v1` / `verifier-result-v1` / `capability-manifest-v1` / `run-event-log-v1` / `delivery-manifest-v1` / `policy-manifest-v1` / `evidence-list-artifact-v1` / `observation-list-artifact-v1` / `run-artifact-v1` / `step-list-artifact-v1` / `tool-call-list-artifact-v1` / `intent-v1` / `capability-v1`）抽出共同 base schema（真正的 `artifact-v1` envelope）。
+
+下一轮建议：
+
+```text
+新增 workload-independent PolicyV1 ArtifactV1 subtype contract artifact：
+为 OS kernel 抽象一个 workload-independent 的 PolicyV1 ArtifactV1 子类型，区别于既有的 workload-specific PolicyManifestV1。定义 policyId / policyClass (permission_policy / approval_policy / delivery_policy / external_side_effect_policy / regression_isolation_policy / coordination_policy) / policyScope (workload_independent_kernel / workload_specific / coordination_layer) / policyLifecycleState (drafted / active / deprecated / withdrawn) / requiredFlag / verifierVerdictOwner / unlockConditionRef 等 workload-independent 字段；绑定 TestExecutionTaskSpecV1 / IntentV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 与 Agent Coordination Layer 五件套；每个 PolicyManifestV1.unlockConditions key 必须解析到 PolicyV1.policyItems[*].unlockConditionRef；字段不得依赖 regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1。
+```
+
 ## 22. Parking Lot
 
 以下内容仍然重要，但不进入第一版 MVP：
