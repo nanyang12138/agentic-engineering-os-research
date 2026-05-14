@@ -7,7 +7,14 @@ review_focus:
   - tests
   - edge-cases
 max_findings: 5
-max_diff_bytes: 120000
+# Linux execve() limits a single argv entry to MAX_ARG_STRLEN = 32 * PAGE_SIZE
+# = 128 KB. cursor-review-action passes the whole prompt (system prompt + PR
+# title + PR body + commit messages + diff) as one argv entry to `agent`, so
+# we must keep diff well under that ceiling once the other pieces are added.
+# Empirically, 120000 bytes of diff plus this repo's verbose PR bodies pushes
+# the single-arg over the limit and triggers OSError [Errno 7]
+# "Argument list too long". 60000 leaves comfortable headroom.
+max_diff_bytes: 60000
 max_files: 20
 max_hunks: 80
 timeout_seconds: 600
