@@ -75,12 +75,15 @@ from coordination_contract import (
     AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH,
     CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH,
     DELEGATION_MANIFEST_ARTIFACT_PATH,
+    NEGOTIATION_RECORD_ARTIFACT_PATH,
     build_agent_message_manifest,
     build_creator_verifier_pairing,
     build_delegation_manifest,
+    build_negotiation_record,
     validate_agent_message_manifest,
     validate_creator_verifier_pairing,
     validate_delegation_manifest,
+    validate_negotiation_record,
 )
 from human_approval import (
     DECISION_ARTIFACT_PATH as HUMAN_APPROVAL_DECISION_ARTIFACT_PATH,
@@ -146,6 +149,7 @@ POLICY_UNLOCK_DENIAL_PATH = ROOT / POLICY_UNLOCK_DENIAL_ARTIFACT_PATH
 DELEGATION_MANIFEST_PATH = ROOT / DELEGATION_MANIFEST_ARTIFACT_PATH
 CREATOR_VERIFIER_PAIRING_PATH = ROOT / CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH
 AGENT_MESSAGE_MANIFEST_PATH = ROOT / AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH
+NEGOTIATION_RECORD_PATH = ROOT / NEGOTIATION_RECORD_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -232,6 +236,7 @@ REQUIRED_FILES = [
     "artifacts/coordination/post_mvp_delegation_manifest.json",
     "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
     "artifacts/coordination/post_mvp_agent_message_manifest.json",
+    "artifacts/coordination/post_mvp_negotiation_record.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -318,6 +323,11 @@ PLAN_REQUIRED_MARKERS = [
     "agent-message-manifest-v1",
     "agent-message-v1",
     "post_mvp_agent_message_manifest.json",
+    "NegotiationRecordV1",
+    "negotiation-record-v1",
+    "negotiation-proposal-v1",
+    "negotiation-agreement-v1",
+    "post_mvp_negotiation_record.json",
     "Agentic Engineering OS Kernel",
     "workload-independent primitives",
     "first workload: Read-only Regression Evidence Demo",
@@ -2881,6 +2891,157 @@ def run_agent_message_manifest_builder(manifest_out: Path) -> None:
         )
 
 
+def expect_negotiation_record_validation_failure(
+    label: str,
+    record: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_negotiation_record(record, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"NegotiationRecordV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"NegotiationRecordV1 forced-failure case {label} unexpectedly passed validation")
+
+
+def validate_committed_negotiation_record_artifact() -> None:
+    record = load_json(NEGOTIATION_RECORD_PATH)
+    try:
+        validate_negotiation_record(record, ROOT)
+    except ValueError as exc:
+        raise AssertionError(f"Committed NegotiationRecordV1 artifact failed validation: {exc}") from exc
+
+    expected_record = build_negotiation_record(ROOT)
+    if record != expected_record:
+        raise AssertionError("Committed NegotiationRecordV1 artifact differs from deterministic builder output")
+
+    tampered = json.loads(json.dumps(record))
+    tampered["agreement"]["overridesVerifierResult"] = True
+    expect_negotiation_record_validation_failure(
+        "agreement_overrides_verifier_result",
+        tampered,
+        "must not override verifier results",
+    )
+
+    tampered = json.loads(json.dumps(record))
+    tampered["agreement"]["mutatesExpectedArtifacts"] = True
+    expect_negotiation_record_validation_failure(
+        "agreement_mutates_expected_artifacts",
+        tampered,
+        "must not mutate delegation expectedArtifacts",
+    )
+
+    tampered = json.loads(json.dumps(record))
+    tampered["agreement"]["agreedBy"] = ["creator_agent"]
+    expect_negotiation_record_validation_failure(
+        "agreement_missing_verifier",
+        tampered,
+        "agreedBy both creator and verifier",
+    )
+
+    tampered = json.loads(json.dumps(record))
+    tampered["proposals"] = [tampered["proposals"][0], tampered["proposals"][-1]]
+    tampered["proposalTypeSequence"] = [
+        tampered["proposals"][0]["proposalType"],
+        tampered["proposals"][-1]["proposalType"],
+    ]
+    expect_negotiation_record_validation_failure(
+        "proposal_sequence_missing_counter_proposal",
+        tampered,
+        "proposalTypeSequence",
+    )
+
+    tampered = json.loads(json.dumps(record))
+    for proposal in tampered["proposals"]:
+        proposal["carriesSideEffects"] = True
+    expect_negotiation_record_validation_failure(
+        "proposals_carry_side_effects",
+        tampered,
+        "must not carry side effects",
+    )
+
+    tampered = json.loads(json.dumps(record))
+    for proposal in tampered["proposals"]:
+        proposal["broadcastAllowed"] = True
+    expect_negotiation_record_validation_failure(
+        "proposals_broadcast_allowed",
+        tampered,
+        "must not broadcast",
+    )
+
+    tampered = json.loads(json.dumps(record))
+    for proposal in tampered["proposals"]:
+        proposal["proposedDelta"]["addedClause"] = (
+            "Allow send_email after agreement."
+        )
+        tampered["agreement"]["agreedClause"] = tampered["proposals"][-1]["proposedDelta"]["addedClause"]
+    expect_negotiation_record_validation_failure(
+        "email_delivery_clause_added",
+        tampered,
+        "regression/email delivery artifacts",
+    )
+
+    tampered = json.loads(json.dumps(record))
+    tampered["policyBoundary"]["broadcastAllowed"] = True
+    expect_negotiation_record_validation_failure(
+        "policy_broadcast_allowed",
+        tampered,
+        "broadcastAllowed false",
+    )
+
+    tampered = json.loads(json.dumps(record))
+    tampered["nonRegressionReusePath"] = ["read_only_regression_evidence_demo"]
+    expect_negotiation_record_validation_failure(
+        "missing_non_regression_reuse_path",
+        tampered,
+        "non-regression workload reuse paths",
+    )
+
+    tampered = json.loads(json.dumps(record))
+    for source in tampered["sourceArtifacts"]:
+        if source.get("role") == "agent_message_manifest":
+            source["contentHash"] = "0" * 64
+            break
+    expect_negotiation_record_validation_failure(
+        "agent_message_manifest_source_hash_mismatch",
+        tampered,
+        "source hash mismatch",
+    )
+
+    tampered = json.loads(json.dumps(record))
+    tampered["messageRefs"]["verificationRequest"] = (
+        "artifacts/coordination/post_mvp_agent_message_manifest.json#messages/unknown"
+    )
+    expect_negotiation_record_validation_failure(
+        "message_refs_request_not_bound",
+        tampered,
+        "verification.request",
+    )
+
+
+def run_negotiation_record_builder(record_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/coordination_contract.py"),
+        "--negotiation-out",
+        str(record_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "NegotiationRecordV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -3281,6 +3442,7 @@ def main() -> None:
     validate_committed_delegation_manifest_artifact()
     validate_committed_creator_verifier_pairing_artifact()
     validate_committed_agent_message_manifest_artifact()
+    validate_committed_negotiation_record_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -3386,6 +3548,10 @@ def main() -> None:
         run_agent_message_manifest_builder(generated_agent_message_manifest)
         if load_json(generated_agent_message_manifest) != load_json(AGENT_MESSAGE_MANIFEST_PATH):
             raise AssertionError("Committed AgentMessageManifestV1 artifact differs from deterministic CLI output")
+        generated_negotiation_record = temp_root / "post_mvp_negotiation_record.json"
+        run_negotiation_record_builder(generated_negotiation_record)
+        if load_json(generated_negotiation_record) != load_json(NEGOTIATION_RECORD_PATH):
+            raise AssertionError("Committed NegotiationRecordV1 artifact differs from deterministic CLI output")
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)
         if load_json(generated_evaluation_report) != load_json(EVALUATION_REPORT_PATH):
