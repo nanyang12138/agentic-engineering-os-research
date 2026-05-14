@@ -22,6 +22,10 @@ from approval_audit_query import (
     AUDIT_ARTIFACT_PATH as APPROVAL_AUDIT_QUERY_ARTIFACT_PATH,
     validate_approval_audit_query,
 )
+from approval_revocation import (
+    REVOCATION_ARTIFACT_PATH as APPROVAL_REVOCATION_ARTIFACT_PATH,
+    validate_approval_revocation_or_expiry,
+)
 
 
 EVALUATION_REPORT_SCHEMA_VERSION = "mvp-evaluation-report-v1"
@@ -118,6 +122,7 @@ def _source_specs() -> list[tuple[str, str]]:
         ("post_mvp_replay_query_script", "scripts/replay_query.py"),
         ("post_mvp_identity_bound_approval_script", "scripts/identity_bound_approval.py"),
         ("post_mvp_approval_audit_query_script", "scripts/approval_audit_query.py"),
+        ("post_mvp_approval_revocation_script", "scripts/approval_revocation.py"),
         ("phase3_capability_catalog", "artifacts/capabilities/phase3_capability_catalog.json"),
         ("phase5_verifier_rule_catalog", "artifacts/verifier/phase5_verifier_rule_catalog.json"),
         ("phase6_recovery_run", "artifacts/recovery/interrupted_after_extract/run.json"),
@@ -136,6 +141,7 @@ def _source_specs() -> list[tuple[str, str]]:
         ("post_mvp_replay_query", REPLAY_QUERY_ARTIFACT_PATH),
         ("post_mvp_identity_bound_approval_record", IDENTITY_BOUND_APPROVAL_RECORD_ARTIFACT_PATH),
         ("post_mvp_approval_audit_query", APPROVAL_AUDIT_QUERY_ARTIFACT_PATH),
+        ("post_mvp_approval_revocation_or_expiry", APPROVAL_REVOCATION_ARTIFACT_PATH),
     ]
     for fixture_id in FIXTURE_IDS:
         specs.append((f"phase1a_{fixture_id}_run", f"artifacts/runs/{fixture_id}/run.json"))
@@ -256,6 +262,8 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
     validate_identity_bound_approval_record(identity_bound_approval_record, root)
     approval_audit_query = _load_json(root / APPROVAL_AUDIT_QUERY_ARTIFACT_PATH)
     validate_approval_audit_query(approval_audit_query, root)
+    approval_revocation = _load_json(root / APPROVAL_REVOCATION_ARTIFACT_PATH)
+    validate_approval_revocation_or_expiry(approval_revocation, root)
     delivery_readiness = delivery_report["readiness"]
     delivery_blocker_ids = [blocker["id"] for blocker in delivery_report["blockers"]]
     phase_coverage = _phase_coverage()
@@ -338,7 +346,7 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
         ],
         "nextRecommendedSlice": {
             "phase": "post_mvp",
-            "slice": "Add an approval expiry or revocation fixture over ApprovalAuditQueryV1 while preserving the no-side-effect contract.",
+            "slice": "Add a policy unlock request denial fixture over ApprovalRevocationOrExpiryV1 while preserving the no-side-effect contract.",
             "mustRemainMachineVerifiable": True,
         },
         "invariants": [

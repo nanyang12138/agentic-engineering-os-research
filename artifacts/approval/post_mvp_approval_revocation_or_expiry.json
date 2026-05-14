@@ -1,0 +1,107 @@
+{
+  "approvalLifecycle": {
+    "activeApproval": false,
+    "approvalPoint": "send_email_requires_human_approval",
+    "approvalUsableForDelivery": false,
+    "currentState": "expired_and_revoked",
+    "decisionId": "human-decision-all_passed-send-email-rejected",
+    "expired": true,
+    "expiresAt": "2026-05-13T14:39:00Z",
+    "expiryReason": "static_fixture_approval_window_elapsed",
+    "fixtureId": "all_passed",
+    "originalApprovalGranted": false,
+    "originalDecision": "rejected",
+    "revocationReason": "mvp_policy_keeps_external_delivery_disabled",
+    "revoked": true,
+    "revokedAt": "2026-05-13T14:40:00Z",
+    "runId": "run-all_passed-988940c2"
+  },
+  "auditBinding": {
+    "approvalAuditQueryId": "post-mvp-approval-audit-query-fixture-all_passed",
+    "approvalAuditQueryRef": "artifacts/approval/post_mvp_approval_audit_query.json",
+    "identityBoundApprovalRecordId": "post-mvp-identity-bound-approval-record-all_passed",
+    "identityBoundApprovalRecordRef": "artifacts/approval/post_mvp_identity_bound_approval_record.json",
+    "requiredAuditQueryIds": [
+      "query-approval-audit-actor-by-run-id",
+      "query-approval-audit-intent-policy-by-run-id",
+      "query-approval-audit-decision-by-run-id",
+      "query-approval-audit-effect-boundary-by-run-id",
+      "query-approval-audit-source-hashes-by-run-id"
+    ],
+    "sourceHashChain": [
+      {
+        "contentHash": "e020d1b30f00445c7b6671f0c63a5f57da069c8c26ff4b7f13008fd73e90fe3f",
+        "path": "artifacts/state/post_mvp_replay_query.json",
+        "role": "replay_query"
+      },
+      {
+        "contentHash": "706b9659c784b139ca6a219d19dc9db3e203e977b312c742b789c3ac91e9bc92",
+        "path": "artifacts/approval/post_mvp_identity_bound_approval_record.json",
+        "role": "identity_bound_approval_record"
+      },
+      {
+        "contentHash": "99b6e4391d1fd0111b375c3393f20374f3c37419f3c4d6a043c1dc2eebdcb017",
+        "path": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+        "role": "human_approval_decision"
+      },
+      {
+        "contentHash": "5e57764de6e9c125d9644d0e4a6797bf8922e5fe346062b77a8dc7c50f7cd0af",
+        "path": "artifacts/state/post_mvp_durable_run_store.json",
+        "role": "durable_run_store"
+      },
+      {
+        "contentHash": "e020d1b30f00445c7b6671f0c63a5f57da069c8c26ff4b7f13008fd73e90fe3f",
+        "path": "artifacts/state/post_mvp_replay_query.json",
+        "role": "replay_query"
+      },
+      {
+        "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
+        "path": "artifacts/runs/all_passed/run.json",
+        "role": "run"
+      }
+    ]
+  },
+  "effectBoundary": {
+    "approvalGrantAllowed": false,
+    "databaseUsed": false,
+    "externalDeliveryAllowed": false,
+    "externalSideEffectsAllowed": false,
+    "prCreationAllowed": false,
+    "realProviderExecutionAllowed": false,
+    "sendEmailAllowed": false,
+    "workspaceMutationAllowed": false
+  },
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "post-mvp-approval-revocation-or-expiry-all_passed",
+  "invariants": [
+    "ApprovalRevocationOrExpiryV1 is derived from ApprovalAuditQueryV1 and IdentityBoundApprovalRecordV1 only.",
+    "Expired or revoked approval lifecycle state cannot unlock send_email, external delivery, workspace mutation, PR creation, or provider execution.",
+    "Approval lifecycle audit remains a static JSON fixture; it does not implement an approval backend or database."
+  ],
+  "lifecyclePolicy": {
+    "approvalGrantAllowed": false,
+    "auditOnly": true,
+    "databaseUsed": false,
+    "externalSideEffectsAllowed": false,
+    "lifecycleEventSource": "static_fixture",
+    "realProviderExecutionAllowed": false,
+    "sourceHashValidationRequired": true,
+    "stateMachine": "approval-revocation-or-expiry-v1"
+  },
+  "mode": "static_json_lifecycle_fixture_only",
+  "phase": "post_mvp",
+  "schemaVersion": "approval-revocation-or-expiry-v1",
+  "scope": "approval_revocation_or_expiry_fixture",
+  "sourceArtifacts": [
+    {
+      "contentHash": "b51f80b454220889502783bcecd4149198db96fe132b40d01f3b12b867818cd8",
+      "path": "artifacts/approval/post_mvp_approval_audit_query.json",
+      "role": "approval_audit_query"
+    },
+    {
+      "contentHash": "706b9659c784b139ca6a219d19dc9db3e203e977b312c742b789c3ac91e9bc92",
+      "path": "artifacts/approval/post_mvp_identity_bound_approval_record.json",
+      "role": "identity_bound_approval_record"
+    }
+  ]
+}

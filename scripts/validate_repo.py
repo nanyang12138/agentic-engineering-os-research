@@ -61,6 +61,11 @@ from approval_audit_query import (
     build_approval_audit_query,
     validate_approval_audit_query,
 )
+from approval_revocation import (
+    REVOCATION_ARTIFACT_PATH as APPROVAL_REVOCATION_ARTIFACT_PATH,
+    build_approval_revocation_or_expiry,
+    validate_approval_revocation_or_expiry,
+)
 from human_approval import (
     DECISION_ARTIFACT_PATH as HUMAN_APPROVAL_DECISION_ARTIFACT_PATH,
     build_human_approval_decision,
@@ -120,6 +125,7 @@ DURABLE_RUN_STORE_PATH = ROOT / DURABLE_RUN_STORE_ARTIFACT_PATH
 REPLAY_QUERY_PATH = ROOT / REPLAY_QUERY_ARTIFACT_PATH
 IDENTITY_BOUND_APPROVAL_RECORD_PATH = ROOT / IDENTITY_BOUND_APPROVAL_RECORD_ARTIFACT_PATH
 APPROVAL_AUDIT_QUERY_PATH = ROOT / APPROVAL_AUDIT_QUERY_ARTIFACT_PATH
+APPROVAL_REVOCATION_PATH = ROOT / APPROVAL_REVOCATION_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -180,6 +186,7 @@ REQUIRED_FILES = [
     "scripts/replay_query.py",
     "scripts/identity_bound_approval.py",
     "scripts/approval_audit_query.py",
+    "scripts/approval_revocation.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
     "artifacts/recovery/interrupted_after_extract/run.json",
@@ -198,6 +205,7 @@ REQUIRED_FILES = [
     "artifacts/state/post_mvp_replay_query.json",
     "artifacts/approval/post_mvp_identity_bound_approval_record.json",
     "artifacts/approval/post_mvp_approval_audit_query.json",
+    "artifacts/approval/post_mvp_approval_revocation_or_expiry.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -266,6 +274,9 @@ PLAN_REQUIRED_MARKERS = [
     "ApprovalAuditQueryV1",
     "approval-audit-query-v1",
     "post_mvp_approval_audit_query.json",
+    "ApprovalRevocationOrExpiryV1",
+    "approval-revocation-or-expiry-v1",
+    "post_mvp_approval_revocation_or_expiry.json",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -2249,6 +2260,105 @@ def run_approval_audit_query_builder(audit_out: Path) -> None:
         )
 
 
+def expect_approval_revocation_validation_failure(
+    label: str,
+    revocation: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_approval_revocation_or_expiry(revocation, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"ApprovalRevocationOrExpiryV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"ApprovalRevocationOrExpiryV1 forced-failure case {label} unexpectedly passed validation")
+
+
+def validate_committed_approval_revocation_artifact() -> None:
+    revocation = load_json(APPROVAL_REVOCATION_PATH)
+    try:
+        validate_approval_revocation_or_expiry(revocation, ROOT)
+    except ValueError as exc:
+        raise AssertionError(f"Committed ApprovalRevocationOrExpiryV1 artifact failed validation: {exc}") from exc
+
+    expected_revocation = build_approval_revocation_or_expiry(ROOT)
+    if revocation != expected_revocation:
+        raise AssertionError("Committed ApprovalRevocationOrExpiryV1 artifact differs from deterministic builder output")
+
+    tampered_revocation = json.loads(json.dumps(revocation))
+    tampered_revocation["approvalLifecycle"]["currentState"] = "active"
+    expect_approval_revocation_validation_failure(
+        "active_current_state",
+        tampered_revocation,
+        "currentState must be expired_and_revoked",
+    )
+
+    tampered_revocation = json.loads(json.dumps(revocation))
+    tampered_revocation["approvalLifecycle"]["activeApproval"] = True
+    expect_approval_revocation_validation_failure(
+        "active_approval",
+        tampered_revocation,
+        "activeApproval must be false",
+    )
+
+    tampered_revocation = json.loads(json.dumps(revocation))
+    tampered_revocation["effectBoundary"]["sendEmailAllowed"] = True
+    expect_approval_revocation_validation_failure(
+        "send_email_allowed",
+        tampered_revocation,
+        "effectBoundary sendEmailAllowed must be false",
+    )
+
+    tampered_revocation = json.loads(json.dumps(revocation))
+    tampered_revocation["lifecyclePolicy"]["externalSideEffectsAllowed"] = True
+    expect_approval_revocation_validation_failure(
+        "external_side_effects_allowed",
+        tampered_revocation,
+        "lifecyclePolicy externalSideEffectsAllowed must be false",
+    )
+
+    tampered_revocation = json.loads(json.dumps(revocation))
+    tampered_revocation["auditBinding"]["sourceHashChain"] = []
+    expect_approval_revocation_validation_failure(
+        "source_hash_chain_removed",
+        tampered_revocation,
+        "source hash chain must match",
+    )
+
+    tampered_revocation = json.loads(json.dumps(revocation))
+    for source in tampered_revocation["sourceArtifacts"]:
+        if source.get("role") == "approval_audit_query":
+            source["contentHash"] = "0" * 64
+            break
+    expect_approval_revocation_validation_failure(
+        "approval_audit_query_hash_mismatch",
+        tampered_revocation,
+        "source hash mismatch",
+    )
+
+
+def run_approval_revocation_builder(revocation_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/approval_revocation.py"),
+        "--revocation-out",
+        str(revocation_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "ApprovalRevocationOrExpiryV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -2644,6 +2754,7 @@ def main() -> None:
     validate_committed_replay_query_artifact()
     validate_committed_identity_bound_approval_record_artifact()
     validate_committed_approval_audit_query_artifact()
+    validate_committed_approval_revocation_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -2729,6 +2840,10 @@ def main() -> None:
         run_approval_audit_query_builder(generated_approval_audit_query)
         if load_json(generated_approval_audit_query) != load_json(APPROVAL_AUDIT_QUERY_PATH):
             raise AssertionError("Committed ApprovalAuditQueryV1 artifact differs from deterministic CLI output")
+        generated_approval_revocation = temp_root / "post_mvp_approval_revocation_or_expiry.json"
+        run_approval_revocation_builder(generated_approval_revocation)
+        if load_json(generated_approval_revocation) != load_json(APPROVAL_REVOCATION_PATH):
+            raise AssertionError("Committed ApprovalRevocationOrExpiryV1 artifact differs from deterministic CLI output")
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)
         if load_json(generated_evaluation_report) != load_json(EVALUATION_REPORT_PATH):
