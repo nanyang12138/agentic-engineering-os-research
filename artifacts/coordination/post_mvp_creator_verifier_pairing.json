@@ -1,0 +1,121 @@
+{
+  "acceptanceEvidence": [
+    {
+      "artifactKind": "EvidenceListV1",
+      "artifactRef": "artifacts/runs/all_passed/evidence.json",
+      "requiredForAcceptance": true
+    },
+    {
+      "artifactKind": "VerifierResultV1",
+      "artifactRef": "artifacts/runs/all_passed/verifier_report.json",
+      "requiredForAcceptance": true
+    }
+  ],
+  "coordinationEventRefs": [
+    "artifacts/coordination/post_mvp_delegation_manifest.json#coordinationEvents/coord-event-delegation-created",
+    "artifacts/coordination/post_mvp_delegation_manifest.json#coordinationEvents/coord-event-delegation-accepted",
+    "artifacts/coordination/post_mvp_delegation_manifest.json#coordinationEvents/coord-event-verification-requested"
+  ],
+  "coordinationProtocols": [
+    "creator_verifier"
+  ],
+  "creator": {
+    "agentId": "creator_agent",
+    "assignedDelegationRef": "artifacts/coordination/post_mvp_delegation_manifest.json#delegations/delegation-workload-independent-artifact-creation",
+    "mayCreateArtifacts": true,
+    "mayDeclareAcceptance": false,
+    "mayVerifyArtifacts": false,
+    "owns": [
+      "artifact_creation",
+      "evidence_backlink_collection"
+    ],
+    "role": "creator"
+  },
+  "creatorOutput": {
+    "acceptanceVerdictOwner": "verifier-runtime-v1",
+    "artifactKind": "ArtifactV1",
+    "artifactRef": "artifacts/runs/all_passed/regression_result.json",
+    "creatorOutputCanSelfCertify": false,
+    "producedBy": "creator_agent"
+  },
+  "delegationBinding": {
+    "delegationManifestRef": "artifacts/coordination/post_mvp_delegation_manifest.json",
+    "delegationRef": "artifacts/coordination/post_mvp_delegation_manifest.json#delegations/delegation-workload-independent-artifact-creation",
+    "parentRunRef": "artifacts/runs/all_passed/run.json",
+    "parentTaskSpecRef": "artifacts/runs/all_passed/run.json#taskSpec",
+    "workloadIndependentObjective": "Create source-bound engineering artifacts from a reviewed TaskSpec without owning the task verdict."
+  },
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "post-mvp-creator-verifier-pairing-kernel-contract",
+  "independencePolicy": {
+    "creatorMayOverrideVerifier": false,
+    "creatorMaySelfVerify": false,
+    "deliverySendAllowed": false,
+    "externalSideEffectsAllowed": false,
+    "policySchemaVersion": "policy-v1",
+    "providerExecutionAllowed": false,
+    "realMultiAgentRuntimeAllowed": false,
+    "verifierMustBeDistinct": true,
+    "weakSelfVerificationAllowed": false,
+    "workspaceMutationAllowed": false
+  },
+  "invariants": [
+    "CreatorVerifierPairingV1 is workload-independent: it binds creator output, acceptance evidence, and VerifierResultV1 without adding regression/email behavior.",
+    "Creator and verifier agents must be distinct; creator output cannot self-certify acceptance.",
+    "VerifierResultV1 remains the acceptance source of truth and is owned by verifier-runtime-v1.",
+    "The pairing is a static contract artifact and does not run a real multi-agent framework, send email, mutate a workspace, or execute providers."
+  ],
+  "kernelPrimitive": "CreatorVerifierPairing",
+  "mode": "static_contract_only",
+  "nonRegressionReusePath": [
+    "test_execution_failure_triage",
+    "code_patch_review_loop",
+    "pr_review"
+  ],
+  "phase": "post_mvp",
+  "schemaVersion": "creator-verifier-pairing-v1",
+  "scope": "agent_coordination_creator_verifier_pairing_contract",
+  "sourceArtifacts": [
+    {
+      "contentHash": "7779a468076194ccb7f88ffeb9e37727d479742ec0add917ac45777b748d5b8f",
+      "path": "artifacts/coordination/post_mvp_delegation_manifest.json",
+      "role": "delegation_manifest"
+    },
+    {
+      "contentHash": "787c47a02d5a6303113d757693a5d70f97f806e0f74dbb078d0f91f34c23d5e1",
+      "path": "artifacts/runs/all_passed/regression_result.json",
+      "role": "creator_output_artifact"
+    },
+    {
+      "contentHash": "0c0e9342e6e4442566e94a3ca639cde78ef2ff3c6581f75f3fe99e082132690c",
+      "path": "artifacts/runs/all_passed/evidence.json",
+      "role": "acceptance_evidence"
+    },
+    {
+      "contentHash": "f6ec06f8bcc35f325451778d8b3d4985b5e75242b2d7ac9cad20bde244676f66",
+      "path": "artifacts/runs/all_passed/verifier_report.json",
+      "role": "verifier_result"
+    }
+  ],
+  "verifier": {
+    "agentId": "verifier_agent",
+    "assignedDelegationRef": "artifacts/coordination/post_mvp_delegation_manifest.json#delegations/delegation-workload-independent-artifact-creation",
+    "independentFromCreator": true,
+    "mayCreateArtifacts": false,
+    "mayVerifyArtifacts": true,
+    "owns": [
+      "independent_verifier_result",
+      "policy_invariant_check"
+    ],
+    "role": "verifier",
+    "verifierResultOwner": "verifier-runtime-v1"
+  },
+  "verifierResultBinding": {
+    "acceptedOnlyIfVerifierPassed": true,
+    "artifactKind": "VerifierResultV1",
+    "creatorOverrideAllowed": false,
+    "verifierAgent": "verifier_agent",
+    "verifierResultOwner": "verifier-runtime-v1",
+    "verifierResultRef": "artifacts/runs/all_passed/verifier_report.json"
+  }
+}
