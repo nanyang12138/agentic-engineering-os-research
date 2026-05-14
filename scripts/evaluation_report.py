@@ -62,6 +62,10 @@ from capability_manifest import (
     CAPABILITY_MANIFEST_ARTIFACT_PATH,
     validate_capability_manifest,
 )
+from run_event_log import (
+    RUN_EVENT_LOG_ARTIFACT_PATH,
+    validate_run_event_log,
+)
 
 
 EVALUATION_REPORT_SCHEMA_VERSION = "mvp-evaluation-report-v1"
@@ -190,6 +194,7 @@ def _source_specs() -> list[tuple[str, str]]:
         ("post_mvp_failure_triage_report", FAILURE_TRIAGE_REPORT_ARTIFACT_PATH),
         ("post_mvp_verifier_result_test_execution", VERIFIER_RESULT_ARTIFACT_PATH),
         ("post_mvp_test_execution_capability_manifest", CAPABILITY_MANIFEST_ARTIFACT_PATH),
+        ("post_mvp_test_execution_run_event_log", RUN_EVENT_LOG_ARTIFACT_PATH),
     ]
     for fixture_id in FIXTURE_IDS:
         specs.append((f"phase1a_{fixture_id}_run", f"artifacts/runs/{fixture_id}/run.json"))
@@ -334,6 +339,8 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
     validate_verifier_result(verifier_result, root)
     capability_manifest = _load_json(root / CAPABILITY_MANIFEST_ARTIFACT_PATH)
     validate_capability_manifest(capability_manifest, root)
+    run_event_log = _load_json(root / RUN_EVENT_LOG_ARTIFACT_PATH)
+    validate_run_event_log(run_event_log, root)
     delivery_readiness = delivery_report["readiness"]
     delivery_blocker_ids = [blocker["id"] for blocker in delivery_report["blockers"]]
     phase_coverage = _phase_coverage()
@@ -416,7 +423,7 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
         ],
         "nextRecommendedSlice": {
             "phase": "post_mvp",
-            "slice": "Add a workload-independent RunEventV1 (or RunEventLogV1) ArtifactV1 subtype contract artifact that defines the canonical OS-kernel event-log schema for any workload Run: ordered events with stable ids, monotonically increasing timestamps, eventType / status / sourceCapability / sourceAgent / payloadHash fields, and explicit RunControl state transitions. Bind it by content hash to TestExecutionTaskSpecV1 and the five Agent Coordination Layer manifests, declare verifier-runtime-v1 as the verdict owner, and explicitly forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1, so the OS kernel gains a workload-independent event-log primitive reusable by Code Patch / Review Loop, PR Review, Documentation Update, and Incident / Log Analysis.",
+            "slice": "Add a workload-independent DeliveryV1 (or DeliveryManifestV1) ArtifactV1 subtype contract artifact that defines the canonical OS-kernel delivery primitive for any workload: bind a VerifierResultV1 verdict, a RunEventLogV1 terminal state, and an approval/policy gate to one or more delivery channels via channel-agnostic kind / status / approvalRef / policyBoundary fields, with externalSideEffectsAllowed=false. Bind it by content hash to TestExecutionTaskSpecV1, CapabilityManifestV1, VerifierResultV1, RunEventLogV1, and the five Agent Coordination Layer manifests, declare verifier-runtime-v1 as the verdict owner, and explicitly forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1, so the OS kernel gains a workload-independent delivery primitive reusable by Code Patch / Review Loop, PR Review, Documentation Update, and Incident / Log Analysis.",
             "mustRemainMachineVerifiable": True,
         },
         "invariants": [
