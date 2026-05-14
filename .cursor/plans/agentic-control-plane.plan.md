@@ -6081,6 +6081,95 @@ Build vs Integrate：
 为第二 workload Test Execution / Failure Triage 提供独立的 triage ArtifactV1 子类型，绑定 TestExecutionResultV1 与 TestExecutionTaskSpecV1，声明 failure_classification / root_cause_hypothesis / evidence_refs / verifier-runtime-v1 verdict ownership，并复用 DelegationManifestV1 / CreatorVerifierPairingV1 / AgentMessageManifestV1 / NegotiationRecordV1 / BroadcastSubscriptionManifestV1 的 coordination contract；字段不得依赖 regression_result / email_draft / send_email。
 ```
 
+### 2026-05-14 09:00 UTC Automation Sprint：FailureTriageReportV1 Second ArtifactV1 Subtype Gate
+
+Active phase：post-MVP Kernel Generalization / Multi-Workload Expansion（Phase 1a-9 contract-only MVP 已满足，Agent Coordination Layer 五件套 contract 完成，第二 workload 的 TaskSpec envelope 与 TestExecutionResultV1 已 land，正在闭合第二 workload 的下游 triage ArtifactV1 子类型）。
+
+Selected slice：
+
+```text
+Add FailureTriageReportV1 ArtifactV1 subtype contract artifact at artifacts/test_execution/post_mvp_failure_triage_report.json so /usr/bin/python3 scripts/validate_repo.py verifies a workload-independent triage ArtifactV1 subtype for Test Execution / Failure Triage, bound to TestExecutionResultV1 (test-execution-result-v1) and TestExecutionTaskSpecV1 (test-execution-task-spec-v1) by content hash, and to DelegationManifestV1 / CreatorVerifierPairingV1 / AgentMessageManifestV1 / NegotiationRecordV1 / BroadcastSubscriptionManifestV1 by ref and source content hash, with regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 explicitly forbidden.
+```
+
+为什么这是下一步：
+
+- 上一轮 `EvaluationReportV1.nextRecommendedSlice` 明确要求新增 workload-independent `FailureTriageReportV1` ArtifactV1 subtype，把 (TaskSpecV1, ArtifactV1, EvidenceListV1, VerifierResultV1) 的 OS kernel 闭环在第二 workload 上从「测试执行结果」推进到「失败归因」。
+- Post-MVP slice priority #1（generalize workload-independent kernel primitive：`ArtifactV1`）与 #2（add second workload：`Test Execution / Failure Triage`）继续叠加：在 `ArtifactV1` envelope 上引入第三个具体 subtype `failure-triage-report-v1`，与 `regression-result-artifact-v1`、`test-execution-result-v1` 并列，证明 envelope 可以承载多份 creator output。
+- `.github/workflows/validate.yml` 与 `.github/workflows/auto-merge-cursor-pr.yml` 均存在；本轮 baseline `/usr/bin/python3 scripts/validate_repo.py` 已通过。
+
+OS kernel primitive advanced：
+
+- 在 `ArtifactV1` envelope 上引入第三个 subtype `failure-triage-report-v1`；`artifactEnvelopeSchemaVersion=artifact-v1` 显式声明 envelope 复用。未来 `PatchArtifactV1`、`ReviewFindingArtifactV1` 可以复用同一 envelope。
+- `EvidenceListV1` 复用：FailureTriageReportV1 自身不引入新的 evidence，只引用 TestExecutionResultV1.evidenceList 中已存在的 evidence id，并校验 evidence.caseId 与 finding.caseRef 一致；这强制 creator 不能凭空捏造 evidence。
+- `TaskSpec → Artifact → Artifact` 链：`testExecutionResultBinding` 与 `taskSpecBinding` 同时绑定上游 TaskSpec envelope 和上游 Artifact envelope，证明 OS kernel 可以表达「一个 creator artifact 引用另一个 creator artifact」的因果链。
+- `Verifier` ownership invariant：`verifierVerdictOwner=verifier-runtime-v1` 与 `creatorMustNotOwnVerdict=true` 把 creator-verifier 不变量延伸到第二个 ArtifactV1 subtype；triage artifact 只声明 hypothesis，不声明 acceptance。
+
+Non-regression workload reuse path：
+
+- `Test Execution / Failure Triage`：本 artifact 直接覆盖；finding / refinedFailureClassification / rootCauseHypothesis / remediationCategory / supportingEvidenceIds 字段均 workload-independent。
+- `Code Patch / Review Loop`：未来 `ReviewFindingArtifactV1` 可复用 finding/observation/evidence/remediation 四元组结构；review hunk 替换 test case，review evidence 替换 test evidence。
+- `PR Review`：未来 `PRReviewFindingArtifactV1` 同理；本 artifact 的 `nonRegressionReusePath` 字段已声明 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review` 三条路径。
+
+Coordination protocol / invariant clarified：
+
+- `creatorAgent=creator_agent` 与 `verifierVerdictOwner=verifier-runtime-v1` 保留 CreatorVerifierPairingV1 不变量：creator output 不能自证 acceptance。
+- `coordinationBinding` 字段强制 ArtifactV1 子类型绑定 Agent Coordination Layer 五件套 contract artifact，并通过 `sourceArtifacts[].contentHash` 把上游 coordination / task spec / test execution result contract 当作不可变前提；任何一个上游 contract 漂移都会让本 artifact validate 失败。
+- 每个 finding 的 `mayBroadcastDownstream=false` 把 broadcast invariant 钉死在 BroadcastSubscriptionManifestV1，triage artifact 不允许自带 fan-out 通道。
+- `policyBoundary` 对 `externalSideEffectsAllowed` / `repositoryMutationAllowed` / `externalCommunicationAllowed` / `releaseOrDeploymentAllowed` / `guiOrBrowserOrDesktopCallAllowed` / `publicAccessAllowed` 全部强制为 `false`，与既有 BroadcastSubscriptionManifestV1 / NegotiationRecordV1 / DelegationManifestV1 / TestExecutionTaskSpecV1 / TestExecutionResultV1 的 policy invariant 对齐。
+
+为什么这不是另一个 regression/email fixture：
+
+- artifact 路径为 `artifacts/test_execution/post_mvp_failure_triage_report.json`，scope 为 `test_execution_failure_triage_artifact_contract`，不是 regression result、email draft、approval lifecycle、delivery unlock 或 policy unlock。
+- `workloadType` 必须等于 `test_execution_failure_triage`，validator 显式拒绝把它改成 `read_only_regression_evidence_demo` 或任何 regression workload；`kind` 必须为 `FailureTriageReportV1`，`schemaVersion` 必须为 `failure-triage-report-v1`。
+- `regressionWorkloadIsolation.forbiddenFields` 包含 `regression_result` / `regression_result.json` / `email_draft` / `email_draft.md` / `send_email` / `regression-task-spec-v1` / `regression-result-artifact-v1`；defensive scan 拒绝这些 token 在 forbiddenFields 之外再次出现。`reusesTestExecutionResultArtifactSchema=false` 把 envelope 复用与 schema 复用区分开。
+- `nonRegressionReusePath` 必须包含 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review`，强制本 artifact 至少有两个 non-regression 复用路径。
+
+Acceptance criteria：
+
+- `scripts/failure_triage_report.py` 提供 `build_failure_triage_report` / `validate_failure_triage_report` 与 CLI（`--out` / `--validate`）。
+- 新增 committed `artifacts/test_execution/post_mvp_failure_triage_report.json`，schemaVersion 为 `failure-triage-report-v1`，artifactEnvelopeSchemaVersion 为 `artifact-v1`。
+- `scripts/validate_repo.py` 验证 committed artifact、deterministic builder output 与多条 forced-failure case：workload_type_regression_reuse / kind_reuses_test_execution_result / schema_regression_reuse / envelope_schema_regression_reuse / creator_owns_verdict / creator_must_not_own_verdict_disabled / task_spec_binding_regression_schema_reuse / test_execution_result_binding_regression_schema_reuse / test_execution_result_binding_hash_drift / policy_external_side_effects_allowed / policy_external_communication_allowed / triage_findings_empty / triages_passed_case / finding_observed_status_drift / finding_evidence_belongs_to_other_case / finding_missing_evidence / finding_refined_classification_invalid / finding_remediation_invalid / finding_broadcast_downstream_allowed / summary_count_drift / coordination_binding_missing_broadcast / coordination_binding_wrong_path / non_regression_reuse_path_missing / reuses_test_execution_result_schema / source_hash_mismatch_test_execution_result / source_hash_mismatch_broadcast。
+- `EvaluationReportV1` 把 FailureTriageReportV1 artifact 纳入 source hash，并把下一推荐切片推进为 workload-independent `VerifierResultV1` ArtifactV1 subtype。
+
+实现摘要：
+
+- 新增 `scripts/failure_triage_report.py`，包含 schema 常量、builder、validator、deterministic CLI（`--out` / `--validate`）和 ArtifactV1 envelope / TaskSpec & TestExecutionResult dual binding / 五件套 coordination binding 逻辑。
+- 新增 committed `artifacts/test_execution/post_mvp_failure_triage_report.json`。
+- 更新 `scripts/validate_repo.py`：REQUIRED_FILES 增加 `scripts/failure_triage_report.py` 与 `artifacts/test_execution/post_mvp_failure_triage_report.json`，PLAN markers 增加 `FailureTriageReportV1` / `failure-triage-report-v1` / `post_mvp_failure_triage_report.json`，新增 committed artifact 校验、deterministic CLI replay 与 26 条 forced-failure case。
+- 更新 `scripts/evaluation_report.py` 与 `artifacts/evaluation/phase9_mvp_evaluation_report.json`：把 FailureTriageReportV1 加入 source hash，并把 `nextRecommendedSlice` 推进为 workload-independent `VerifierResultV1` ArtifactV1 subtype。
+
+Build vs Integrate：
+
+- Build：`FailureTriageReportV1` schema、deterministic builder / validator / CLI、committed artifact、26 条 forced-failure case、`EvaluationReportV1` source hash 集成。
+- Integrate later：真实失败归因 rule engine、根因聚类 / LLM 解释器、跨多 framework triage（pytest / jest / go test / cargo test）、与 IDE / PR review 工具的接入、ArtifactV1 envelope 抽取为独立 schema 文件、跨 workload triage catalogue。
+
+验证计划 / 结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline /usr/bin/python3 scripts/validate_repo.py before edits：通过。
+- /usr/bin/python3 -m py_compile scripts/*.py：通过。
+- /usr/bin/python3 scripts/failure_triage_report.py --out artifacts/test_execution/post_mvp_failure_triage_report.json：通过。
+- /usr/bin/python3 scripts/failure_triage_report.py --validate artifacts/test_execution/post_mvp_failure_triage_report.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --report-out artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/validate_repo.py：通过，覆盖 FailureTriageReportV1 committed artifact、deterministic builder output 与 26 条 forced-failure case。
+- git diff --check：通过。
+```
+
+剩余风险：
+
+- `FailureTriageReportV1` 仍是 static contract artifact，不驱动任何真实 root-cause analysis；下一切片应给出 workload-independent `VerifierResultV1` ArtifactV1 subtype，把 (TaskSpec, Artifact, Evidence, Verifier) 闭环在第二 workload 上真正闭合 verifier verdict 这一端。
+- 当前 artifact 复用 first workload 的 5 件套 coordination contract artifact 作为 source fixture；`Code Patch / Review Loop` 与 `PR Review` 的 TaskSpec / Artifact subtype 仍未实现。
+- `ArtifactV1` envelope 目前仍通过 `artifactEnvelopeSchemaVersion` 字段表达；未来需要把 `regression-result-artifact-v1` / `test-execution-result-v1` / `failure-triage-report-v1` 抽出共同 base schema（真正的 `artifact-v1` envelope）。
+
+下一轮建议：
+
+```text
+新增 workload-independent VerifierResultV1 ArtifactV1 subtype contract artifact：
+为第二 workload Test Execution / Failure Triage 提供独立的 verifier-owned ArtifactV1 子类型，绑定 TestExecutionResultV1、FailureTriageReportV1、TestExecutionTaskSpecV1 与 Agent Coordination Layer 五件套，声明 verdict / verdictDomain / ruleResults / verdictOwner=verifier-runtime-v1 与 creatorMustNotOwnVerdict=true；字段不得依赖 regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1。
+```
+
 ## 22. Parking Lot
 
 以下内容仍然重要，但不进入第一版 MVP：

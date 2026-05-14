@@ -1,0 +1,156 @@
+{
+  "artifactEnvelopeSchemaVersion": "artifact-v1",
+  "coordinationBinding": {
+    "agentMessageManifestRef": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+    "broadcastSubscriptionManifestRef": "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
+    "creatorVerifierPairingRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+    "delegationManifestRef": "artifacts/coordination/post_mvp_delegation_manifest.json",
+    "negotiationRecordRef": "artifacts/coordination/post_mvp_negotiation_record.json"
+  },
+  "creatorAgent": "creator_agent",
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "post-mvp-failure-triage-report-kernel-contract",
+  "invariants": [
+    "FailureTriageReportV1 is an ArtifactV1 subtype distinct from RegressionResultArtifactV1 and TestExecutionResultV1.",
+    "FailureTriageReportV1 must not own the verifier verdict; verifier-runtime-v1 owns acceptance.",
+    "FailureTriageReportV1 must bind the TestExecutionResultV1 and TestExecutionTaskSpecV1 envelopes and all five coordination contracts by content hash.",
+    "FailureTriageReportV1 must keep external side effects, repository mutation, external communication, and downstream broadcast disabled.",
+    "FailureTriageReportV1 must cover every failed or error case in the bound TestExecutionResultV1 with at least one evidence-backed finding.",
+    "FailureTriageReportV1 must not triage passed or skipped cases and must reuse evidence ids already present in the bound TestExecutionResultV1."
+  ],
+  "kind": "FailureTriageReportV1",
+  "nonRegressionReusePath": [
+    "test_execution_failure_triage",
+    "code_patch_review_loop",
+    "pr_review"
+  ],
+  "policyBoundary": {
+    "externalCommunicationAllowed": false,
+    "externalSideEffectsAllowed": false,
+    "guiOrBrowserOrDesktopCallAllowed": false,
+    "publicAccessAllowed": false,
+    "releaseOrDeploymentAllowed": false,
+    "repositoryMutationAllowed": false
+  },
+  "regressionWorkloadIsolation": {
+    "forbiddenFields": [
+      "regression_result",
+      "regression_result.json",
+      "email_draft",
+      "email_draft.md",
+      "send_email",
+      "regression-task-spec-v1",
+      "regression-result-artifact-v1"
+    ],
+    "reusesEmailDraftArtifact": false,
+    "reusesRegressionResultArtifact": false,
+    "reusesTestExecutionResultArtifactSchema": false
+  },
+  "schemaVersion": "failure-triage-report-v1",
+  "scope": "test_execution_failure_triage_artifact_contract",
+  "sourceArtifacts": [
+    {
+      "contentHash": "e026fb8f8d78f3a54d0a1a3d846cd93d8289cd9a8fefb59ead112fb18e4552f2",
+      "path": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+      "role": "agent_message_manifest"
+    },
+    {
+      "contentHash": "4e622eafff1480cb2e109aad1230e0852d99c412470ff8f33b215898beeb90b6",
+      "path": "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
+      "role": "broadcast_subscription_manifest"
+    },
+    {
+      "contentHash": "834b3c6bfe4dc401a5c34f3ed20edb479c4352e85363ac629caab3a3af429932",
+      "path": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+      "role": "creator_verifier_pairing"
+    },
+    {
+      "contentHash": "7779a468076194ccb7f88ffeb9e37727d479742ec0add917ac45777b748d5b8f",
+      "path": "artifacts/coordination/post_mvp_delegation_manifest.json",
+      "role": "delegation_manifest"
+    },
+    {
+      "contentHash": "fbbcd49ad9e7cd229658b431ab15313829f3a58107d809ef288043236746698e",
+      "path": "artifacts/coordination/post_mvp_negotiation_record.json",
+      "role": "negotiation_record"
+    },
+    {
+      "contentHash": "10260acfded87f746bb8b86684e8b4c77bc5ffbc6a2e8f440ba8c5262fc7c56c",
+      "path": "artifacts/test_execution/post_mvp_test_execution_result.json",
+      "role": "test_execution_result"
+    },
+    {
+      "contentHash": "1b9bbb64c87879848276b77fe2be1a20f89df2bfed971a7a0ec5210a91f664ba",
+      "path": "artifacts/task_specs/post_mvp_test_execution_task_spec.json",
+      "role": "test_execution_task_spec"
+    }
+  ],
+  "summary": {
+    "byRefinedFailureClassification": {
+      "assertion_error": 1,
+      "configuration_error": 0,
+      "environment_error": 0,
+      "flaky": 0,
+      "timeout": 0,
+      "type_error": 0,
+      "unknown": 0
+    },
+    "byRemediationCategory": {
+      "requires_code_fix": 0,
+      "requires_infra_change": 0,
+      "requires_more_diagnostics": 0,
+      "requires_test_fix": 1
+    },
+    "totalFindings": 1
+  },
+  "taskSpecBinding": {
+    "taskSpecContentHash": "1b9bbb64c87879848276b77fe2be1a20f89df2bfed971a7a0ec5210a91f664ba",
+    "taskSpecEnvelopeSchemaVersion": "task-spec-v1",
+    "taskSpecId": "post-mvp-test-execution-failure-triage-task-spec",
+    "taskSpecRef": "artifacts/task_specs/post_mvp_test_execution_task_spec.json",
+    "taskSpecSchemaVersion": "test-execution-task-spec-v1"
+  },
+  "testExecutionResultBinding": {
+    "testExecutionResultContentHash": "10260acfded87f746bb8b86684e8b4c77bc5ffbc6a2e8f440ba8c5262fc7c56c",
+    "testExecutionResultEnvelopeSchemaVersion": "artifact-v1",
+    "testExecutionResultId": "post-mvp-test-execution-result-kernel-contract",
+    "testExecutionResultRef": "artifacts/test_execution/post_mvp_test_execution_result.json",
+    "testExecutionResultSchemaVersion": "test-execution-result-v1"
+  },
+  "triageFindings": [
+    {
+      "caseRef": "case-002",
+      "confidenceLevel": "high",
+      "declaredFailureClassification": "assertion_error",
+      "id": "ft-finding-001",
+      "mayBroadcastDownstream": false,
+      "observedStatus": "failed",
+      "refinedFailureClassification": "assertion_error",
+      "remediationCategory": "requires_test_fix",
+      "rootCauseHypothesis": "Synthetic assertion compares literal 1 to 2; this is a deterministic test-side error and does not indicate a regression in production code.",
+      "supportingEvidenceIds": [
+        "ev-case-002-outcome",
+        "ev-case-002-trace"
+      ]
+    }
+  ],
+  "verifierExpectations": {
+    "creatorMustNotOwnVerdict": true,
+    "mustEnforcePolicyBoundary": true,
+    "mustValidateCaseTriageCoverage": true,
+    "mustValidateEvidenceProvenance": true,
+    "mustValidateForbiddenEffectClasses": true,
+    "mustValidateSchema": true,
+    "mustValidateUpstreamContractBindings": true,
+    "verdictDomain": [
+      "passed",
+      "failed",
+      "incomplete",
+      "needs_human_check"
+    ],
+    "verdictOwner": "verifier-runtime-v1"
+  },
+  "verifierVerdictOwner": "verifier-runtime-v1",
+  "workloadCategory": "engineering_workload",
+  "workloadType": "test_execution_failure_triage"
+}
