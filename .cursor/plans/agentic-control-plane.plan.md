@@ -1243,6 +1243,28 @@ Build vs Integrate：
 
 当前 post-MVP replay query 前置 gate 已满足 static query fixture：DurableRunStoreV1 不只可重放，也可被 deterministic read-only 查询验证。但完整 durable runtime、真实 query service、identity-bound approval backend、数据库和 resume executor 仍未实现。下一步应进入 identity-bound approval backend fixture，继续保持 no-side-effect policy。
 
+#### Post-MVP IdentityBoundApprovalRecordV1 Static Identity Fixture Gate
+
+2026-05-14 00:01 UTC 自动化实现结论：ReplayQueryV1 已能从 DurableRunStoreV1 查询 approval decision，但 approval backend 的下一步不应先接入真实身份服务、OAuth、database audit log、邮件发送器或 PR 创建器；最小有用切片是一个 deterministic `IdentityBoundApprovalRecordV1` fixture，把 HumanApprovalDecisionV1 绑定到 actor identity、TaskSpec intent、RunControl permission policy、DurableRunStoreV1、ReplayQueryV1 和 source hashes。这个 gate 证明 approval decision 不能只是一段 JSON 结论，必须被 actor/intent/policy/replay/source 共同约束，同时继续保持 no-side-effect policy。
+
+最小 IdentityBoundApprovalRecordV1 contract：
+
+- `scripts/identity_bound_approval.py` 提供 `identity-bound-approval-record-v1` / `IdentityBoundApprovalRecordV1` builder、validator 和 CLI。
+- `artifacts/approval/post_mvp_identity_bound_approval_record.json` 采用 POSIX 相对路径和 normalized content hash，绑定 `phase9_human_approval_decision_fixture.json`、`post_mvp_durable_run_store.json`、`post_mvp_replay_query.json` 和 `all_passed` Run。
+- `actorIdentity` 固定 `actorId=static-human-approver-fixture`、`actorType=human`、`authenticated=true`、`identitySynthesized=false` 和 `approvalAuthority=permission-policy-v1:send_email_requires_human_approval`。
+- `intentBinding` 绑定 run id、fixture id、TaskSpec ref、TaskSpec id、TaskSpec content hash、goal 和 input log path，防止 approval record 漂移到不同任务。
+- `approvalBinding` / `decisionBinding` / `policyBinding` 分别绑定 IDE approval handoff、HumanApprovalDecisionV1、RunControlV1 `permission-policy-v1`；`approvalGranted=false`、`taskVerdictOverrideAllowed=false`、`sendEmailRequiresApproval=true`、`externalSideEffectsAllowed=false`。
+- `replayBinding` 绑定 DurableRunStoreV1 和 ReplayQueryV1 的 id/ref/query ids，证明身份记录可由 replay/query 层复查，而不是孤立审批声明。
+- `effectBoundary` 明确 `approvalGrantAllowed=false`、`sendEmailAllowed=false`、`externalDeliveryAllowed=false`、`externalSideEffectsAllowed=false`、`prCreationAllowed=false`、`workspaceMutationAllowed=false`、`realProviderExecutionAllowed=false`、`databaseUsed=false`。
+- validator 拒绝关键错误：actor identity 漂移、TaskSpec intent/hash 漂移、approval grant、external side effects 打开、send_email approval bypass、ReplayQuery source hash 漂移。
+
+Build vs Integrate：
+
+- Build：post-MVP 最小 `IdentityBoundApprovalRecordV1` schema、source-bound identity approval artifact、builder/validator/CLI、deterministic repository validation gate。
+- Integrate later：真实 identity provider、approval backend、approval audit database、OAuth/SAML/SSO、signed decisions、multi-user approval UI、delivery adapter unlock 和 policy engine backend。
+
+当前 post-MVP identity-bound approval 前置 gate 已满足 static identity fixture：approval decision 已绑定 actor/intent/policy/replay/source hashes，但完整 identity service、approval backend、database audit log、signed decision 和 external delivery unlock 仍未实现。下一步应补 approval audit query fixture，把 ReplayQueryV1 与 IdentityBoundApprovalRecordV1 一起纳入 read-only audit 查询，仍不得引入真实邮件、PR、workspace mutation 或 provider side effects。
+
 ## 13. 第一版应该证明什么
 
 第一版只需要证明一个核心闭环：
@@ -1878,6 +1900,7 @@ Add forced-failure verifier checks so that python3 scripts/validate_repo.py prov
 15. Phase 1a Verifier Hardening：已实现 deterministic negative validation，`scripts/validate_repo.py` 会验证 malformed schema、missing evidence refs、failure-marker-to-passed tamper 和 pass-style email injection 均被拒绝或生成 failed verifier report。
 16. RunControlV1 State / Permission / Recovery：Phase 6 regression MVP gate 基本满足：`scripts/run_control.py` 提供 `RunControlV1` validator / CLI，`run.json#runControl` 使用 `run-control-v1`、`permission-policy-v1` 和 `recovery-snapshot-v1` 记录 stateHistory、permissionPolicy、stepAttempts 和 recoverySnapshot；`scripts/validate_repo.py` 会拒绝 state history 漂移、允许 external side effects、recovery last event 损坏或 non-terminal recovery 缺失 `resumeTarget` 的契约。`scripts/recovery_fixture.py` 生成 committed `artifacts/recovery/interrupted_after_extract/*`，证明 interrupted `running` 状态可以指向下一步 `write_artifact` resume action。
 17. Post-MVP DurableRunStoreV1：已实现 static replay index gate，入口为 `python3 scripts/durable_run_store.py --store-out artifacts/state/post_mvp_durable_run_store.json`；`durable-run-store-v1` 索引 `all_passed` Run、append-only events、DeliveryReportV1 和 HumanApprovalDecisionV1 的 source hashes、state/delivery/approval/persistence policy，并由 `scripts/validate_repo.py` 拒绝 source hash 漂移、event order 漂移、缺少 approval source、database/外部副作用/approval grant 伪完成。
+18. Post-MVP IdentityBoundApprovalRecordV1：已实现 static identity fixture gate，入口为 `python3 scripts/identity_bound_approval.py --record-out artifacts/approval/post_mvp_identity_bound_approval_record.json`；`identity-bound-approval-record-v1` 绑定 HumanApprovalDecisionV1、DurableRunStoreV1、ReplayQueryV1、Run/TaskSpec 和 permission-policy-v1 的 source hashes、actor identity、intent、decision、policy 与 replay query ids，并由 `scripts/validate_repo.py` 拒绝 actor 漂移、TaskSpec hash 漂移、approval grant、external side effects、send_email approval bypass 和 replay query hash mismatch。
 
 每个 sprint 的交付物不是一段总结，而是对主计划的具体修改。
 
@@ -2172,6 +2195,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-13 15:02 UTC：Phase 7 ObservationRedactionPolicyV1 Source / Redaction Gate 已实现；决定将 Phase 7 contract-only MVP 收敛为 adapter boundary + trajectory observation + permission overlay + redaction/source policy 四件套。真实 trycua/cua provider、desktop automation、screen redaction engine、trajectory replay 和 IDE/CUA runtime scheduling 继续后移；下一轮可以进入 Phase 8 IDE Adapter contract。
 - 2026-05-13 16:03 UTC：Phase 8 IDEAdapterContractV1 Static Workspace Observation Gate 已实现；决定先把 IDE 接入收敛为 contract-only `IDEAdapterContractV1` 和 source-bound `WorkspaceObservationV1`，不执行真实 IDE provider、open file、diff view、terminal 或 workspace mutation。真实 IDE extension bridge、diagnostics streaming、approval UI 和 CLI/Web/IDE history synchronization 继续后移；下一轮应补 IDE approval handoff manifest。
 - 2026-05-13 18:01 UTC：Phase 9 MultiAgentDeliveryManifestV1 Handoff / Delivery Gate 已实现；决定先把多 agent 协作收敛为 contract-only `multi-agent-delivery-manifest-v1` 和 `agent-handoff-v1`，五个 agent 只通过已有 TaskSpec、ContextPack、Run、Evidence、Verifier、IDE approval handoff 和 Delivery draft refs 交接。真实多 agent runtime、调度器、PR 创建器、邮件发送器和 delivery dashboard 继续后移；下一轮应补最终 `DeliveryReportV1` / readiness summary contract。
+- 2026-05-14 00:01 UTC：Post-MVP IdentityBoundApprovalRecordV1 Static Identity Fixture Gate 已实现；决定先自研 deterministic `identity-bound-approval-record-v1`，把 HumanApprovalDecisionV1 绑定到 actor identity、TaskSpec intent、permission-policy-v1、DurableRunStoreV1、ReplayQueryV1 和 source hashes。真实 identity provider、signed decisions、approval backend、audit database 和 external delivery unlock 继续后移；下一轮应补 approval audit query fixture。
 
 ## 20. Open Questions
 
@@ -4844,6 +4868,70 @@ Add ReplayQueryV1 fixture so that /usr/bin/python3 scripts/validate_repo.py prov
 ```text
 进入 post-MVP identity-bound approval backend 前置切片：
 新增最小 IdentityBoundApprovalRecordV1 fixture，基于 HumanApprovalDecisionV1、DurableRunStoreV1 和 ReplayQueryV1 证明 approval decision 必须绑定 actor/intent/policy/source hashes；仍不得接入真实身份服务、邮件发送、PR 创建或 provider side effects。
+```
+
+### 2026-05-14 00:01 UTC Automation Sprint：Post-MVP IdentityBoundApprovalRecordV1 Static Identity Fixture Gate
+
+Active phase：post-MVP state / permission / approval hardening（Phase 1a-9 contract-only MVP 已满足，完整 Agentic Engineering OS 产品仍未完成）。
+
+Selected slice：
+
+```text
+Add IdentityBoundApprovalRecordV1 static approval identity fixture so that scripts/validate_repo.py verifies actor/intent/policy/source-hash binding.
+```
+
+为什么这是下一步：
+
+- `validate.yml` 和 `.github/workflows/auto-merge-cursor-pr.yml` 均存在；baseline `python3 scripts/validate_repo.py` 已通过。
+- `EvaluationReportV1` 和上一轮 ReplayQueryV1 已明确下一步是 identity-bound approval backend fixture。
+- 真实 identity provider、approval backend、database audit log、邮件发送、PR 创建和 external delivery unlock 仍过早；本轮只完成可机器验证的 source-bound identity record。
+
+验收标准：
+
+- 新增 `scripts/identity_bound_approval.py` builder / validator / CLI。
+- 新增 committed `artifacts/approval/post_mvp_identity_bound_approval_record.json`，schemaVersion 为 `identity-bound-approval-record-v1`。
+- `IdentityBoundApprovalRecordV1` 必须绑定 HumanApprovalDecisionV1、DurableRunStoreV1、ReplayQueryV1、Run/TaskSpec、actor identity、permission-policy-v1 和 source hashes。
+- `scripts/validate_repo.py` 必须验证 committed artifact、deterministic CLI output，并拒绝 actor drift、TaskSpec hash drift、approval grant、external side effects、send_email approval bypass、ReplayQuery hash mismatch。
+- `EvaluationReportV1` 必须把 identity-bound approval script/artifact 纳入 source hash 汇总，并把下一推荐切片推进为 approval audit query fixture。
+
+实现摘要：
+
+- 新增 `scripts/identity_bound_approval.py`，提供 `IdentityBoundApprovalRecordV1` / `identity-bound-approval-record-v1` builder、validator 和 CLI。
+- 新增 committed `artifacts/approval/post_mvp_identity_bound_approval_record.json`，记录 actorIdentity、intentBinding、approvalBinding、decisionBinding、policyBinding、replayBinding、effectBoundary 和 invariants。
+- 更新 `scripts/validate_repo.py` 的 required files/markers、committed artifact validation、deterministic builder output comparison 和 forced-failure cases。
+- 更新 `scripts/evaluation_report.py` 与 `artifacts/evaluation/phase9_mvp_evaluation_report.json`，将 identity-bound approval 作为 post-MVP source artifact 并推进下一推荐切片。
+
+验证计划 / 结果：
+
+```text
+- Python executable resolved for this run: python3.
+- Baseline `python3 scripts/validate_repo.py` before edits：通过。
+- Initial post-edit `python3 scripts/validate_repo.py`：按预期失败，原因是主计划缺少新的 identity-bound marker；已补主计划。
+- First final `python3 scripts/validate_repo.py`：通过，覆盖 IdentityBoundApprovalRecordV1 committed artifact、deterministic builder output 和 forced-failure cases。
+- `python3 -m py_compile scripts/*.py`：通过。
+- Second final `python3 scripts/validate_repo.py`：通过。
+- `python3 scripts/identity_bound_approval.py --validate-record artifacts/approval/post_mvp_identity_bound_approval_record.json`：通过。
+- `python3 scripts/identity_bound_approval.py --record-out /tmp/post-mvp-identity-checks/post_mvp_identity_bound_approval_record.json`：通过，可 deterministic 生成 IdentityBoundApprovalRecordV1 artifact。
+- `python3 scripts/replay_query.py --validate-query artifacts/state/post_mvp_replay_query.json`：通过。
+- `python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json`：通过。
+- `python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/post-mvp-identity-checks/fixture-smoke`：通过。
+- `python3 scripts/task_spec.py --goal ... --input-log-path fixtures/regression/all_passed/input.log --out /tmp/post-mvp-identity-checks/task-spec.json`：通过。
+- `python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json`：通过。
+- `git diff --check`：通过。
+- Final post-plan-update `python3 scripts/validate_repo.py`：通过。
+```
+
+剩余风险：
+
+- IdentityBoundApprovalRecordV1 仍是 static fixture，不是生产 identity provider、signed decision、approval backend、audit database 或 delivery unlock。
+- 本切片只覆盖 `all_passed` read-only regression run；多用户、多 run、多 approval point、撤销/过期、审批 UI 和外部 delivery 仍后移。
+- 完整 Agentic Engineering OS 产品仍缺真实 durable runtime、identity-bound approval backend、IDE/CUA providers、external delivery adapters 和 production learning/evaluation loop。
+
+下一轮建议：
+
+```text
+进入 post-MVP approval audit query fixture：
+新增最小 ApprovalAuditQueryV1 fixture，基于 ReplayQueryV1 和 IdentityBoundApprovalRecordV1 证明审批审计查询能同时返回 actor、intent、policy、decision、replay source hashes 和 no-side-effect 状态；仍不得接入真实身份服务、数据库、邮件发送、PR 创建或 provider side effects。
 ```
 
 ## 22. Parking Lot

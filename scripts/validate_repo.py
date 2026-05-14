@@ -51,6 +51,11 @@ from replay_query import (
     build_replay_query,
     validate_replay_query,
 )
+from identity_bound_approval import (
+    RECORD_ARTIFACT_PATH as IDENTITY_BOUND_APPROVAL_RECORD_ARTIFACT_PATH,
+    build_identity_bound_approval_record,
+    validate_identity_bound_approval_record,
+)
 from human_approval import (
     DECISION_ARTIFACT_PATH as HUMAN_APPROVAL_DECISION_ARTIFACT_PATH,
     build_human_approval_decision,
@@ -108,6 +113,7 @@ HUMAN_APPROVAL_DECISION_PATH = ROOT / HUMAN_APPROVAL_DECISION_ARTIFACT_PATH
 EVALUATION_REPORT_PATH = ROOT / EVALUATION_REPORT_ARTIFACT_PATH
 DURABLE_RUN_STORE_PATH = ROOT / DURABLE_RUN_STORE_ARTIFACT_PATH
 REPLAY_QUERY_PATH = ROOT / REPLAY_QUERY_ARTIFACT_PATH
+IDENTITY_BOUND_APPROVAL_RECORD_PATH = ROOT / IDENTITY_BOUND_APPROVAL_RECORD_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -166,6 +172,7 @@ REQUIRED_FILES = [
     "scripts/human_approval.py",
     "scripts/durable_run_store.py",
     "scripts/replay_query.py",
+    "scripts/identity_bound_approval.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
     "artifacts/recovery/interrupted_after_extract/run.json",
@@ -182,6 +189,7 @@ REQUIRED_FILES = [
     "artifacts/approval/phase9_human_approval_decision_fixture.json",
     "artifacts/state/post_mvp_durable_run_store.json",
     "artifacts/state/post_mvp_replay_query.json",
+    "artifacts/approval/post_mvp_identity_bound_approval_record.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -244,6 +252,9 @@ PLAN_REQUIRED_MARKERS = [
     "ReplayQueryV1",
     "replay-query-v1",
     "post_mvp_replay_query.json",
+    "IdentityBoundApprovalRecordV1",
+    "identity-bound-approval-record-v1",
+    "post_mvp_identity_bound_approval_record.json",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -2029,6 +2040,105 @@ def run_replay_query_builder(query_out: Path) -> None:
         )
 
 
+def expect_identity_bound_approval_validation_failure(
+    label: str,
+    record: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_identity_bound_approval_record(record, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"IdentityBoundApprovalRecordV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"IdentityBoundApprovalRecordV1 forced-failure case {label} unexpectedly passed validation")
+
+
+def validate_committed_identity_bound_approval_record_artifact() -> None:
+    record = load_json(IDENTITY_BOUND_APPROVAL_RECORD_PATH)
+    try:
+        validate_identity_bound_approval_record(record, ROOT)
+    except ValueError as exc:
+        raise AssertionError(f"Committed IdentityBoundApprovalRecordV1 artifact failed validation: {exc}") from exc
+
+    expected_record = build_identity_bound_approval_record(ROOT)
+    if record != expected_record:
+        raise AssertionError("Committed IdentityBoundApprovalRecordV1 artifact differs from deterministic builder output")
+
+    tampered_record = json.loads(json.dumps(record))
+    tampered_record["actorIdentity"]["actorId"] = "unbound-approver"
+    expect_identity_bound_approval_validation_failure(
+        "actor_identity_drift",
+        tampered_record,
+        "actorId must be static-human-approver-fixture",
+    )
+
+    tampered_record = json.loads(json.dumps(record))
+    tampered_record["intentBinding"]["taskSpecContentHash"] = "0" * 64
+    expect_identity_bound_approval_validation_failure(
+        "task_spec_hash_drift",
+        tampered_record,
+        "taskSpecContentHash must match Run taskSpec",
+    )
+
+    tampered_record = json.loads(json.dumps(record))
+    tampered_record["decisionBinding"]["approvalGranted"] = True
+    expect_identity_bound_approval_validation_failure(
+        "approval_granted",
+        tampered_record,
+        "must not grant approval",
+    )
+
+    tampered_record = json.loads(json.dumps(record))
+    tampered_record["effectBoundary"]["externalSideEffectsAllowed"] = True
+    expect_identity_bound_approval_validation_failure(
+        "external_side_effects_allowed",
+        tampered_record,
+        "externalSideEffectsAllowed must be false",
+    )
+
+    tampered_record = json.loads(json.dumps(record))
+    tampered_record["policyBinding"]["sendEmailRequiresApproval"] = False
+    expect_identity_bound_approval_validation_failure(
+        "send_email_approval_bypass",
+        tampered_record,
+        "policy must require approval for send_email",
+    )
+
+    tampered_record = json.loads(json.dumps(record))
+    for source in tampered_record["sourceArtifacts"]:
+        if source.get("role") == "replay_query":
+            source["contentHash"] = "0" * 64
+            break
+    expect_identity_bound_approval_validation_failure(
+        "replay_query_hash_mismatch",
+        tampered_record,
+        "source hash mismatch",
+    )
+
+
+def run_identity_bound_approval_record_builder(record_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/identity_bound_approval.py"),
+        "--record-out",
+        str(record_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "IdentityBoundApprovalRecordV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -2422,6 +2532,7 @@ def main() -> None:
     validate_committed_human_approval_decision_artifact()
     validate_committed_durable_run_store_artifact()
     validate_committed_replay_query_artifact()
+    validate_committed_identity_bound_approval_record_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -2499,6 +2610,10 @@ def main() -> None:
         run_replay_query_builder(generated_replay_query)
         if load_json(generated_replay_query) != load_json(REPLAY_QUERY_PATH):
             raise AssertionError("Committed ReplayQueryV1 artifact differs from deterministic CLI output")
+        generated_identity_bound_approval_record = temp_root / "post_mvp_identity_bound_approval_record.json"
+        run_identity_bound_approval_record_builder(generated_identity_bound_approval_record)
+        if load_json(generated_identity_bound_approval_record) != load_json(IDENTITY_BOUND_APPROVAL_RECORD_PATH):
+            raise AssertionError("Committed IdentityBoundApprovalRecordV1 artifact differs from deterministic CLI output")
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)
         if load_json(generated_evaluation_report) != load_json(EVALUATION_REPORT_PATH):
