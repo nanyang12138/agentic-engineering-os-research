@@ -195,6 +195,11 @@ from policy_kernel import (
     build_policy_kernel_artifact,
     validate_policy_kernel_artifact,
 )
+from run_event_kernel import (
+    RUN_EVENT_KERNEL_ARTIFACT_PATH as POST_MVP_RUN_EVENT_KERNEL_ARTIFACT_PATH,
+    build_run_event_kernel_artifact,
+    validate_run_event_kernel_artifact,
+)
 from verifier_runtime import (
     REQUIRED_ARTIFACT_CHECK_IDS,
     REQUIRED_VERIFIER_RULE_IDS,
@@ -250,6 +255,7 @@ TOOL_CALL_LIST_ARTIFACT_PATH = ROOT / POST_MVP_TOOL_CALL_LIST_ARTIFACT_PATH
 INTENT_ARTIFACT_PATH = ROOT / POST_MVP_INTENT_ARTIFACT_PATH
 CAPABILITY_KERNEL_ARTIFACT_PATH = ROOT / POST_MVP_CAPABILITY_KERNEL_ARTIFACT_PATH
 POLICY_KERNEL_ARTIFACT_PATH = ROOT / POST_MVP_POLICY_KERNEL_ARTIFACT_PATH
+RUN_EVENT_KERNEL_ARTIFACT_PATH = ROOT / POST_MVP_RUN_EVENT_KERNEL_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -329,10 +335,12 @@ REQUIRED_FILES = [
     "scripts/intent_artifact.py",
     "scripts/capability_kernel.py",
     "scripts/policy_kernel.py",
+    "scripts/run_event_kernel.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
     "artifacts/capabilities/post_mvp_capability_v1_catalog.json",
     "artifacts/policy/post_mvp_policy_v1_catalog.json",
+    "artifacts/state/post_mvp_run_event_v1_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
     "artifacts/recovery/interrupted_after_extract/run.json",
     "artifacts/recovery/interrupted_after_extract/events.jsonl",
@@ -530,6 +538,10 @@ PLAN_REQUIRED_MARKERS = [
     "policy-v1",
     "policy-item-v1",
     "post_mvp_policy_v1_catalog.json",
+    "RunEventV1",
+    "run-event-v1",
+    "run-event-item-v1",
+    "post_mvp_run_event_v1_catalog.json",
     "Agentic Engineering OS Kernel",
     "workload-independent primitives",
     "first workload: Read-only Regression Evidence Demo",
@@ -10428,6 +10440,521 @@ def run_policy_kernel_builder(artifact_out: Path) -> None:
         )
 
 
+def expect_run_event_kernel_validation_failure(
+    label: str,
+    manifest: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_run_event_kernel_artifact(manifest, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"RunEventV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(
+        f"RunEventV1 forced-failure case {label} unexpectedly passed validation"
+    )
+
+
+def validate_committed_run_event_kernel_artifact() -> None:
+    artifact = load_json(RUN_EVENT_KERNEL_ARTIFACT_PATH)
+    try:
+        validate_run_event_kernel_artifact(artifact, ROOT)
+    except ValueError as exc:
+        raise AssertionError(
+            f"Committed RunEventV1 artifact failed validation: {exc}"
+        ) from exc
+
+    expected_artifact = build_run_event_kernel_artifact(ROOT)
+    if artifact != expected_artifact:
+        raise AssertionError(
+            "Committed RunEventV1 artifact differs from deterministic builder output"
+        )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["workloadType"] = "read_only_regression_evidence_demo"
+    expect_run_event_kernel_validation_failure(
+        "workload_type_regression_reuse",
+        tampered,
+        "workloadType must be test_execution_failure_triage",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["kind"] = "RunEventLogV1"
+    expect_run_event_kernel_validation_failure(
+        "kind_run_event_log_reuse",
+        tampered,
+        "kind must be RunEventV1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["schemaVersion"] = "run-event-log-v1"
+    expect_run_event_kernel_validation_failure(
+        "schema_run_event_log_reuse",
+        tampered,
+        "schemaVersion must be run-event-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["artifactEnvelopeSchemaVersion"] = "run-event-envelope-v1"
+    expect_run_event_kernel_validation_failure(
+        "envelope_schema_drift",
+        tampered,
+        "artifactEnvelopeSchemaVersion must be artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventItemSchemaVersion"] = "run-event-rule-v1"
+    expect_run_event_kernel_validation_failure(
+        "item_schema_drift",
+        tampered,
+        "runEventItemSchemaVersion must be run-event-item-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierVerdictOwner"] = "creator_agent"
+    expect_run_event_kernel_validation_failure(
+        "creator_owns_verdict",
+        tampered,
+        "verifierVerdictOwner must be verifier-runtime-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierExpectations"]["creatorMustNotOwnVerdict"] = False
+    expect_run_event_kernel_validation_failure(
+        "creator_must_not_own_verdict_disabled",
+        tampered,
+        "verifierExpectations.creatorMustNotOwnVerdict must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["permissionFlags"]["externalCommunicationAllowed"] = True
+    expect_run_event_kernel_validation_failure(
+        "permission_flag_external_communication_true",
+        tampered,
+        "permissionFlags.externalCommunicationAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["permissionFlagDomain"] = ["externalSideEffectsAllowed"]
+    expect_run_event_kernel_validation_failure(
+        "permission_flag_domain_drift",
+        tampered,
+        "permissionFlagDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventCount"] = 99
+    expect_run_event_kernel_validation_failure(
+        "run_event_count_drift",
+        tampered,
+        "runEventCount must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventClassDomain"] = ["run_lifecycle"]
+    expect_run_event_kernel_validation_failure(
+        "run_event_class_domain_drift",
+        tampered,
+        "runEventClassDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["forbiddenRunEventClasses"] = []
+    expect_run_event_kernel_validation_failure(
+        "forbidden_run_event_classes_drift",
+        tampered,
+        "forbiddenRunEventClasses must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventItems"][0]["runEventClass"] = "regression_run_event"
+    expect_run_event_kernel_validation_failure(
+        "run_event_item_forbidden_class",
+        tampered,
+        "must not intersect declared runEventItems",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventScopeDomain"] = ["workload_independent_kernel"]
+    expect_run_event_kernel_validation_failure(
+        "run_event_scope_domain_drift",
+        tampered,
+        "runEventScopeDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["allowedCommittedRunEventScopes"] = ["workload_specific"]
+    expect_run_event_kernel_validation_failure(
+        "allowed_committed_scopes_drift",
+        tampered,
+        "allowedCommittedRunEventScopes must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventItems"][0]["runEventScope"] = "workload_specific"
+    expect_run_event_kernel_validation_failure(
+        "run_event_item_workload_specific_scope",
+        tampered,
+        "runEventScope must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventLifecycleStateDomain"] = ["emitted"]
+    expect_run_event_kernel_validation_failure(
+        "lifecycle_state_domain_drift",
+        tampered,
+        "runEventLifecycleStateDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["requiredRunEventLifecycleState"] = "drafted"
+    expect_run_event_kernel_validation_failure(
+        "required_lifecycle_state_drift",
+        tampered,
+        "requiredRunEventLifecycleState must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventItems"][0]["runEventLifecycleState"] = "drafted"
+    expect_run_event_kernel_validation_failure(
+        "run_event_item_lifecycle_drafted",
+        tampered,
+        "runEventLifecycleState must equal emitted",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventItems"][0]["requiredFlag"] = True
+    expect_run_event_kernel_validation_failure(
+        "run_event_item_required_flag_true",
+        tampered,
+        "requiredFlag must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventItems"][0]["verifierVerdictOwner"] = "creator_agent"
+    expect_run_event_kernel_validation_failure(
+        "run_event_item_creator_owns_verdict",
+        tampered,
+        "verifierVerdictOwner must equal verifier-runtime-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventItems"][0]["permissionFlagOverrides"]["externalSideEffectsAllowed"] = True
+    expect_run_event_kernel_validation_failure(
+        "run_event_item_permission_override_true",
+        tampered,
+        "permissionFlagOverrides.externalSideEffectsAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventItems"][0]["sourceEventRef"] = "unknown.event"
+    expect_run_event_kernel_validation_failure(
+        "run_event_item_source_event_ref_drift",
+        tampered,
+        "sourceEventRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["sourceEventCoverage"]["everyEventTypeDomainCovered"] = False
+    expect_run_event_kernel_validation_failure(
+        "source_event_coverage_every_domain_false",
+        tampered,
+        "everyEventTypeDomainCovered must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["sourceEventCoverage"]["everyRunEventItemReferencesValidEventType"] = False
+    expect_run_event_kernel_validation_failure(
+        "source_event_coverage_every_ref_false",
+        tampered,
+        "everyRunEventItemReferencesValidEventType must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["sourceEventCoverage"]["everyLogEventTypeResolved"] = False
+    expect_run_event_kernel_validation_failure(
+        "source_event_coverage_every_log_false",
+        tampered,
+        "everyLogEventTypeResolved must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["sourceEventCoverage"]["eventTypeDomainKeys"] = ["unknown.event"]
+    expect_run_event_kernel_validation_failure(
+        "source_event_coverage_keys_drift",
+        tampered,
+        "eventTypeDomainKeys must equal sorted RunEventLogV1.eventTypeDomain",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["sourceEventCoverage"]["uniqueRunEventItemRefs"] = ["run.created"]
+    expect_run_event_kernel_validation_failure(
+        "source_event_coverage_unique_refs_drift",
+        tampered,
+        "uniqueRunEventItemRefs must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["promotionConditions"]["requiredVerdict"] = "needs_human_check"
+    expect_run_event_kernel_validation_failure(
+        "promotion_required_verdict_drift",
+        tampered,
+        "promotionConditions.requiredVerdict must be passed",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["promotionConditions"]["promoted"] = True
+    expect_run_event_kernel_validation_failure(
+        "promotion_promoted_true_without_gates",
+        tampered,
+        "promotionConditions.promoted must be true only when",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["promotionConditions"]["verdictOwner"] = "creator_agent"
+    expect_run_event_kernel_validation_failure(
+        "promotion_verdict_owner_drift",
+        tampered,
+        "promotionConditions.verdictOwner must be verifier-runtime-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["taskSpecBinding"]["taskSpecSchemaVersion"] = "regression-task-spec-v1"
+    expect_run_event_kernel_validation_failure(
+        "task_spec_binding_regression_schema",
+        tampered,
+        "taskSpecSchemaVersion must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["taskSpecBinding"]["taskSpecWorkloadType"] = "read_only_regression_evidence_demo"
+    expect_run_event_kernel_validation_failure(
+        "task_spec_binding_regression_workload",
+        tampered,
+        "taskSpecWorkloadType must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runBinding"]["runState"] = "failed"
+    expect_run_event_kernel_validation_failure(
+        "run_binding_run_state_drift",
+        tampered,
+        "runBinding.runState must equal RunV1.runState",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepListBinding"]["stepCount"] = 99
+    expect_run_event_kernel_validation_failure(
+        "step_list_binding_count_drift",
+        tampered,
+        "stepListBinding.stepCount must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallListBinding"]["toolCallCount"] = 99
+    expect_run_event_kernel_validation_failure(
+        "tool_call_list_binding_count_drift",
+        tampered,
+        "toolCallListBinding.toolCallCount must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityKernelBinding"]["capabilityCount"] = 99
+    expect_run_event_kernel_validation_failure(
+        "capability_kernel_binding_count_drift",
+        tampered,
+        "capabilityKernelBinding.capabilityCount must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventLogBinding"]["eventCount"] = 99
+    expect_run_event_kernel_validation_failure(
+        "run_event_log_binding_event_count_drift",
+        tampered,
+        "runEventLogBinding.eventCount must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventLogBinding"]["terminalState"] = "failed"
+    expect_run_event_kernel_validation_failure(
+        "run_event_log_binding_terminal_state_drift",
+        tampered,
+        "runEventLogBinding.terminalState must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventLogBinding"]["eventTypeDomain"] = ["run.created"]
+    expect_run_event_kernel_validation_failure(
+        "run_event_log_binding_event_type_domain_drift",
+        tampered,
+        "runEventLogBinding.eventTypeDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["observationListBinding"]["observationItemCount"] = 99
+    expect_run_event_kernel_validation_failure(
+        "observation_list_binding_count_drift",
+        tampered,
+        "observationListBinding.observationItemCount must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["evidenceListBinding"]["evidenceItemCount"] = 99
+    expect_run_event_kernel_validation_failure(
+        "evidence_list_binding_count_drift",
+        tampered,
+        "evidenceListBinding.evidenceItemCount must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierResultBinding"]["verdict"] = "passed"
+    expect_run_event_kernel_validation_failure(
+        "verifier_result_binding_verdict_drift",
+        tampered,
+        "verifierResultBinding.verdict must equal VerifierResultV1.verdict",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyManifestBinding"]["unlocked"] = True
+    expect_run_event_kernel_validation_failure(
+        "policy_manifest_binding_unlocked_drift",
+        tampered,
+        "policyManifestBinding.unlocked must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyKernelBinding"]["policyCount"] = 99
+    expect_run_event_kernel_validation_failure(
+        "policy_kernel_binding_policy_count_drift",
+        tampered,
+        "policyKernelBinding.policyCount must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyKernelBinding"]["policyKernelSchemaVersion"] = "policy-manifest-v1"
+    expect_run_event_kernel_validation_failure(
+        "policy_kernel_binding_schema_drift",
+        tampered,
+        "policyKernelBinding.policyKernelSchemaVersion must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["approvalDecisionBinding"]["approvalGranted"] = True
+    expect_run_event_kernel_validation_failure(
+        "approval_decision_binding_granted_drift",
+        tampered,
+        "approvalDecisionBinding.approvalGranted must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesRegressionRunEventArtifact"] = True
+    expect_run_event_kernel_validation_failure(
+        "reuses_regression_run_event_artifact",
+        tampered,
+        "must not reuse any first-workload regression run event artifact",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesRegressionResultArtifact"] = True
+    expect_run_event_kernel_validation_failure(
+        "reuses_regression_result_artifact",
+        tampered,
+        "must not reuse RegressionResultArtifactV1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesPhase7AdapterPolicyManifest"] = True
+    expect_run_event_kernel_validation_failure(
+        "reuses_phase7_adapter_policy_manifest",
+        tampered,
+        "must not reuse phase7_adapter_policy_manifest.json",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesPolicyUnlockDenialFixture"] = True
+    expect_run_event_kernel_validation_failure(
+        "reuses_policy_unlock_denial_fixture",
+        tampered,
+        "must not reuse post_mvp_policy_unlock_request_denied.json",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesSendEmailCapability"] = True
+    expect_run_event_kernel_validation_failure(
+        "reuses_send_email_capability",
+        tampered,
+        "must not reuse the send_email capability",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["nonRegressionReusePath"] = ["read_only_regression_evidence_demo"]
+    expect_run_event_kernel_validation_failure(
+        "non_regression_reuse_path_drift",
+        tampered,
+        "nonRegressionReusePath must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["coordinationBinding"]["delegationManifestRef"] = "artifacts/coordination/other.json"
+    expect_run_event_kernel_validation_failure(
+        "coordination_binding_delegation_drift",
+        tampered,
+        "coordinationBinding.delegationManifestRef must equal",
+    )
+
+    for hash_role, label in [
+        ("test_execution_task_spec", "source_hash_mismatch_task_spec"),
+        ("test_execution_intent", "source_hash_mismatch_intent"),
+        ("test_execution_capability_kernel", "source_hash_mismatch_capability_kernel"),
+        ("test_execution_capability_manifest", "source_hash_mismatch_capability_manifest"),
+        ("test_execution_run_event_log", "source_hash_mismatch_run_event_log"),
+        ("test_execution_observation_list", "source_hash_mismatch_observation_list"),
+        ("test_execution_evidence_list", "source_hash_mismatch_evidence_list"),
+        ("test_execution_verifier_result", "source_hash_mismatch_verifier_result"),
+        ("test_execution_delivery_manifest", "source_hash_mismatch_delivery_manifest"),
+        ("test_execution_policy_manifest", "source_hash_mismatch_policy_manifest"),
+        ("test_execution_policy_kernel", "source_hash_mismatch_policy_kernel"),
+        ("test_execution_run_artifact", "source_hash_mismatch_run_artifact"),
+        ("test_execution_step_list", "source_hash_mismatch_step_list"),
+        ("test_execution_tool_call_list", "source_hash_mismatch_tool_call_list"),
+        ("human_approval_decision", "source_hash_mismatch_human_approval_decision"),
+        ("broadcast_subscription_manifest", "source_hash_mismatch_broadcast"),
+    ]:
+        tampered = json.loads(json.dumps(artifact))
+        for source in tampered["sourceArtifacts"]:
+            if source.get("role") == hash_role:
+                source["contentHash"] = "0" * 64
+                break
+        expect_run_event_kernel_validation_failure(
+            label,
+            tampered,
+            "source hash mismatch",
+        )
+
+
+def run_run_event_kernel_builder(artifact_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/run_event_kernel.py"),
+        "--out",
+        str(artifact_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "RunEventV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -10846,6 +11373,7 @@ def main() -> None:
     validate_committed_intent_artifact()
     validate_committed_capability_kernel_artifact()
     validate_committed_policy_kernel_artifact()
+    validate_committed_run_event_kernel_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -11056,6 +11584,12 @@ def main() -> None:
         if load_json(generated_policy_kernel_artifact) != load_json(POLICY_KERNEL_ARTIFACT_PATH):
             raise AssertionError(
                 "Committed PolicyV1 artifact differs from deterministic CLI output"
+            )
+        generated_run_event_kernel_artifact = temp_root / "post_mvp_run_event_v1_catalog.json"
+        run_run_event_kernel_builder(generated_run_event_kernel_artifact)
+        if load_json(generated_run_event_kernel_artifact) != load_json(RUN_EVENT_KERNEL_ARTIFACT_PATH):
+            raise AssertionError(
+                "Committed RunEventV1 artifact differs from deterministic CLI output"
             )
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)

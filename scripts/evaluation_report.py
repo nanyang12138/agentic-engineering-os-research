@@ -106,6 +106,10 @@ from policy_kernel import (
     POLICY_KERNEL_ARTIFACT_PATH as POST_MVP_POLICY_KERNEL_ARTIFACT_PATH,
     validate_policy_kernel_artifact,
 )
+from run_event_kernel import (
+    RUN_EVENT_KERNEL_ARTIFACT_PATH as POST_MVP_RUN_EVENT_KERNEL_ARTIFACT_PATH,
+    validate_run_event_kernel_artifact,
+)
 
 
 EVALUATION_REPORT_SCHEMA_VERSION = "mvp-evaluation-report-v1"
@@ -245,6 +249,7 @@ def _source_specs() -> list[tuple[str, str]]:
         ("post_mvp_test_execution_intent", POST_MVP_INTENT_ARTIFACT_PATH),
         ("post_mvp_capability_v1_catalog", POST_MVP_CAPABILITY_KERNEL_ARTIFACT_PATH),
         ("post_mvp_policy_v1_catalog", POST_MVP_POLICY_KERNEL_ARTIFACT_PATH),
+        ("post_mvp_run_event_v1_catalog", POST_MVP_RUN_EVENT_KERNEL_ARTIFACT_PATH),
     ]
     for fixture_id in FIXTURE_IDS:
         specs.append((f"phase1a_{fixture_id}_run", f"artifacts/runs/{fixture_id}/run.json"))
@@ -411,6 +416,8 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
     validate_capability_kernel_artifact(capability_kernel_artifact, root)
     policy_kernel_artifact = _load_json(root / POST_MVP_POLICY_KERNEL_ARTIFACT_PATH)
     validate_policy_kernel_artifact(policy_kernel_artifact, root)
+    run_event_kernel_artifact = _load_json(root / POST_MVP_RUN_EVENT_KERNEL_ARTIFACT_PATH)
+    validate_run_event_kernel_artifact(run_event_kernel_artifact, root)
     delivery_readiness = delivery_report["readiness"]
     delivery_blocker_ids = [blocker["id"] for blocker in delivery_report["blockers"]]
     phase_coverage = _phase_coverage()
@@ -493,7 +500,7 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
         ],
         "nextRecommendedSlice": {
             "phase": "post_mvp",
-            "slice": "Add a workload-independent RunEventV1 ArtifactV1 subtype contract artifact at artifacts/state/post_mvp_run_event_v1_catalog.json that defines the canonical OS-kernel RunEvent primitive distinct from the workload-specific RunEventLogV1: each runEventItem must declare runEventId / runEventClass (run_lifecycle / step_lifecycle / tool_call_lifecycle / verifier_lifecycle / artifact_lifecycle / approval_lifecycle / policy_lifecycle / coordination_lifecycle) / runEventScope (workload_independent_kernel / workload_specific / coordination_layer) / runEventLifecycleState (drafted / emitted / replayed / deprecated) / requiredFlag / verifierVerdictOwner / sourceEventRef using only workload-independent vocabulary; the envelope must bind TestExecutionTaskSpecV1 / IntentV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyV1 / PolicyManifestV1 / HumanApprovalDecisionV1 by content hash plus the five Agent Coordination Layer manifests; declare verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true; force the six workload-independent permission flags to false; RunEventV1 must explicitly forbid every regression/email forbidden token and set reusesRegressionRunEventLog=false; ensure the artifact reuses ArtifactV1 envelope (artifactEnvelopeSchemaVersion=artifact-v1) and every RunEventLogV1.events[*].type resolves into RunEventV1.runEventItems[*].sourceEventRef.",
+            "slice": "Add a workload-independent MemoryV1 / memory-v1 / memory-entry-v1 ArtifactV1 subtype contract artifact at artifacts/state/post_mvp_memory_v1_catalog.json that defines the canonical OS-kernel Memory primitive for cross-run long-term knowledge with auditable creator-verifier separation: each memoryEntry must declare memoryEntryId / memoryClass (run_observation_memory / verifier_evidence_memory / approval_memory / capability_memory / policy_memory / coordination_memory / regression_isolation_memory) / memoryScope (workload_independent_kernel / workload_specific / coordination_layer) / memoryLifecycleState (drafted / committed / superseded / withdrawn / forgotten) / requiredFlag / verifierVerdictOwner / sourceRef / contentHash / confidence using only workload-independent vocabulary; the envelope must bind TestExecutionTaskSpecV1 / IntentV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityV1 / CapabilityManifestV1 / RunEventLogV1 / RunEventV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyV1 / PolicyManifestV1 / HumanApprovalDecisionV1 by content hash plus the five Agent Coordination Layer manifests; declare verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true; force the six workload-independent permission flags to false; MemoryV1 must explicitly forbid every regression/email forbidden token and set reusesRegressionMemoryArtifact=false / reusesPhase7AdapterPolicyManifest=false / reusesPolicyUnlockDenialFixture=false / reusesSendEmailCapability=false; ensure the artifact reuses ArtifactV1 envelope (artifactEnvelopeSchemaVersion=artifact-v1) and every committed memoryEntry must trace back to an EvidenceListV1 or VerifierResultV1 backlink so creator-staged memory is never accepted without verifier evidence.",
             "mustRemainMachineVerifiable": True,
         },
         "invariants": [

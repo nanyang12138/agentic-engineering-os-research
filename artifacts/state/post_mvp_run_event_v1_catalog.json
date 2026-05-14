@@ -1,0 +1,607 @@
+{
+  "allowedCommittedRunEventScopes": [
+    "workload_independent_kernel",
+    "coordination_layer"
+  ],
+  "approvalDecisionBinding": {
+    "approvalDecisionContentHash": "99b6e4391d1fd0111b375c3393f20374f3c37419f3c4d6a043c1dc2eebdcb017",
+    "approvalDecisionId": "phase9-human-approval-decision-fixture-all_passed",
+    "approvalDecisionRef": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+    "approvalDecisionSchemaVersion": "human-approval-decision-v1",
+    "approvalGranted": false
+  },
+  "artifactEnvelopeSchemaVersion": "artifact-v1",
+  "capabilityKernelBinding": {
+    "capabilityCount": 5,
+    "capabilityKernelContentHash": "a2ac7f293116ab288b9f13f0bc2f56dd86e4d16e5b0e905a7d9ddf0f21eb1f96",
+    "capabilityKernelEnvelopeSchemaVersion": "artifact-v1",
+    "capabilityKernelId": "post-mvp-capability-v1-kernel-contract",
+    "capabilityKernelRef": "artifacts/capabilities/post_mvp_capability_v1_catalog.json",
+    "capabilityKernelSchemaVersion": "capability-v1"
+  },
+  "capabilityManifestBinding": {
+    "capabilityManifestContentHash": "39d71c8275fb5432a8db3b10caae9c4602fa8a0e6f330d797e656f4a1df0e764",
+    "capabilityManifestEnvelopeSchemaVersion": "artifact-v1",
+    "capabilityManifestId": "post-mvp-test-execution-capability-manifest-kernel-contract",
+    "capabilityManifestRef": "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
+    "capabilityManifestSchemaVersion": "capability-manifest-v1"
+  },
+  "coordinationBinding": {
+    "agentMessageManifestRef": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+    "broadcastSubscriptionManifestRef": "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
+    "creatorVerifierPairingRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+    "delegationManifestRef": "artifacts/coordination/post_mvp_delegation_manifest.json",
+    "negotiationRecordRef": "artifacts/coordination/post_mvp_negotiation_record.json"
+  },
+  "creatorAgent": "creator_agent",
+  "deliveryManifestBinding": {
+    "deliveryManifestContentHash": "8074c4224a63cf99902e20d0cfd7373c4c7907e74b82a01a61897d23fd5404ec",
+    "deliveryManifestEnvelopeSchemaVersion": "artifact-v1",
+    "deliveryManifestId": "post-mvp-test-execution-delivery-manifest-kernel-contract",
+    "deliveryManifestRef": "artifacts/delivery/post_mvp_test_execution_delivery_manifest.json",
+    "deliveryManifestSchemaVersion": "delivery-manifest-v1"
+  },
+  "evidenceListBinding": {
+    "evidenceItemCount": 4,
+    "evidenceListContentHash": "b6bbb11ba37751a02ae7554c0c2dd182beda8d939f833ef81dbdb03fa38657bb",
+    "evidenceListEnvelopeSchemaVersion": "artifact-v1",
+    "evidenceListId": "post-mvp-test-execution-evidence-list-kernel-contract",
+    "evidenceListRef": "artifacts/evidence/post_mvp_test_execution_evidence_list.json",
+    "evidenceListSchemaVersion": "evidence-list-artifact-v1"
+  },
+  "forbiddenRunEventClasses": [
+    "regression_run_event",
+    "email_event",
+    "send_email_event"
+  ],
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "post-mvp-run-event-v1-kernel-contract",
+  "intentBinding": {
+    "intentContentHash": "ac6b5c59ff090076374bba41dd55d87bbee65baf62b7c400c3365a67aba0cfb2",
+    "intentEnvelopeSchemaVersion": "artifact-v1",
+    "intentId": "post-mvp-test-execution-intent-kernel-contract",
+    "intentIdentifier": "intent-post-mvp-test-execution-failure-triage-0001",
+    "intentLifecycleState": "accepted_into_task_spec",
+    "intentRef": "artifacts/intents/post_mvp_test_execution_intent.json",
+    "intentSchemaVersion": "intent-v1"
+  },
+  "invariants": [
+    "RunEventV1 is an ArtifactV1 subtype distinct from every workload-specific result subtype and from RunEventLogV1.",
+    "RunEventV1.runEventItems[*].runEventClass must lie in [run_lifecycle, step_lifecycle, tool_call_lifecycle, verifier_lifecycle, artifact_lifecycle, approval_lifecycle, policy_lifecycle, coordination_lifecycle].",
+    "RunEventV1.forbiddenRunEventClasses must enumerate [regression_run_event, email_event, send_email_event] and never intersect declared runEventClasses.",
+    "RunEventV1.runEventItems[*].runEventScope must lie in [workload_independent_kernel, workload_specific, coordination_layer]; every committed item must be workload_independent_kernel or coordination_layer.",
+    "RunEventV1.runEventItems[*].runEventLifecycleState must lie in [drafted, emitted, replayed, deprecated]; every committed run event item must be emitted.",
+    "RunEventV1.runEventItems[*].requiredFlag must be false for every workload-independent kernel item; the contract-only MVP cannot flip a kernel-scope run event required on at static time.",
+    "RunEventV1 must not own the verifier verdict; verifier-runtime-v1 owns acceptance and the creator agent may only stage drafts.",
+    "RunEventV1 must bind TestExecutionTaskSpecV1, IntentV1, RunV1, StepListV1, ToolCallListV1, CapabilityV1, CapabilityManifestV1, RunEventLogV1, ObservationListV1, EvidenceListV1, VerifierResultV1, DeliveryManifestV1, PolicyV1, PolicyManifestV1, HumanApprovalDecisionV1, and all five Agent Coordination Layer contracts by content hash.",
+    "Every RunEventLogV1.events[*].eventType must resolve into a RunEventV1.runEventItems[*].sourceEventRef; the RunEventLogV1.eventTypeDomain must equal the unique set of run event item references.",
+    "RunEventV1 must not reuse regression-task-spec-v1, regression-result-artifact-v1, phase7_adapter_policy_manifest.json, post_mvp_policy_unlock_request_denied.json, the send_email capability, or any regression_result / email_draft / send_email field outside the declarative forbiddenFields list."
+  ],
+  "kind": "RunEventV1",
+  "nonRegressionReusePath": [
+    "test_execution_failure_triage",
+    "code_patch_review_loop",
+    "pr_review"
+  ],
+  "observationListBinding": {
+    "observationItemCount": 12,
+    "observationListContentHash": "baa32e7f16c233f50a84e79c143b4c124df996d3e228606c4e40abc4192af076",
+    "observationListEnvelopeSchemaVersion": "artifact-v1",
+    "observationListId": "post-mvp-test-execution-observation-list-kernel-contract",
+    "observationListRef": "artifacts/observations/post_mvp_test_execution_observation_list.json",
+    "observationListSchemaVersion": "observation-list-artifact-v1"
+  },
+  "permissionFlagDomain": [
+    "externalSideEffectsAllowed",
+    "repositoryMutationAllowed",
+    "externalCommunicationAllowed",
+    "releaseOrDeploymentAllowed",
+    "guiOrBrowserOrDesktopCallAllowed",
+    "publicAccessAllowed"
+  ],
+  "permissionFlags": {
+    "externalCommunicationAllowed": false,
+    "externalSideEffectsAllowed": false,
+    "guiOrBrowserOrDesktopCallAllowed": false,
+    "publicAccessAllowed": false,
+    "releaseOrDeploymentAllowed": false,
+    "repositoryMutationAllowed": false
+  },
+  "policyKernelBinding": {
+    "policyCount": 11,
+    "policyKernelContentHash": "1d591cf449964f6406180a910aa7a668fde007bfeded493d04a52b29d1fb042f",
+    "policyKernelEnvelopeSchemaVersion": "artifact-v1",
+    "policyKernelId": "post-mvp-policy-v1-kernel-contract",
+    "policyKernelRef": "artifacts/policy/post_mvp_policy_v1_catalog.json",
+    "policyKernelSchemaVersion": "policy-v1"
+  },
+  "policyManifestBinding": {
+    "policyManifestContentHash": "1c95304f5b2ef724737cc980bdc5df85305d56ad4cb484e27025ab8fe5764054",
+    "policyManifestEnvelopeSchemaVersion": "artifact-v1",
+    "policyManifestId": "post-mvp-test-execution-policy-manifest-kernel-contract",
+    "policyManifestRef": "artifacts/policy/post_mvp_test_execution_policy_manifest.json",
+    "policyManifestSchemaVersion": "policy-manifest-v1",
+    "unlockConditionKeys": [
+      "approvalGranted",
+      "approvalRecordRef",
+      "approvalRecordSchemaVersion",
+      "currentApprovalDecision",
+      "currentTerminalRunState",
+      "currentVerdict",
+      "requiredApprovalDecision",
+      "requiredTerminalRunState",
+      "requiredVerdict",
+      "unlocked",
+      "verdictOwner"
+    ],
+    "unlocked": false
+  },
+  "promotionConditions": {
+    "currentPolicyUnlocked": false,
+    "currentTerminalRunState": "completed",
+    "currentVerdict": "needs_human_check",
+    "promoted": false,
+    "requiredPolicyUnlocked": true,
+    "requiredTerminalRunState": "completed",
+    "requiredVerdict": "passed",
+    "verdictOwner": "verifier-runtime-v1"
+  },
+  "regressionWorkloadIsolation": {
+    "forbiddenFields": [
+      "regression_result",
+      "regression_result.json",
+      "email_draft",
+      "email_draft.md",
+      "send_email",
+      "regression-task-spec-v1",
+      "regression-result-artifact-v1"
+    ],
+    "reusesPhase7AdapterPolicyManifest": false,
+    "reusesPolicyUnlockDenialFixture": false,
+    "reusesRegressionEventsArtifact": false,
+    "reusesRegressionResultArtifact": false,
+    "reusesRegressionRunEventArtifact": false,
+    "reusesRegressionTaskSpec": false,
+    "reusesSendEmailCapability": false
+  },
+  "requiredRunEventLifecycleState": "emitted",
+  "runBinding": {
+    "runContentHash": "b835da5eed98e282f078995850e702a7f17d7d0b63a43af8b86debfd2cb0977e",
+    "runEnvelopeSchemaVersion": "artifact-v1",
+    "runId": "post-mvp-test-execution-run-kernel-contract",
+    "runIdentifier": "run-post-mvp-test-execution-failure-triage",
+    "runRef": "artifacts/runs/post_mvp_test_execution_run.json",
+    "runSchemaVersion": "run-artifact-v1",
+    "runState": "completed"
+  },
+  "runEventClassDomain": [
+    "run_lifecycle",
+    "step_lifecycle",
+    "tool_call_lifecycle",
+    "verifier_lifecycle",
+    "artifact_lifecycle",
+    "approval_lifecycle",
+    "policy_lifecycle",
+    "coordination_lifecycle"
+  ],
+  "runEventCount": 8,
+  "runEventItemSchemaVersion": "run-event-item-v1",
+  "runEventItems": [
+    {
+      "description": "Marks the canonical run.created run lifecycle event; the kernel must emit exactly one run.created event per run before any step is planned.",
+      "permissionFlagOverrides": {
+        "externalCommunicationAllowed": false,
+        "externalSideEffectsAllowed": false,
+        "guiOrBrowserOrDesktopCallAllowed": false,
+        "publicAccessAllowed": false,
+        "releaseOrDeploymentAllowed": false,
+        "repositoryMutationAllowed": false
+      },
+      "requiredFlag": false,
+      "runEventClass": "run_lifecycle",
+      "runEventId": "run-event-run-created",
+      "runEventLifecycleState": "emitted",
+      "runEventScope": "workload_independent_kernel",
+      "schemaVersion": "run-event-item-v1",
+      "sequence": 0,
+      "sourceEventRef": "run.created",
+      "verifierVerdictOwner": "verifier-runtime-v1"
+    },
+    {
+      "description": "Marks the canonical task_spec.generated step lifecycle event; the kernel must record TaskSpec materialisation before context fetch and capability invocation.",
+      "permissionFlagOverrides": {
+        "externalCommunicationAllowed": false,
+        "externalSideEffectsAllowed": false,
+        "guiOrBrowserOrDesktopCallAllowed": false,
+        "publicAccessAllowed": false,
+        "releaseOrDeploymentAllowed": false,
+        "repositoryMutationAllowed": false
+      },
+      "requiredFlag": false,
+      "runEventClass": "step_lifecycle",
+      "runEventId": "run-event-task-spec-generated",
+      "runEventLifecycleState": "emitted",
+      "runEventScope": "workload_independent_kernel",
+      "schemaVersion": "run-event-item-v1",
+      "sequence": 1,
+      "sourceEventRef": "task_spec.generated",
+      "verifierVerdictOwner": "verifier-runtime-v1"
+    },
+    {
+      "description": "Marks the canonical capability.invoked tool-call lifecycle event; every CapabilityV1 invocation must surface as a tool-call started event.",
+      "permissionFlagOverrides": {
+        "externalCommunicationAllowed": false,
+        "externalSideEffectsAllowed": false,
+        "guiOrBrowserOrDesktopCallAllowed": false,
+        "publicAccessAllowed": false,
+        "releaseOrDeploymentAllowed": false,
+        "repositoryMutationAllowed": false
+      },
+      "requiredFlag": false,
+      "runEventClass": "tool_call_lifecycle",
+      "runEventId": "run-event-capability-invoked",
+      "runEventLifecycleState": "emitted",
+      "runEventScope": "workload_independent_kernel",
+      "schemaVersion": "run-event-item-v1",
+      "sequence": 2,
+      "sourceEventRef": "capability.invoked",
+      "verifierVerdictOwner": "verifier-runtime-v1"
+    },
+    {
+      "description": "Marks the canonical capability.completed tool-call lifecycle event; every CapabilityV1 invocation must close with a tool-call completed event before artifact write.",
+      "permissionFlagOverrides": {
+        "externalCommunicationAllowed": false,
+        "externalSideEffectsAllowed": false,
+        "guiOrBrowserOrDesktopCallAllowed": false,
+        "publicAccessAllowed": false,
+        "releaseOrDeploymentAllowed": false,
+        "repositoryMutationAllowed": false
+      },
+      "requiredFlag": false,
+      "runEventClass": "tool_call_lifecycle",
+      "runEventId": "run-event-capability-completed",
+      "runEventLifecycleState": "emitted",
+      "runEventScope": "workload_independent_kernel",
+      "schemaVersion": "run-event-item-v1",
+      "sequence": 3,
+      "sourceEventRef": "capability.completed",
+      "verifierVerdictOwner": "verifier-runtime-v1"
+    },
+    {
+      "description": "Marks the canonical artifact.written artifact lifecycle event; every ArtifactV1 emission must publish an artifact lifecycle event before verifier acceptance.",
+      "permissionFlagOverrides": {
+        "externalCommunicationAllowed": false,
+        "externalSideEffectsAllowed": false,
+        "guiOrBrowserOrDesktopCallAllowed": false,
+        "publicAccessAllowed": false,
+        "releaseOrDeploymentAllowed": false,
+        "repositoryMutationAllowed": false
+      },
+      "requiredFlag": false,
+      "runEventClass": "artifact_lifecycle",
+      "runEventId": "run-event-artifact-written",
+      "runEventLifecycleState": "emitted",
+      "runEventScope": "workload_independent_kernel",
+      "schemaVersion": "run-event-item-v1",
+      "sequence": 4,
+      "sourceEventRef": "artifact.written",
+      "verifierVerdictOwner": "verifier-runtime-v1"
+    },
+    {
+      "description": "Marks the canonical verifier.completed verifier lifecycle event; the verifier owns the verdict and the event must be emitted by verifier-runtime-v1 rather than the creator.",
+      "permissionFlagOverrides": {
+        "externalCommunicationAllowed": false,
+        "externalSideEffectsAllowed": false,
+        "guiOrBrowserOrDesktopCallAllowed": false,
+        "publicAccessAllowed": false,
+        "releaseOrDeploymentAllowed": false,
+        "repositoryMutationAllowed": false
+      },
+      "requiredFlag": false,
+      "runEventClass": "verifier_lifecycle",
+      "runEventId": "run-event-verifier-completed",
+      "runEventLifecycleState": "emitted",
+      "runEventScope": "coordination_layer",
+      "schemaVersion": "run-event-item-v1",
+      "sequence": 5,
+      "sourceEventRef": "verifier.completed",
+      "verifierVerdictOwner": "verifier-runtime-v1"
+    },
+    {
+      "description": "Marks the canonical run.completed run lifecycle terminal event; only a verified run may close with run.completed and never with a regression-specific terminator.",
+      "permissionFlagOverrides": {
+        "externalCommunicationAllowed": false,
+        "externalSideEffectsAllowed": false,
+        "guiOrBrowserOrDesktopCallAllowed": false,
+        "publicAccessAllowed": false,
+        "releaseOrDeploymentAllowed": false,
+        "repositoryMutationAllowed": false
+      },
+      "requiredFlag": false,
+      "runEventClass": "run_lifecycle",
+      "runEventId": "run-event-run-completed",
+      "runEventLifecycleState": "emitted",
+      "runEventScope": "workload_independent_kernel",
+      "schemaVersion": "run-event-item-v1",
+      "sequence": 6,
+      "sourceEventRef": "run.completed",
+      "verifierVerdictOwner": "verifier-runtime-v1"
+    },
+    {
+      "description": "Marks the canonical run.failed run lifecycle terminal event; failed runs must publish run.failed so the verifier can preserve negative evidence under a non-passed verdict.",
+      "permissionFlagOverrides": {
+        "externalCommunicationAllowed": false,
+        "externalSideEffectsAllowed": false,
+        "guiOrBrowserOrDesktopCallAllowed": false,
+        "publicAccessAllowed": false,
+        "releaseOrDeploymentAllowed": false,
+        "repositoryMutationAllowed": false
+      },
+      "requiredFlag": false,
+      "runEventClass": "run_lifecycle",
+      "runEventId": "run-event-run-failed",
+      "runEventLifecycleState": "emitted",
+      "runEventScope": "workload_independent_kernel",
+      "schemaVersion": "run-event-item-v1",
+      "sequence": 7,
+      "sourceEventRef": "run.failed",
+      "verifierVerdictOwner": "verifier-runtime-v1"
+    }
+  ],
+  "runEventLifecycleStateDomain": [
+    "drafted",
+    "emitted",
+    "replayed",
+    "deprecated"
+  ],
+  "runEventLogBinding": {
+    "eventCount": 12,
+    "eventTypeDomain": [
+      "run.created",
+      "task_spec.generated",
+      "capability.invoked",
+      "capability.completed",
+      "artifact.written",
+      "verifier.completed",
+      "run.completed",
+      "run.failed"
+    ],
+    "runEventLogContentHash": "f1a32305df32fde0cdf212bcd67a9368fc8cccbedb362b38ad1059c099f2793d",
+    "runEventLogEnvelopeSchemaVersion": "artifact-v1",
+    "runEventLogId": "post-mvp-test-execution-run-event-log-kernel-contract",
+    "runEventLogRef": "artifacts/state/post_mvp_test_execution_run_event_log.json",
+    "runEventLogSchemaVersion": "run-event-log-v1",
+    "terminalState": "completed"
+  },
+  "runEventScopeDomain": [
+    "workload_independent_kernel",
+    "workload_specific",
+    "coordination_layer"
+  ],
+  "schemaVersion": "run-event-v1",
+  "scope": "workload_independent_run_event_v1_kernel_contract",
+  "sourceArtifacts": [
+    {
+      "contentHash": "e026fb8f8d78f3a54d0a1a3d846cd93d8289cd9a8fefb59ead112fb18e4552f2",
+      "path": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+      "role": "agent_message_manifest"
+    },
+    {
+      "contentHash": "4e622eafff1480cb2e109aad1230e0852d99c412470ff8f33b215898beeb90b6",
+      "path": "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
+      "role": "broadcast_subscription_manifest"
+    },
+    {
+      "contentHash": "834b3c6bfe4dc401a5c34f3ed20edb479c4352e85363ac629caab3a3af429932",
+      "path": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+      "role": "creator_verifier_pairing"
+    },
+    {
+      "contentHash": "7779a468076194ccb7f88ffeb9e37727d479742ec0add917ac45777b748d5b8f",
+      "path": "artifacts/coordination/post_mvp_delegation_manifest.json",
+      "role": "delegation_manifest"
+    },
+    {
+      "contentHash": "99b6e4391d1fd0111b375c3393f20374f3c37419f3c4d6a043c1dc2eebdcb017",
+      "path": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+      "role": "human_approval_decision"
+    },
+    {
+      "contentHash": "fbbcd49ad9e7cd229658b431ab15313829f3a58107d809ef288043236746698e",
+      "path": "artifacts/coordination/post_mvp_negotiation_record.json",
+      "role": "negotiation_record"
+    },
+    {
+      "contentHash": "a2ac7f293116ab288b9f13f0bc2f56dd86e4d16e5b0e905a7d9ddf0f21eb1f96",
+      "path": "artifacts/capabilities/post_mvp_capability_v1_catalog.json",
+      "role": "test_execution_capability_kernel"
+    },
+    {
+      "contentHash": "39d71c8275fb5432a8db3b10caae9c4602fa8a0e6f330d797e656f4a1df0e764",
+      "path": "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
+      "role": "test_execution_capability_manifest"
+    },
+    {
+      "contentHash": "8074c4224a63cf99902e20d0cfd7373c4c7907e74b82a01a61897d23fd5404ec",
+      "path": "artifacts/delivery/post_mvp_test_execution_delivery_manifest.json",
+      "role": "test_execution_delivery_manifest"
+    },
+    {
+      "contentHash": "b6bbb11ba37751a02ae7554c0c2dd182beda8d939f833ef81dbdb03fa38657bb",
+      "path": "artifacts/evidence/post_mvp_test_execution_evidence_list.json",
+      "role": "test_execution_evidence_list"
+    },
+    {
+      "contentHash": "ac6b5c59ff090076374bba41dd55d87bbee65baf62b7c400c3365a67aba0cfb2",
+      "path": "artifacts/intents/post_mvp_test_execution_intent.json",
+      "role": "test_execution_intent"
+    },
+    {
+      "contentHash": "baa32e7f16c233f50a84e79c143b4c124df996d3e228606c4e40abc4192af076",
+      "path": "artifacts/observations/post_mvp_test_execution_observation_list.json",
+      "role": "test_execution_observation_list"
+    },
+    {
+      "contentHash": "1d591cf449964f6406180a910aa7a668fde007bfeded493d04a52b29d1fb042f",
+      "path": "artifacts/policy/post_mvp_policy_v1_catalog.json",
+      "role": "test_execution_policy_kernel"
+    },
+    {
+      "contentHash": "1c95304f5b2ef724737cc980bdc5df85305d56ad4cb484e27025ab8fe5764054",
+      "path": "artifacts/policy/post_mvp_test_execution_policy_manifest.json",
+      "role": "test_execution_policy_manifest"
+    },
+    {
+      "contentHash": "b835da5eed98e282f078995850e702a7f17d7d0b63a43af8b86debfd2cb0977e",
+      "path": "artifacts/runs/post_mvp_test_execution_run.json",
+      "role": "test_execution_run_artifact"
+    },
+    {
+      "contentHash": "f1a32305df32fde0cdf212bcd67a9368fc8cccbedb362b38ad1059c099f2793d",
+      "path": "artifacts/state/post_mvp_test_execution_run_event_log.json",
+      "role": "test_execution_run_event_log"
+    },
+    {
+      "contentHash": "4f13dd3e7cc80dccca59dda7839e33346028595f1be0949ec2515f7193e63a78",
+      "path": "artifacts/steps/post_mvp_test_execution_step_list.json",
+      "role": "test_execution_step_list"
+    },
+    {
+      "contentHash": "1b9bbb64c87879848276b77fe2be1a20f89df2bfed971a7a0ec5210a91f664ba",
+      "path": "artifacts/task_specs/post_mvp_test_execution_task_spec.json",
+      "role": "test_execution_task_spec"
+    },
+    {
+      "contentHash": "697d38d54d60d1202af0d757e517985c54ab9417b03b9166aad1360ab957ef03",
+      "path": "artifacts/tool_calls/post_mvp_test_execution_tool_call_list.json",
+      "role": "test_execution_tool_call_list"
+    },
+    {
+      "contentHash": "c317f05c5aa5cde6ba6b86fca1968539faef29ff87dc3cf57cbb540a136b8515",
+      "path": "artifacts/verifier/post_mvp_verifier_result_test_execution.json",
+      "role": "test_execution_verifier_result"
+    }
+  ],
+  "sourceEventCoverage": {
+    "eventTypeDomainCount": 8,
+    "eventTypeDomainKeys": [
+      "artifact.written",
+      "capability.completed",
+      "capability.invoked",
+      "run.completed",
+      "run.created",
+      "run.failed",
+      "task_spec.generated",
+      "verifier.completed"
+    ],
+    "everyEventTypeDomainCovered": true,
+    "everyLogEventTypeResolved": true,
+    "everyRunEventItemReferencesValidEventType": true,
+    "logEventTypesObserved": [
+      "artifact.written",
+      "capability.completed",
+      "capability.invoked",
+      "run.completed",
+      "run.created",
+      "task_spec.generated",
+      "verifier.completed"
+    ],
+    "runEventItemRefsCovered": [
+      "run.created",
+      "task_spec.generated",
+      "capability.invoked",
+      "capability.completed",
+      "artifact.written",
+      "verifier.completed",
+      "run.completed",
+      "run.failed"
+    ],
+    "runEventLogRef": "artifacts/state/post_mvp_test_execution_run_event_log.json",
+    "uniqueRunEventItemRefCount": 8,
+    "uniqueRunEventItemRefs": [
+      "artifact.written",
+      "capability.completed",
+      "capability.invoked",
+      "run.completed",
+      "run.created",
+      "run.failed",
+      "task_spec.generated",
+      "verifier.completed"
+    ]
+  },
+  "stepListBinding": {
+    "stepCount": 8,
+    "stepListContentHash": "4f13dd3e7cc80dccca59dda7839e33346028595f1be0949ec2515f7193e63a78",
+    "stepListEnvelopeSchemaVersion": "artifact-v1",
+    "stepListId": "post-mvp-test-execution-step-list-kernel-contract",
+    "stepListRef": "artifacts/steps/post_mvp_test_execution_step_list.json",
+    "stepListSchemaVersion": "step-list-artifact-v1"
+  },
+  "taskSpecBinding": {
+    "taskSpecContentHash": "1b9bbb64c87879848276b77fe2be1a20f89df2bfed971a7a0ec5210a91f664ba",
+    "taskSpecEnvelopeSchemaVersion": "task-spec-v1",
+    "taskSpecId": "post-mvp-test-execution-failure-triage-task-spec",
+    "taskSpecRef": "artifacts/task_specs/post_mvp_test_execution_task_spec.json",
+    "taskSpecSchemaVersion": "test-execution-task-spec-v1",
+    "taskSpecWorkloadType": "test_execution_failure_triage"
+  },
+  "toolCallListBinding": {
+    "toolCallCount": 5,
+    "toolCallListContentHash": "697d38d54d60d1202af0d757e517985c54ab9417b03b9166aad1360ab957ef03",
+    "toolCallListEnvelopeSchemaVersion": "artifact-v1",
+    "toolCallListId": "post-mvp-test-execution-tool-call-list-kernel-contract",
+    "toolCallListRef": "artifacts/tool_calls/post_mvp_test_execution_tool_call_list.json",
+    "toolCallListSchemaVersion": "tool-call-list-artifact-v1"
+  },
+  "verdictDomain": [
+    "passed",
+    "failed",
+    "incomplete",
+    "needs_human_check"
+  ],
+  "verifierExpectations": {
+    "creatorMustNotOwnVerdict": true,
+    "mustValidateApprovalDecisionBinding": true,
+    "mustValidateCapabilityManifestBinding": true,
+    "mustValidateCapabilityV1Binding": true,
+    "mustValidateDeliveryManifestBinding": true,
+    "mustValidateEvidenceListBinding": true,
+    "mustValidateForbiddenRunEventClasses": true,
+    "mustValidateIntentBinding": true,
+    "mustValidateObservationListBinding": true,
+    "mustValidatePermissionFlags": true,
+    "mustValidatePolicyManifestBinding": true,
+    "mustValidatePolicyV1Binding": true,
+    "mustValidatePromotionConditions": true,
+    "mustValidateRequiredFlag": true,
+    "mustValidateRunBinding": true,
+    "mustValidateRunEventClassDomain": true,
+    "mustValidateRunEventLifecycleStateDomain": true,
+    "mustValidateRunEventLogBinding": true,
+    "mustValidateRunEventScopeDomain": true,
+    "mustValidateSchema": true,
+    "mustValidateSourceEventCoverage": true,
+    "mustValidateStepListBinding": true,
+    "mustValidateTaskSpecBinding": true,
+    "mustValidateToolCallListBinding": true,
+    "mustValidateVerifierResultBinding": true,
+    "verdictDomain": [
+      "passed",
+      "failed",
+      "incomplete",
+      "needs_human_check"
+    ],
+    "verdictOwner": "verifier-runtime-v1"
+  },
+  "verifierResultBinding": {
+    "verdict": "needs_human_check",
+    "verifierResultContentHash": "c317f05c5aa5cde6ba6b86fca1968539faef29ff87dc3cf57cbb540a136b8515",
+    "verifierResultEnvelopeSchemaVersion": "artifact-v1",
+    "verifierResultId": "post-mvp-verifier-result-test-execution-kernel-contract",
+    "verifierResultRef": "artifacts/verifier/post_mvp_verifier_result_test_execution.json",
+    "verifierResultSchemaVersion": "verifier-result-v1"
+  },
+  "verifierVerdictOwner": "verifier-runtime-v1",
+  "workloadCategory": "engineering_workload",
+  "workloadType": "test_execution_failure_triage"
+}
