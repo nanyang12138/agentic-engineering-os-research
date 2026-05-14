@@ -66,6 +66,10 @@ from run_event_log import (
     RUN_EVENT_LOG_ARTIFACT_PATH,
     validate_run_event_log,
 )
+from delivery_manifest import (
+    DELIVERY_MANIFEST_ARTIFACT_PATH,
+    validate_delivery_manifest,
+)
 
 
 EVALUATION_REPORT_SCHEMA_VERSION = "mvp-evaluation-report-v1"
@@ -195,6 +199,7 @@ def _source_specs() -> list[tuple[str, str]]:
         ("post_mvp_verifier_result_test_execution", VERIFIER_RESULT_ARTIFACT_PATH),
         ("post_mvp_test_execution_capability_manifest", CAPABILITY_MANIFEST_ARTIFACT_PATH),
         ("post_mvp_test_execution_run_event_log", RUN_EVENT_LOG_ARTIFACT_PATH),
+        ("post_mvp_test_execution_delivery_manifest", DELIVERY_MANIFEST_ARTIFACT_PATH),
     ]
     for fixture_id in FIXTURE_IDS:
         specs.append((f"phase1a_{fixture_id}_run", f"artifacts/runs/{fixture_id}/run.json"))
@@ -341,6 +346,8 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
     validate_capability_manifest(capability_manifest, root)
     run_event_log = _load_json(root / RUN_EVENT_LOG_ARTIFACT_PATH)
     validate_run_event_log(run_event_log, root)
+    delivery_manifest = _load_json(root / DELIVERY_MANIFEST_ARTIFACT_PATH)
+    validate_delivery_manifest(delivery_manifest, root)
     delivery_readiness = delivery_report["readiness"]
     delivery_blocker_ids = [blocker["id"] for blocker in delivery_report["blockers"]]
     phase_coverage = _phase_coverage()
@@ -423,7 +430,7 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
         ],
         "nextRecommendedSlice": {
             "phase": "post_mvp",
-            "slice": "Add a workload-independent DeliveryV1 (or DeliveryManifestV1) ArtifactV1 subtype contract artifact that defines the canonical OS-kernel delivery primitive for any workload: bind a VerifierResultV1 verdict, a RunEventLogV1 terminal state, and an approval/policy gate to one or more delivery channels via channel-agnostic kind / status / approvalRef / policyBoundary fields, with externalSideEffectsAllowed=false. Bind it by content hash to TestExecutionTaskSpecV1, CapabilityManifestV1, VerifierResultV1, RunEventLogV1, and the five Agent Coordination Layer manifests, declare verifier-runtime-v1 as the verdict owner, and explicitly forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1, so the OS kernel gains a workload-independent delivery primitive reusable by Code Patch / Review Loop, PR Review, Documentation Update, and Incident / Log Analysis.",
+            "slice": "Add a workload-independent PolicyV1 (or PolicyManifestV1) ArtifactV1 subtype contract artifact that defines the canonical OS-kernel policy primitive for any workload: enumerate the workload-independent permission flags (externalSideEffectsAllowed, repositoryMutationAllowed, externalCommunicationAllowed, releaseOrDeploymentAllowed, guiOrBrowserOrDesktopCallAllowed, publicAccessAllowed) plus per-effect-class allow/deny rules, ownership (policy-runtime-v1), unlock conditions and revocation rules, and bind it by content hash to TestExecutionTaskSpecV1, CapabilityManifestV1, RunEventLogV1, VerifierResultV1, DeliveryManifestV1, and the five Agent Coordination Layer manifests. Declare verifier-runtime-v1 as the verdict owner, forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1, and expose policy unlock state to DeliveryManifestV1 channels and to CapabilityManifestV1 capabilities, so the OS kernel gains a workload-independent policy primitive reusable by Code Patch / Review Loop, PR Review, Documentation Update, and Incident / Log Analysis.",
             "mustRemainMachineVerifiable": True,
         },
         "invariants": [

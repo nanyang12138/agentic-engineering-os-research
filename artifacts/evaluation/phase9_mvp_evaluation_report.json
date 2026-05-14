@@ -56,7 +56,7 @@
   "nextRecommendedSlice": {
     "mustRemainMachineVerifiable": true,
     "phase": "post_mvp",
-    "slice": "Add a workload-independent DeliveryV1 (or DeliveryManifestV1) ArtifactV1 subtype contract artifact that defines the canonical OS-kernel delivery primitive for any workload: bind a VerifierResultV1 verdict, a RunEventLogV1 terminal state, and an approval/policy gate to one or more delivery channels via channel-agnostic kind / status / approvalRef / policyBoundary fields, with externalSideEffectsAllowed=false. Bind it by content hash to TestExecutionTaskSpecV1, CapabilityManifestV1, VerifierResultV1, RunEventLogV1, and the five Agent Coordination Layer manifests, declare verifier-runtime-v1 as the verdict owner, and explicitly forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1, so the OS kernel gains a workload-independent delivery primitive reusable by Code Patch / Review Loop, PR Review, Documentation Update, and Incident / Log Analysis."
+    "slice": "Add a workload-independent PolicyV1 (or PolicyManifestV1) ArtifactV1 subtype contract artifact that defines the canonical OS-kernel policy primitive for any workload: enumerate the workload-independent permission flags (externalSideEffectsAllowed, repositoryMutationAllowed, externalCommunicationAllowed, releaseOrDeploymentAllowed, guiOrBrowserOrDesktopCallAllowed, publicAccessAllowed) plus per-effect-class allow/deny rules, ownership (policy-runtime-v1), unlock conditions and revocation rules, and bind it by content hash to TestExecutionTaskSpecV1, CapabilityManifestV1, RunEventLogV1, VerifierResultV1, DeliveryManifestV1, and the five Agent Coordination Layer manifests. Declare verifier-runtime-v1 as the verdict owner, forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1, and expose policy unlock state to DeliveryManifestV1 channels and to CapabilityManifestV1 capabilities, so the OS kernel gains a workload-independent policy primitive reusable by Code Patch / Review Loop, PR Review, Documentation Update, and Incident / Log Analysis."
   },
   "outOfScope": [
     {
@@ -263,7 +263,7 @@
   "scope": "read_only_regression_evidence_demo_mvp_completion",
   "sourceArtifacts": [
     {
-      "contentHash": "f12a05720c45f88a8d2655f179aa33d0bb4da9fdb81a046ca86cd4e890736c5b",
+      "contentHash": "55cc86cc543557f60bd05c54272d8d99344ee52a7d0e82a791902f2ddabbcbc5",
       "path": "scripts/validate_repo.py",
       "role": "validation_script"
     },
@@ -466,6 +466,11 @@
       "contentHash": "f1a32305df32fde0cdf212bcd67a9368fc8cccbedb362b38ad1059c099f2793d",
       "path": "artifacts/state/post_mvp_test_execution_run_event_log.json",
       "role": "post_mvp_test_execution_run_event_log"
+    },
+    {
+      "contentHash": "8074c4224a63cf99902e20d0cfd7373c4c7907e74b82a01a61897d23fd5404ec",
+      "path": "artifacts/delivery/post_mvp_test_execution_delivery_manifest.json",
+      "role": "post_mvp_test_execution_delivery_manifest"
     },
     {
       "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",

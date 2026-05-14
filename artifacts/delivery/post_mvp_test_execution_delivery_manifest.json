@@ -1,0 +1,363 @@
+{
+  "anyChannelUnlocked": false,
+  "approvalGate": {
+    "approvalRecordRef": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+    "approvalRecordSchemaVersion": "human-approval-decision-v1",
+    "currentDecision": "rejected",
+    "granted": false,
+    "requiredDecision": "approved",
+    "unlocked": false
+  },
+  "artifactEnvelopeSchemaVersion": "artifact-v1",
+  "capabilityManifestBinding": {
+    "capabilityManifestContentHash": "39d71c8275fb5432a8db3b10caae9c4602fa8a0e6f330d797e656f4a1df0e764",
+    "capabilityManifestEnvelopeSchemaVersion": "artifact-v1",
+    "capabilityManifestId": "post-mvp-test-execution-capability-manifest-kernel-contract",
+    "capabilityManifestRef": "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
+    "capabilityManifestSchemaVersion": "capability-manifest-v1"
+  },
+  "channelCount": 5,
+  "channelKindDomain": [
+    "internal_run_summary_card",
+    "verifier_verdict_record",
+    "human_review_queue_entry",
+    "triage_artifact_handoff",
+    "internal_event_log_archive"
+  ],
+  "channelStatusDomain": [
+    "drafted_internal_only",
+    "pending_verdict",
+    "pending_approval",
+    "pending_policy_unlock",
+    "blocked_by_verdict",
+    "blocked_by_approval",
+    "blocked_by_policy"
+  ],
+  "channels": [
+    {
+      "approvalRef": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+      "channelKind": "internal_run_summary_card",
+      "channelName": "internal-test-execution-run-summary-card",
+      "channelStatus": "blocked_by_verdict",
+      "description": "Internal dashboard card summarizing the test execution Run for human review only.",
+      "evidenceContract": {
+        "runEventLogRef": "artifacts/state/post_mvp_test_execution_run_event_log.json",
+        "runEventLogSchemaVersion": "run-event-log-v1",
+        "verifierResultRef": "artifacts/verifier/post_mvp_verifier_result_test_execution.json",
+        "verifierResultSchemaVersion": "verifier-result-v1"
+      },
+      "payloadContract": {
+        "contractRefs": [
+          "TestExecutionResultV1",
+          "VerifierResultV1"
+        ],
+        "payloadKind": "structured_json",
+        "rendering": "internal_only",
+        "schemaVersion": "test-execution-result-v1"
+      },
+      "policyBoundary": {
+        "externalCommunicationAllowed": false,
+        "externalSideEffectsAllowed": false,
+        "guiOrBrowserOrDesktopCallAllowed": false,
+        "publicAccessAllowed": false,
+        "releaseOrDeploymentAllowed": false,
+        "repositoryMutationAllowed": false
+      },
+      "schemaVersion": "delivery-channel-v1",
+      "unlocked": false
+    },
+    {
+      "approvalRef": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+      "channelKind": "verifier_verdict_record",
+      "channelName": "verifier-verdict-record-archive",
+      "channelStatus": "blocked_by_verdict",
+      "description": "Verifier verdict record persisted to internal evidence store; never published externally.",
+      "evidenceContract": {
+        "runEventLogRef": "artifacts/state/post_mvp_test_execution_run_event_log.json",
+        "runEventLogSchemaVersion": "run-event-log-v1",
+        "verifierResultRef": "artifacts/verifier/post_mvp_verifier_result_test_execution.json",
+        "verifierResultSchemaVersion": "verifier-result-v1"
+      },
+      "payloadContract": {
+        "contractRefs": [
+          "VerifierResultV1",
+          "RunEventLogV1"
+        ],
+        "payloadKind": "structured_json",
+        "rendering": "internal_only",
+        "schemaVersion": "verifier-result-v1"
+      },
+      "policyBoundary": {
+        "externalCommunicationAllowed": false,
+        "externalSideEffectsAllowed": false,
+        "guiOrBrowserOrDesktopCallAllowed": false,
+        "publicAccessAllowed": false,
+        "releaseOrDeploymentAllowed": false,
+        "repositoryMutationAllowed": false
+      },
+      "schemaVersion": "delivery-channel-v1",
+      "unlocked": false
+    },
+    {
+      "approvalRef": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+      "channelKind": "human_review_queue_entry",
+      "channelName": "human-review-queue-entry",
+      "channelStatus": "blocked_by_verdict",
+      "description": "Queue entry that asks a human reviewer to approve or reject the workload outcome.",
+      "evidenceContract": {
+        "runEventLogRef": "artifacts/state/post_mvp_test_execution_run_event_log.json",
+        "runEventLogSchemaVersion": "run-event-log-v1",
+        "verifierResultRef": "artifacts/verifier/post_mvp_verifier_result_test_execution.json",
+        "verifierResultSchemaVersion": "verifier-result-v1"
+      },
+      "payloadContract": {
+        "contractRefs": [
+          "HumanApprovalDecisionV1",
+          "VerifierResultV1"
+        ],
+        "payloadKind": "structured_json",
+        "rendering": "internal_only",
+        "schemaVersion": "human-approval-decision-v1"
+      },
+      "policyBoundary": {
+        "externalCommunicationAllowed": false,
+        "externalSideEffectsAllowed": false,
+        "guiOrBrowserOrDesktopCallAllowed": false,
+        "publicAccessAllowed": false,
+        "releaseOrDeploymentAllowed": false,
+        "repositoryMutationAllowed": false
+      },
+      "schemaVersion": "delivery-channel-v1",
+      "unlocked": false
+    },
+    {
+      "approvalRef": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+      "channelKind": "triage_artifact_handoff",
+      "channelName": "failure-triage-artifact-handoff",
+      "channelStatus": "blocked_by_verdict",
+      "description": "Internal handoff of the failure triage report to downstream creator or verifier agents.",
+      "evidenceContract": {
+        "runEventLogRef": "artifacts/state/post_mvp_test_execution_run_event_log.json",
+        "runEventLogSchemaVersion": "run-event-log-v1",
+        "verifierResultRef": "artifacts/verifier/post_mvp_verifier_result_test_execution.json",
+        "verifierResultSchemaVersion": "verifier-result-v1"
+      },
+      "payloadContract": {
+        "contractRefs": [
+          "FailureTriageReportV1",
+          "VerifierResultV1"
+        ],
+        "payloadKind": "structured_json",
+        "rendering": "internal_only",
+        "schemaVersion": "failure-triage-report-v1"
+      },
+      "policyBoundary": {
+        "externalCommunicationAllowed": false,
+        "externalSideEffectsAllowed": false,
+        "guiOrBrowserOrDesktopCallAllowed": false,
+        "publicAccessAllowed": false,
+        "releaseOrDeploymentAllowed": false,
+        "repositoryMutationAllowed": false
+      },
+      "schemaVersion": "delivery-channel-v1",
+      "unlocked": false
+    },
+    {
+      "approvalRef": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+      "channelKind": "internal_event_log_archive",
+      "channelName": "run-event-log-archive",
+      "channelStatus": "blocked_by_verdict",
+      "description": "Internal archive of the workload Run event log for replay; never exposed externally.",
+      "evidenceContract": {
+        "runEventLogRef": "artifacts/state/post_mvp_test_execution_run_event_log.json",
+        "runEventLogSchemaVersion": "run-event-log-v1",
+        "verifierResultRef": "artifacts/verifier/post_mvp_verifier_result_test_execution.json",
+        "verifierResultSchemaVersion": "verifier-result-v1"
+      },
+      "payloadContract": {
+        "contractRefs": [
+          "RunEventLogV1"
+        ],
+        "payloadKind": "structured_json",
+        "rendering": "internal_only",
+        "schemaVersion": "run-event-log-v1"
+      },
+      "policyBoundary": {
+        "externalCommunicationAllowed": false,
+        "externalSideEffectsAllowed": false,
+        "guiOrBrowserOrDesktopCallAllowed": false,
+        "publicAccessAllowed": false,
+        "releaseOrDeploymentAllowed": false,
+        "repositoryMutationAllowed": false
+      },
+      "schemaVersion": "delivery-channel-v1",
+      "unlocked": false
+    }
+  ],
+  "coordinationBinding": {
+    "agentMessageManifestRef": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+    "broadcastSubscriptionManifestRef": "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
+    "creatorVerifierPairingRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+    "delegationManifestRef": "artifacts/coordination/post_mvp_delegation_manifest.json",
+    "negotiationRecordRef": "artifacts/coordination/post_mvp_negotiation_record.json"
+  },
+  "creatorAgent": "creator_agent",
+  "deliveryChannelSchemaVersion": "delivery-channel-v1",
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "post-mvp-test-execution-delivery-manifest-kernel-contract",
+  "invariants": [
+    "DeliveryManifestV1 is an ArtifactV1 subtype distinct from every workload-specific result subtype.",
+    "DeliveryManifestV1 must bind TestExecutionTaskSpecV1, CapabilityManifestV1, VerifierResultV1, RunEventLogV1, and all five coordination contracts by content hash.",
+    "DeliveryManifestV1 channels must have unique workload-independent names and kinds from a closed domain.",
+    "DeliveryManifestV1 channels never declare a terminal external delivery status; only drafted_internal_only / pending_* / blocked_* are allowed.",
+    "DeliveryManifestV1 unlock requires verdict=passed, terminal run state=completed, and granted human approval; channels claiming unlocked=true otherwise are rejected.",
+    "DeliveryManifestV1 must not own the verifier verdict; verifier-runtime-v1 owns acceptance.",
+    "DeliveryManifestV1 must keep external side effects, repository mutation, external communication, GUI/desktop access, public access, and release/deployment disabled at the manifest level and on every channel."
+  ],
+  "kind": "DeliveryManifestV1",
+  "nonRegressionReusePath": [
+    "test_execution_failure_triage",
+    "code_patch_review_loop",
+    "pr_review"
+  ],
+  "policyBoundary": {
+    "externalCommunicationAllowed": false,
+    "externalSideEffectsAllowed": false,
+    "guiOrBrowserOrDesktopCallAllowed": false,
+    "publicAccessAllowed": false,
+    "releaseOrDeploymentAllowed": false,
+    "repositoryMutationAllowed": false
+  },
+  "regressionWorkloadIsolation": {
+    "forbiddenFields": [
+      "regression_result",
+      "regression_result.json",
+      "email_draft",
+      "email_draft.md",
+      "send_email",
+      "regression-task-spec-v1",
+      "regression-result-artifact-v1"
+    ],
+    "reusesPhase9DeliveryReport": false,
+    "reusesRegressionEmailDraft": false,
+    "reusesRegressionResultArtifact": false,
+    "reusesSendEmailCapability": false
+  },
+  "requiredTerminalRunState": "completed",
+  "requiredVerdictForUnlock": "passed",
+  "runEventLogBinding": {
+    "runEventLogContentHash": "f1a32305df32fde0cdf212bcd67a9368fc8cccbedb362b38ad1059c099f2793d",
+    "runEventLogEnvelopeSchemaVersion": "artifact-v1",
+    "runEventLogId": "post-mvp-test-execution-run-event-log-kernel-contract",
+    "runEventLogRef": "artifacts/state/post_mvp_test_execution_run_event_log.json",
+    "runEventLogSchemaVersion": "run-event-log-v1",
+    "terminalState": "completed"
+  },
+  "runTerminalStateGate": {
+    "currentTerminalState": "completed",
+    "requiredTerminalState": "completed",
+    "unlocked": true
+  },
+  "schemaVersion": "delivery-manifest-v1",
+  "scope": "test_execution_failure_triage_delivery_manifest_contract",
+  "sourceArtifacts": [
+    {
+      "contentHash": "e026fb8f8d78f3a54d0a1a3d846cd93d8289cd9a8fefb59ead112fb18e4552f2",
+      "path": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+      "role": "agent_message_manifest"
+    },
+    {
+      "contentHash": "4e622eafff1480cb2e109aad1230e0852d99c412470ff8f33b215898beeb90b6",
+      "path": "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
+      "role": "broadcast_subscription_manifest"
+    },
+    {
+      "contentHash": "834b3c6bfe4dc401a5c34f3ed20edb479c4352e85363ac629caab3a3af429932",
+      "path": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+      "role": "creator_verifier_pairing"
+    },
+    {
+      "contentHash": "7779a468076194ccb7f88ffeb9e37727d479742ec0add917ac45777b748d5b8f",
+      "path": "artifacts/coordination/post_mvp_delegation_manifest.json",
+      "role": "delegation_manifest"
+    },
+    {
+      "contentHash": "99b6e4391d1fd0111b375c3393f20374f3c37419f3c4d6a043c1dc2eebdcb017",
+      "path": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+      "role": "human_approval_decision"
+    },
+    {
+      "contentHash": "fbbcd49ad9e7cd229658b431ab15313829f3a58107d809ef288043236746698e",
+      "path": "artifacts/coordination/post_mvp_negotiation_record.json",
+      "role": "negotiation_record"
+    },
+    {
+      "contentHash": "39d71c8275fb5432a8db3b10caae9c4602fa8a0e6f330d797e656f4a1df0e764",
+      "path": "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
+      "role": "test_execution_capability_manifest"
+    },
+    {
+      "contentHash": "f1a32305df32fde0cdf212bcd67a9368fc8cccbedb362b38ad1059c099f2793d",
+      "path": "artifacts/state/post_mvp_test_execution_run_event_log.json",
+      "role": "test_execution_run_event_log"
+    },
+    {
+      "contentHash": "1b9bbb64c87879848276b77fe2be1a20f89df2bfed971a7a0ec5210a91f664ba",
+      "path": "artifacts/task_specs/post_mvp_test_execution_task_spec.json",
+      "role": "test_execution_task_spec"
+    },
+    {
+      "contentHash": "c317f05c5aa5cde6ba6b86fca1968539faef29ff87dc3cf57cbb540a136b8515",
+      "path": "artifacts/verifier/post_mvp_verifier_result_test_execution.json",
+      "role": "test_execution_verifier_result"
+    }
+  ],
+  "taskSpecBinding": {
+    "taskSpecContentHash": "1b9bbb64c87879848276b77fe2be1a20f89df2bfed971a7a0ec5210a91f664ba",
+    "taskSpecEnvelopeSchemaVersion": "task-spec-v1",
+    "taskSpecId": "post-mvp-test-execution-failure-triage-task-spec",
+    "taskSpecRef": "artifacts/task_specs/post_mvp_test_execution_task_spec.json",
+    "taskSpecSchemaVersion": "test-execution-task-spec-v1"
+  },
+  "verdictDomain": [
+    "passed",
+    "failed",
+    "incomplete",
+    "needs_human_check"
+  ],
+  "verdictGate": {
+    "currentVerdict": "needs_human_check",
+    "requiredVerdict": "passed",
+    "unlocked": false,
+    "verdictOwner": "verifier-runtime-v1"
+  },
+  "verifierExpectations": {
+    "creatorMustNotOwnVerdict": true,
+    "mustEnforcePolicyBoundary": true,
+    "mustEnforceVerdictGate": true,
+    "mustValidateApprovalGate": true,
+    "mustValidateCapabilityManifestBinding": true,
+    "mustValidateRunEventLogBinding": true,
+    "mustValidateSchema": true,
+    "mustValidateTaskSpecBinding": true,
+    "mustValidateVerifierResultBinding": true,
+    "verdictDomain": [
+      "passed",
+      "failed",
+      "incomplete",
+      "needs_human_check"
+    ],
+    "verdictOwner": "verifier-runtime-v1"
+  },
+  "verifierResultBinding": {
+    "verdict": "needs_human_check",
+    "verifierResultContentHash": "c317f05c5aa5cde6ba6b86fca1968539faef29ff87dc3cf57cbb540a136b8515",
+    "verifierResultEnvelopeSchemaVersion": "artifact-v1",
+    "verifierResultId": "post-mvp-verifier-result-test-execution-kernel-contract",
+    "verifierResultRef": "artifacts/verifier/post_mvp_verifier_result_test_execution.json",
+    "verifierResultSchemaVersion": "verifier-result-v1"
+  },
+  "verifierVerdictOwner": "verifier-runtime-v1",
+  "workloadCategory": "engineering_workload",
+  "workloadType": "test_execution_failure_triage"
+}
