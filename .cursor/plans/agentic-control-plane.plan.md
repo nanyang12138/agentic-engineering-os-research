@@ -7241,6 +7241,96 @@ Build vs Integrate：
 为 OS kernel 抽象一个 workload-independent 的 PolicyV1 ArtifactV1 子类型，区别于既有的 workload-specific PolicyManifestV1。定义 policyId / policyClass (permission_policy / approval_policy / delivery_policy / external_side_effect_policy / regression_isolation_policy / coordination_policy) / policyScope (workload_independent_kernel / workload_specific / coordination_layer) / policyLifecycleState (drafted / active / deprecated / withdrawn) / requiredFlag / verifierVerdictOwner / unlockConditionRef 等 workload-independent 字段；绑定 TestExecutionTaskSpecV1 / IntentV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 与 Agent Coordination Layer 五件套；每个 PolicyManifestV1.unlockConditions key 必须解析到 PolicyV1.policyItems[*].unlockConditionRef；字段不得依赖 regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1。
 ```
 
+### 2026-05-14 13:20 UTC Automation Sprint：PolicyV1 Workload-Independent Policy Primitive Gate
+
+Active phase：post-MVP Kernel Generalization / Multi-Workload Expansion（Phase 1a-9 contract-only MVP 已满足，Agent Coordination Layer 五件套 contract 完成，第二 workload 的 TaskSpec envelope、TestExecutionResultV1、FailureTriageReportV1、VerifierResultV1、CapabilityManifestV1、RunEventLogV1、DeliveryManifestV1、PolicyManifestV1、EvidenceListV1、ObservationListV1、RunV1、StepListV1、ToolCallListV1、IntentV1、CapabilityV1 均已 land，正在闭合 OS kernel 的 Policy 原语：把「策略条目」从 workload-specific `PolicyManifestV1` 抽象为 workload-independent ArtifactV1 子类型 `PolicyV1` / `policy-v1` / `policy-item-v1`，并把 `PolicyManifestV1.unlockConditions.<key>` → `PolicyV1.policyItems[*].unlockConditionRef` 的解析链路显式化）。
+
+Selected slice：
+
+```text
+Add PolicyV1 / policy-v1 ArtifactV1 subtype contract artifact at artifacts/policy/post_mvp_policy_v1_catalog.json so /usr/bin/python3 scripts/validate_repo.py verifies a workload-independent Policy primitive distinct from workload-specific PolicyManifestV1: declare policy-v1 / policy-item-v1 schemas, partition the policyClassDomain into the workload-independent set (permission_policy / approval_policy / delivery_policy / external_side_effect_policy / regression_isolation_policy / coordination_policy) and forbiddenPolicyClasses (regression_result_policy / email_draft_policy / send_email_policy), partition the policyScopeDomain into (workload_independent_kernel / workload_specific / coordination_layer) and allowedCommittedPolicyScopes (workload_independent_kernel / coordination_layer), enforce the six permission flags and per-policyItem permissionFlagOverrides to false, force every policy item to policyLifecycleState=active and requiredFlag=false, bind TestExecutionTaskSpecV1 / IntentV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 by content hash plus the five Agent Coordination Layer contracts, require every PolicyManifestV1.unlockConditions key to resolve into PolicyV1.policyItems[*].unlockConditionRef with everyUnlockConditionKeyCovered=true and everyPolicyItemReferencesValidKey=true, declare verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true, and explicitly forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 / reusesRegressionPolicyArtifact=false / reusesPhase7AdapterPolicyManifest=false / reusesPolicyUnlockDenialFixture=false / reusesSendEmailCapability=false.
+```
+
+为什么这是下一步：
+
+- 上一轮 `EvaluationReportV1.nextRecommendedSlice` 明确要求新增 workload-independent `PolicyV1` ArtifactV1 subtype，把 OS kernel 的 Policy 原语从 workload-specific `PolicyManifestV1` 中抽出来，并显式表达 `PolicyManifestV1.unlockConditions.<key> → PolicyV1.policyItems[*].unlockConditionRef` 的解析关系。
+- Post-MVP slice priority #1（generalize workload-independent kernel primitive：`PolicyV1`）与 #2（add second workload：`Test Execution / Failure Triage`）继续叠加：在 `ArtifactV1` envelope 上引入第十五个具体 subtype `policy-v1`，与既有十四个 subtype 并列。
+- 这是 OS kernel 的 `Policy` 抽象第一次以 workload-independent 形式独立成 ArtifactV1 子类型。既有 `artifacts/policy/post_mvp_test_execution_policy_manifest.json` 把策略的运行细节（effectClasses / policyRules / revocationRules / unlockConditions）封装成 workload-specific manifest；新 artifact 在显式 `regressionWorkloadIsolation.reusesPhase7AdapterPolicyManifest=false` / `reusesPolicyUnlockDenialFixture=false` / `reusesRegressionPolicyArtifact=false` 的前提下，用新的 `policy-v1` envelope、`policy-item-v1` 子 schema，把每一个策略条目抽出来成为独立可绑定 / 可审计 / 可校验的 workload-independent 对象，并通过 `unlockConditionCoverage` 把 `PolicyManifestV1.unlockConditions.<key>` → `PolicyV1.policyItems[*].unlockConditionRef` 钉成不变量。
+- `.github/workflows/validate.yml` 与 `.github/workflows/auto-merge-cursor-pr.yml` 均存在；本轮 baseline `/usr/bin/python3 scripts/validate_repo.py` 已通过。
+
+OS kernel primitive advanced：
+
+- 在 `ArtifactV1` envelope 上引入第十五个 subtype `policy-v1`；`artifactEnvelopeSchemaVersion=artifact-v1` 显式声明 envelope 复用。未来 `CodePatchPolicyV1`、`PRReviewPolicyV1`、`DocumentationUpdatePolicyV1`、`IncidentAnalysisPolicyV1` 等可以复用同一 envelope。
+- `PolicyV1` / `policy-v1`：第一次把 OS kernel 中的 `Policy` 抽象作为独立 schema 落地；policyClassDomain（`permission_policy` / `approval_policy` / `delivery_policy` / `external_side_effect_policy` / `regression_isolation_policy` / `coordination_policy`）、policyScopeDomain（`workload_independent_kernel` / `workload_specific` / `coordination_layer`）、forbiddenPolicyClasses（`regression_result_policy` / `email_draft_policy` / `send_email_policy`）、policyLifecycleStateDomain（`drafted` / `active` / `deprecated` / `withdrawn`）全部 workload-independent。
+- `policy-item-v1`：每个策略条目都拥有独立的 `policyId` / `policyClass` / `policyScope` / `policyLifecycleState` / `requiredFlag` / `verifierVerdictOwner` / `unlockConditionRef` / `permissionFlagOverrides` / `description`，与 workload-specific `PolicyManifestV1.policyRules[*]` 完全解耦。
+- `PolicyManifestV1.unlockConditions ↔ PolicyV1.policyItems` 一致性：`unlockConditionCoverage.everyUnlockConditionKeyCovered=true` 与 `everyPolicyItemReferencesValidKey=true` 钉为 invariant；`PolicyV1.policyItems[*].unlockConditionRef` 的唯一集合必须等于 `PolicyManifestV1.unlockConditions` 的 key 集合。OS kernel 第一次拥有「每一个 policy unlock 条件都能解析到一个 workload-independent policy 条目」的机器可验证证据。
+- `Verifier ↔ RunEventLog ↔ PolicyManifest` 三重门：`promotionConditions` 把 `VerifierResultV1.verdict==passed` / `RunEventLogV1.terminalState==completed` / `PolicyManifestV1.unlockConditions.unlocked==true` 钉为 policy promotion 条件；任何一个 gate 失败 → `promoted=false`。
+
+Non-regression workload reuse path：
+
+- `Test Execution / Failure Triage`：本 artifact 直接覆盖；11 个 policy item 一一映射到 `PolicyManifestV1.unlockConditions` 的 11 个 key（`approvalGranted` / `approvalRecordRef` / `approvalRecordSchemaVersion` / `currentApprovalDecision` / `currentTerminalRunState` / `currentVerdict` / `requiredApprovalDecision` / `requiredTerminalRunState` / `requiredVerdict` / `unlocked` / `verdictOwner`），并把 6 个 policy class 用满（permission_policy / approval_policy / delivery_policy / external_side_effect_policy / regression_isolation_policy / coordination_policy）。
+- `Code Patch / Review Loop`：未来 `CodePatchPolicyV1` 可复用同一 `policy-v1` envelope、`policy-item-v1` 子 schema、policyClassDomain、policyScopeDomain、policyLifecycleStateDomain；只需要替换 `policyItems` 内容并把 policyClass 落在同一 workload-independent 集合里。
+- `PR Review` / `Documentation Update` / `Incident / Log Analysis`：同理。本 artifact 的 `nonRegressionReusePath` 字段已声明 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review` 三条路径。
+
+Coordination protocol / invariant clarified：
+
+- `coordinationBinding` 字段强制 PolicyV1 绑定 Agent Coordination Layer 五件套 contract artifact，并通过 `sourceArtifacts[].contentHash` 把上游 12 件套 + Run + StepList + ToolCallList + Intent + CapabilityV1 contract 当作不可变前提；任何一个上游 contract 漂移都会让本 artifact validate 失败。
+- `verifierVerdictOwner=verifier-runtime-v1` 与 `verifierExpectations.creatorMustNotOwnVerdict=true` 把 CreatorVerifierPairingV1 不变量延伸到 Policy 层：creator 写入 policy draft，但 verifier 拥有 acceptance；envelope 的 `promotionConditions.promoted=true` 不能由 creator 单方面声明。
+- `permissionFlagDomain` / `permissionFlags` / 每个 policyItem 的 `permissionFlagOverrides` 都对 6 个 workload-independent 权限位强制为 `false`；`forbiddenPolicyClasses` 显式禁止 `regression_result_policy` / `email_draft_policy` / `send_email_policy`，与既有 BroadcastSubscriptionManifestV1 / NegotiationRecordV1 / DelegationManifestV1 / TestExecutionTaskSpecV1 / TestExecutionResultV1 / FailureTriageReportV1 / VerifierResultV1 / CapabilityManifestV1 / RunEventLogV1 / DeliveryManifestV1 / PolicyManifestV1 / EvidenceListV1 / ObservationListV1 / RunV1 / StepListV1 / ToolCallListV1 / IntentV1 / CapabilityV1 的 policy invariant 对齐：Policy 原语自身不允许携带任何 regression 或 email 子类，也不允许触发任何 side effect / external communication / public access。
+
+为什么这不是另一个 regression/email fixture：
+
+- artifact 路径为 `artifacts/policy/post_mvp_policy_v1_catalog.json`（独立于既有 `artifacts/policy/post_mvp_test_execution_policy_manifest.json` 这个 workload-specific manifest、`artifacts/computer_runtime/phase7_adapter_policy_manifest.json` 这个 adapter overlay 与 `artifacts/approval/post_mvp_policy_unlock_request_denied.json` 这个 denial fixture），scope 为 `workload_independent_policy_v1_kernel_contract`，不是 regression run、email draft、approval lifecycle、delivery unlock 或 policy unlock。
+- `workloadType` 必须等于 `test_execution_failure_triage`，validator 显式拒绝把它改成 `read_only_regression_evidence_demo` 或任何 regression workload；`kind` 必须为 `PolicyV1`，`schemaVersion` 必须为 `policy-v1`（区别于任何 first-workload `policy-manifest-v1` / `adapter-policy-manifest-v1` / `policy-rule-v1` / `policy-revocation-rule-v1` schema），每个 policyItem 的 `schemaVersion` 必须为 `policy-item-v1`。
+- `regressionWorkloadIsolation.forbiddenFields` 包含 `regression_result` / `regression_result.json` / `email_draft` / `email_draft.md` / `send_email` / `regression-task-spec-v1` / `regression-result-artifact-v1`；新增 `reusesRegressionPolicyArtifact=false` / `reusesRegressionTaskSpec=false` / `reusesRegressionResultArtifact=false` / `reusesPhase7AdapterPolicyManifest=false` / `reusesPolicyUnlockDenialFixture=false` / `reusesSendEmailCapability=false` 把本 artifact 与 first-workload regression policy / adapter policy / policy unlock denial / regression task spec / regression result / send_email 显式隔离。defensive scan 拒绝这些 token 在 forbiddenFields 之外再次出现。
+- `nonRegressionReusePath` 必须包含 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review`，强制本 artifact 至少有两个 non-regression 复用路径。
+
+Acceptance criteria：
+
+- `scripts/policy_kernel.py` 提供 `build_policy_kernel_artifact` / `validate_policy_kernel_artifact` 与 CLI（`--out` / `--validate`）。
+- 新增 committed `artifacts/policy/post_mvp_policy_v1_catalog.json`，schemaVersion 为 `policy-v1`，artifactEnvelopeSchemaVersion 为 `artifact-v1`，policyItemSchemaVersion 为 `policy-item-v1`，policyCount=11。
+- `scripts/validate_repo.py` 验证 committed artifact、deterministic builder output、deterministic CLI replay 与约 55 条 forced-failure case（workload_type / kind / schema / envelope / item schema / verdict ownership / permission flags / policy class domain / forbidden policy classes / policy scope domain / allowed committed scopes / lifecycle state domain / required lifecycle state / required flag / per-item lifecycle state / per-item permission overrides / per-item verifier owner / per-item unlock condition ref / per-item policyId / per-item sequence / count drift / 14 binding pair / unlock-condition coverage everyCovered / everyValid / refs drift / capability-kernel binding schema / capability count / promotion gates / coordination binding / regression isolation / non-regression reuse path / 15 source hash mismatches）。
+- `EvaluationReportV1` 把 PolicyV1 artifact 纳入 source hash，并把下一推荐切片推进为 workload-independent `RunEventV1` ArtifactV1 subtype。
+
+实现摘要：
+
+- 新增 `scripts/policy_kernel.py`，包含 schema 常量、11 条 deterministic POLICY_BLUEPRINT、builder、validator、deterministic CLI（`--out` / `--validate`），以及 ArtifactV1 envelope / 14 向 binding（含 CapabilityV1 + IntentV1 + RunV1 + StepList + ToolCallList）/ 五件套 coordination binding 逻辑；`unlockConditionCoverage` 自动从 policyItems 与上游 PolicyManifestV1 推导；`promotionConditions` 由 verdict / run terminal state / policy unlock 三重门派生。
+- 新增 committed `artifacts/policy/post_mvp_policy_v1_catalog.json`，共 11 个 policy item：1 个 `permission_policy` / 5 个 `approval_policy` / 2 个 `delivery_policy` / 1 个 `external_side_effect_policy` / 1 个 `regression_isolation_policy` / 1 个 `coordination_policy`，全部 `policyLifecycleState=active` 且 `requiredFlag=false`。
+- 更新 `scripts/validate_repo.py`：REQUIRED_FILES 增加 `scripts/policy_kernel.py` 与 `artifacts/policy/post_mvp_policy_v1_catalog.json`，PLAN markers 增加 `PolicyV1` / `policy-v1` / `policy-item-v1` / `post_mvp_policy_v1_catalog.json`，新增 committed artifact 校验、deterministic CLI replay 与约 55 条 forced-failure case。
+- 更新 `scripts/evaluation_report.py` 与 `artifacts/evaluation/phase9_mvp_evaluation_report.json`：把 PolicyV1 加入 source hash，并把 `nextRecommendedSlice` 推进为 workload-independent `RunEventV1` ArtifactV1 subtype（run-event-v1 / run-event-item-v1，runEventClass / runEventScope / runEventLifecycleState / sourceEventRef）。
+
+Build vs Integrate：
+
+- Build：`PolicyV1 / policy-item-v1` schema、deterministic builder / validator / CLI、committed artifact、约 55 条 forced-failure case、`EvaluationReportV1` source hash 集成、`PolicyManifestV1.unlockConditions.<key> → PolicyV1.policyItems[*].unlockConditionRef` 解析链路显式化、Verifier ↔ RunEventLog ↔ PolicyManifest 三重 promotion 门、14 向 binding、permissionFlagOverrides / requiredFlag 不变量。
+- Integrate later：真实 Policy enforcement runtime / policy registry / 真实 policy lifecycle 调度 / policy versioning / policy deprecation runtime；跨 workload `PolicyV1` catalogue；`ArtifactV1` envelope 抽取为独立 schema 文件；`RunEventV1` / 真实 run-event lifecycle runtime / 真实 capability ↔ policy enforcement runtime 等下一批 OS kernel primitive。
+
+验证计划 / 结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline /usr/bin/python3 scripts/validate_repo.py before edits：通过。
+- /usr/bin/python3 -m py_compile scripts/*.py：通过。
+- /usr/bin/python3 scripts/policy_kernel.py --out artifacts/policy/post_mvp_policy_v1_catalog.json：通过。
+- /usr/bin/python3 scripts/policy_kernel.py --validate artifacts/policy/post_mvp_policy_v1_catalog.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --report-out artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/validate_repo.py：通过，覆盖 PolicyV1 committed artifact、deterministic CLI replay 与约 55 条 forced-failure case。
+- git diff --check：通过。
+```
+
+剩余风险：
+
+- `PolicyV1` 仍是 static contract artifact，不驱动任何真实 policy enforcement runtime / 真实 policy lifecycle 调度 / policy versioning / policy deprecation runtime；下一切片应给出 workload-independent `RunEventV1` ArtifactV1 subtype，把 OS kernel 的 RunEvent 原语在第二 workload 上独立抽象出来，并把 `RunEventLogV1.events[*].type` 显式 binding 到 `RunEventV1.runEventItems[*].sourceEventRef`。
+- 当前 artifact 复用 first workload 的 5 件套 coordination contract artifact 与 phase9 human approval decision fixture 作为 source fixture；`Code Patch / Review Loop` 与 `PR Review` 的 PolicyV1 subtype 仍未实现。
+- `ArtifactV1` envelope 目前仍通过 `artifactEnvelopeSchemaVersion` 字段表达；未来需要把所有 16 个 subtype（`regression-result-artifact-v1` / `test-execution-result-v1` / `failure-triage-report-v1` / `verifier-result-v1` / `capability-manifest-v1` / `run-event-log-v1` / `delivery-manifest-v1` / `policy-manifest-v1` / `evidence-list-artifact-v1` / `observation-list-artifact-v1` / `run-artifact-v1` / `step-list-artifact-v1` / `tool-call-list-artifact-v1` / `intent-v1` / `capability-v1` / `policy-v1`）抽出共同 base schema（真正的 `artifact-v1` envelope）。
+
+下一轮建议：
+
+```text
+新增 workload-independent RunEventV1 ArtifactV1 subtype contract artifact：
+为 OS kernel 抽象一个 workload-independent 的 RunEventV1 ArtifactV1 子类型，区别于既有的 workload-specific RunEventLogV1。定义 runEventId / runEventClass (run_lifecycle / step_lifecycle / tool_call_lifecycle / verifier_lifecycle / artifact_lifecycle / approval_lifecycle / policy_lifecycle / coordination_lifecycle) / runEventScope (workload_independent_kernel / workload_specific / coordination_layer) / runEventLifecycleState (drafted / emitted / replayed / deprecated) / requiredFlag / verifierVerdictOwner / sourceEventRef 等 workload-independent 字段；绑定 TestExecutionTaskSpecV1 / IntentV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyV1 / PolicyManifestV1 / HumanApprovalDecisionV1 与 Agent Coordination Layer 五件套；每个 RunEventLogV1.events[*].type 必须解析到 RunEventV1.runEventItems[*].sourceEventRef；字段不得依赖 regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1。
+```
+
 ## 22. Parking Lot
 
 以下内容仍然重要，但不进入第一版 MVP：
