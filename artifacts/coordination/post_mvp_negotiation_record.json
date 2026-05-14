@@ -1,0 +1,227 @@
+{
+  "agentBindings": [
+    {
+      "agentId": "creator_agent",
+      "mayAcceptProposal": true,
+      "mayBroadcast": false,
+      "mayMutateDelegationArtifacts": false,
+      "mayOverrideVerifierResult": false,
+      "mayProposeAdjustment": true,
+      "owns": [
+        "proposal_origination",
+        "agreement_co_authoring"
+      ],
+      "role": "creator"
+    },
+    {
+      "agentId": "verifier_agent",
+      "mayAcceptProposal": true,
+      "mayBroadcast": false,
+      "mayMutateDelegationArtifacts": false,
+      "mayOverrideVerifierResult": false,
+      "mayProposeAdjustment": true,
+      "owns": [
+        "counter_proposal_origination",
+        "agreement_co_authoring"
+      ],
+      "role": "verifier"
+    }
+  ],
+  "agreement": {
+    "agreedBy": [
+      "creator_agent",
+      "verifier_agent"
+    ],
+    "agreedClause": "All required evidence must reference source-bound observation hashes captured before verifier review AND must remain independent of creator override.",
+    "appliesToDelegationRef": "artifacts/coordination/post_mvp_delegation_manifest.json#delegations/delegation-workload-independent-artifact-creation",
+    "appliesToPairingRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json#id/post-mvp-creator-verifier-pairing-kernel-contract",
+    "broadcastAllowed": false,
+    "carriesSideEffects": false,
+    "finalProposalId": "negotiation-proposal-acceptance-criteria-agreement",
+    "id": "negotiation-agreement-acceptance-criteria-source-bound",
+    "mutatesExpectedArtifacts": false,
+    "mutatesPolicyBoundary": false,
+    "overridesVerifierResult": false,
+    "rootProposalId": "negotiation-proposal-acceptance-criteria-clarification",
+    "schemaVersion": "negotiation-agreement-v1",
+    "topic": "acceptance_criteria"
+  },
+  "coordinationEventRefs": [
+    "artifacts/coordination/post_mvp_delegation_manifest.json#coordinationEvents/coord-event-delegation-created",
+    "artifacts/coordination/post_mvp_delegation_manifest.json#coordinationEvents/coord-event-delegation-accepted",
+    "artifacts/coordination/post_mvp_delegation_manifest.json#coordinationEvents/coord-event-verification-requested"
+  ],
+  "coordinationProtocols": [
+    "negotiation",
+    "direct_communication",
+    "creator_verifier"
+  ],
+  "delegationBinding": {
+    "agentMessageManifestId": "artifacts/coordination/post_mvp_agent_message_manifest.json#id/post-mvp-agent-message-manifest-kernel-contract",
+    "agentMessageManifestRef": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+    "delegationManifestRef": "artifacts/coordination/post_mvp_delegation_manifest.json",
+    "delegationRef": "artifacts/coordination/post_mvp_delegation_manifest.json#delegations/delegation-workload-independent-artifact-creation",
+    "pairingManifestRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+    "pairingRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json#id/post-mvp-creator-verifier-pairing-kernel-contract",
+    "parentRunRef": "artifacts/runs/all_passed/run.json",
+    "parentTaskSpecRef": "artifacts/runs/all_passed/run.json#taskSpec",
+    "workloadIndependentObjective": "Create source-bound engineering artifacts from a reviewed TaskSpec without owning the task verdict."
+  },
+  "expectedDelegationArtifactRefs": {
+    "ArtifactV1": "artifacts/runs/all_passed/regression_result.json",
+    "EvidenceListV1": "artifacts/runs/all_passed/evidence.json",
+    "VerifierResultV1": "artifacts/runs/all_passed/verifier_report.json"
+  },
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "post-mvp-negotiation-record-kernel-contract",
+  "invariants": [
+    "NegotiationRecordV1 is workload-independent: it captures scope/risk/policy/acceptance-criteria negotiation without adding regression/email behavior.",
+    "Negotiation proposals form a causal chain that ends with a single agreement signed by both creator and verifier.",
+    "Agreements must not override VerifierResultV1, mutate delegation expectedArtifacts, relax policyBoundary, carry side effects, or broadcast.",
+    "Proposals and agreements bind DelegationManifestV1, CreatorVerifierPairingV1, and AgentMessageManifestV1 by reference; they do not duplicate or rewrite those contracts.",
+    "The record is a static contract artifact and does not run a real negotiation runtime, scheduler, message bus, blackboard, or external delivery channel."
+  ],
+  "kernelPrimitive": "NegotiationRecord",
+  "messageRefs": {
+    "verificationRequest": "artifacts/coordination/post_mvp_agent_message_manifest.json#messages/agent-message-verification-request",
+    "verificationResponse": "artifacts/coordination/post_mvp_agent_message_manifest.json#messages/agent-message-verification-response"
+  },
+  "mode": "static_contract_only",
+  "negotiationInvariant": {
+    "agreementMayMutateExpectedArtifacts": false,
+    "agreementMayMutatePolicyBoundary": false,
+    "agreementMayOverrideVerifierResult": false,
+    "agreementRequiresBothParties": true,
+    "broadcastAllowed": false,
+    "creatorAgent": "creator_agent",
+    "creatorAndVerifierMustBeDistinct": true,
+    "proposalsMayCarrySideEffects": false,
+    "verifierAgent": "verifier_agent",
+    "verifierResultOwner": "verifier-runtime-v1"
+  },
+  "negotiationTopics": [
+    "scope",
+    "risk",
+    "policy",
+    "acceptance_criteria"
+  ],
+  "nonRegressionReusePath": [
+    "test_execution_failure_triage",
+    "code_patch_review_loop",
+    "pr_review"
+  ],
+  "phase": "post_mvp",
+  "policyBoundary": {
+    "broadcastAllowed": false,
+    "deliverySendAllowed": false,
+    "externalSideEffectsAllowed": false,
+    "policySchemaVersion": "policy-v1",
+    "providerExecutionAllowed": false,
+    "realMultiAgentRuntimeAllowed": false,
+    "workspaceMutationAllowed": false
+  },
+  "proposalTypeSequence": [
+    "proposal",
+    "counter_proposal",
+    "agreement"
+  ],
+  "proposals": [
+    {
+      "broadcastAllowed": false,
+      "carriesSideEffects": false,
+      "causalRefs": [
+        "artifacts/coordination/post_mvp_agent_message_manifest.json#messages/agent-message-verification-request"
+      ],
+      "delegationRef": "artifacts/coordination/post_mvp_delegation_manifest.json#delegations/delegation-workload-independent-artifact-creation",
+      "fromAgent": "creator_agent",
+      "id": "negotiation-proposal-acceptance-criteria-clarification",
+      "inReplyToProposalId": null,
+      "mayOverrideVerifierResult": false,
+      "pairingRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json#id/post-mvp-creator-verifier-pairing-kernel-contract",
+      "policyBoundaryHonored": true,
+      "proposalType": "proposal",
+      "proposedDelta": {
+        "addedClause": "All required evidence must reference source-bound observation hashes captured before verifier review.",
+        "appliesToDelegationRef": "artifacts/coordination/post_mvp_delegation_manifest.json#delegations/delegation-workload-independent-artifact-creation",
+        "field": "acceptanceCriteriaClarification",
+        "mutatesExpectedArtifacts": false,
+        "mutatesPolicyBoundary": false
+      },
+      "rationale": "Creator proposes a clarifying acceptance-criteria clause that does not mutate expectedArtifacts or policyBoundary.",
+      "schemaVersion": "negotiation-proposal-v1",
+      "toAgent": "verifier_agent",
+      "topic": "acceptance_criteria"
+    },
+    {
+      "broadcastAllowed": false,
+      "carriesSideEffects": false,
+      "causalRefs": [
+        "negotiation-proposal-acceptance-criteria-clarification"
+      ],
+      "delegationRef": "artifacts/coordination/post_mvp_delegation_manifest.json#delegations/delegation-workload-independent-artifact-creation",
+      "fromAgent": "verifier_agent",
+      "id": "negotiation-proposal-acceptance-criteria-counter",
+      "inReplyToProposalId": "negotiation-proposal-acceptance-criteria-clarification",
+      "mayOverrideVerifierResult": false,
+      "pairingRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json#id/post-mvp-creator-verifier-pairing-kernel-contract",
+      "policyBoundaryHonored": true,
+      "proposalType": "counter_proposal",
+      "proposedDelta": {
+        "addedClause": "All required evidence must reference source-bound observation hashes captured before verifier review AND must remain independent of creator override.",
+        "appliesToDelegationRef": "artifacts/coordination/post_mvp_delegation_manifest.json#delegations/delegation-workload-independent-artifact-creation",
+        "field": "acceptanceCriteriaClarification",
+        "mutatesExpectedArtifacts": false,
+        "mutatesPolicyBoundary": false
+      },
+      "rationale": "Verifier strengthens the clarifying clause to preserve verifier independence without mutating expectedArtifacts.",
+      "schemaVersion": "negotiation-proposal-v1",
+      "toAgent": "creator_agent",
+      "topic": "acceptance_criteria"
+    },
+    {
+      "broadcastAllowed": false,
+      "carriesSideEffects": false,
+      "causalRefs": [
+        "negotiation-proposal-acceptance-criteria-counter"
+      ],
+      "delegationRef": "artifacts/coordination/post_mvp_delegation_manifest.json#delegations/delegation-workload-independent-artifact-creation",
+      "fromAgent": "creator_agent",
+      "id": "negotiation-proposal-acceptance-criteria-agreement",
+      "inReplyToProposalId": "negotiation-proposal-acceptance-criteria-counter",
+      "mayOverrideVerifierResult": false,
+      "pairingRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json#id/post-mvp-creator-verifier-pairing-kernel-contract",
+      "policyBoundaryHonored": true,
+      "proposalType": "agreement",
+      "proposedDelta": {
+        "addedClause": "All required evidence must reference source-bound observation hashes captured before verifier review AND must remain independent of creator override.",
+        "appliesToDelegationRef": "artifacts/coordination/post_mvp_delegation_manifest.json#delegations/delegation-workload-independent-artifact-creation",
+        "field": "acceptanceCriteriaClarification",
+        "mutatesExpectedArtifacts": false,
+        "mutatesPolicyBoundary": false
+      },
+      "rationale": "Creator agrees to the verifier counter-proposal without overriding VerifierResultV1 or mutating delegation expectedArtifacts.",
+      "schemaVersion": "negotiation-proposal-v1",
+      "toAgent": "verifier_agent",
+      "topic": "acceptance_criteria"
+    }
+  ],
+  "schemaVersion": "negotiation-record-v1",
+  "scope": "agent_coordination_negotiation_contract",
+  "sourceArtifacts": [
+    {
+      "contentHash": "7779a468076194ccb7f88ffeb9e37727d479742ec0add917ac45777b748d5b8f",
+      "path": "artifacts/coordination/post_mvp_delegation_manifest.json",
+      "role": "delegation_manifest"
+    },
+    {
+      "contentHash": "834b3c6bfe4dc401a5c34f3ed20edb479c4352e85363ac629caab3a3af429932",
+      "path": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+      "role": "creator_verifier_pairing"
+    },
+    {
+      "contentHash": "e026fb8f8d78f3a54d0a1a3d846cd93d8289cd9a8fefb59ead112fb18e4552f2",
+      "path": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+      "role": "agent_message_manifest"
+    }
+  ]
+}

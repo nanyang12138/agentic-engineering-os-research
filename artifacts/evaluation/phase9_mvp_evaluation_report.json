@@ -56,7 +56,7 @@
   "nextRecommendedSlice": {
     "mustRemainMachineVerifiable": true,
     "phase": "post_mvp",
-    "slice": "Add a NegotiationRecordV1 contract artifact so scope/risk/policy/acceptance-criteria negotiation between creator and verifier is machine-verifiable."
+    "slice": "Add a BroadcastSubscriptionV1 coordination contract artifact so workload-independent event broadcast subscriptions, no-side-effect/no-override invariants, and CoordinationEventV1 fan-out are machine-verifiable on top of DelegationManifestV1, CreatorVerifierPairingV1, AgentMessageManifestV1, and NegotiationRecordV1."
   },
   "outOfScope": [
     {
@@ -263,7 +263,7 @@
   "scope": "read_only_regression_evidence_demo_mvp_completion",
   "sourceArtifacts": [
     {
-      "contentHash": "916481d13b477261807e936849db9f2593037f3d7e99fac1d66b3861020a0987",
+      "contentHash": "567c9f05a20e5e533cb759248d7d552b6a74e2b4e1d3131a33f09803968f7461",
       "path": "scripts/validate_repo.py",
       "role": "validation_script"
     },
@@ -426,6 +426,11 @@
       "contentHash": "e026fb8f8d78f3a54d0a1a3d846cd93d8289cd9a8fefb59ead112fb18e4552f2",
       "path": "artifacts/coordination/post_mvp_agent_message_manifest.json",
       "role": "post_mvp_agent_message_manifest"
+    },
+    {
+      "contentHash": "fbbcd49ad9e7cd229658b431ab15313829f3a58107d809ef288043236746698e",
+      "path": "artifacts/coordination/post_mvp_negotiation_record.json",
+      "role": "post_mvp_negotiation_record"
     },
     {
       "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",

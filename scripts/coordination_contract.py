@@ -16,6 +16,9 @@ COORDINATION_EVENT_SCHEMA_VERSION = "coordination-event-v1"
 CREATOR_VERIFIER_PAIRING_SCHEMA_VERSION = "creator-verifier-pairing-v1"
 AGENT_MESSAGE_MANIFEST_SCHEMA_VERSION = "agent-message-manifest-v1"
 AGENT_MESSAGE_SCHEMA_VERSION = "agent-message-v1"
+NEGOTIATION_RECORD_SCHEMA_VERSION = "negotiation-record-v1"
+NEGOTIATION_PROPOSAL_SCHEMA_VERSION = "negotiation-proposal-v1"
+NEGOTIATION_AGREEMENT_SCHEMA_VERSION = "negotiation-agreement-v1"
 TASK_SPEC_ENVELOPE_SCHEMA_VERSION = "task-spec-v1"
 GENERATED_AT = "2026-05-12T14:39:00Z"
 
@@ -25,6 +28,16 @@ CREATOR_VERIFIER_PAIRING_ID = "post-mvp-creator-verifier-pairing-kernel-contract
 CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH = "artifacts/coordination/post_mvp_creator_verifier_pairing.json"
 AGENT_MESSAGE_MANIFEST_ID = "post-mvp-agent-message-manifest-kernel-contract"
 AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH = "artifacts/coordination/post_mvp_agent_message_manifest.json"
+NEGOTIATION_RECORD_ID = "post-mvp-negotiation-record-kernel-contract"
+NEGOTIATION_RECORD_ARTIFACT_PATH = "artifacts/coordination/post_mvp_negotiation_record.json"
+NEGOTIATION_PROPOSAL_ROOT_ID = "negotiation-proposal-acceptance-criteria-clarification"
+NEGOTIATION_PROPOSAL_COUNTER_ID = "negotiation-proposal-acceptance-criteria-counter"
+NEGOTIATION_PROPOSAL_AGREEMENT_ID = "negotiation-proposal-acceptance-criteria-agreement"
+NEGOTIATION_AGREEMENT_ID = "negotiation-agreement-acceptance-criteria-source-bound"
+
+NEGOTIATION_TOPICS = ["scope", "risk", "policy", "acceptance_criteria"]
+NEGOTIATION_PROPOSAL_TYPES = ["proposal", "counter_proposal", "agreement", "withdrawal"]
+NEGOTIATION_PROPOSAL_SEQUENCE_TYPES = ["proposal", "counter_proposal", "agreement"]
 
 AGENT_MESSAGE_CHANNEL_REQUEST_ID = "creator-to-verifier-verification-request-channel"
 AGENT_MESSAGE_CHANNEL_RESPONSE_ID = "verifier-to-creator-verification-response-channel"
@@ -1579,6 +1592,684 @@ def validate_agent_message_manifest(manifest: dict[str, Any], root: Path) -> Non
         raise ValueError("AgentMessageManifestV1 must include non-regression workload reuse paths")
 
 
+def _agent_message_manifest_ref() -> str:
+    return f"{AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH}#id/{AGENT_MESSAGE_MANIFEST_ID}"
+
+
+def _agent_message_ref(message_id: str) -> str:
+    return f"{AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH}#messages/{message_id}"
+
+
+def _build_negotiation_source_artifacts(root: Path) -> list[dict[str, Any]]:
+    return [
+        _artifact_source("delegation_manifest", DELEGATION_MANIFEST_ARTIFACT_PATH, root),
+        _artifact_source("creator_verifier_pairing", CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH, root),
+        _artifact_source("agent_message_manifest", AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH, root),
+    ]
+
+
+def _expected_negotiation_source_paths() -> dict[str, str]:
+    return {
+        "delegation_manifest": DELEGATION_MANIFEST_ARTIFACT_PATH,
+        "creator_verifier_pairing": CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH,
+        "agent_message_manifest": AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH,
+    }
+
+
+def _build_negotiation_agent_bindings(delegation: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "agentId": delegation["creatorAgent"],
+            "role": "creator",
+            "owns": ["proposal_origination", "agreement_co_authoring"],
+            "mayProposeAdjustment": True,
+            "mayAcceptProposal": True,
+            "mayOverrideVerifierResult": False,
+            "mayMutateDelegationArtifacts": False,
+            "mayBroadcast": False,
+        },
+        {
+            "agentId": delegation["verifierAgent"],
+            "role": "verifier",
+            "owns": ["counter_proposal_origination", "agreement_co_authoring"],
+            "mayProposeAdjustment": True,
+            "mayAcceptProposal": True,
+            "mayOverrideVerifierResult": False,
+            "mayMutateDelegationArtifacts": False,
+            "mayBroadcast": False,
+        },
+    ]
+
+
+def _build_negotiation_proposals(delegation: dict[str, Any], delegation_ref: str, pairing_ref: str) -> list[dict[str, Any]]:
+    base_payload = {
+        "topic": "acceptance_criteria",
+        "delegationRef": delegation_ref,
+        "pairingRef": pairing_ref,
+    }
+    return [
+        {
+            **base_payload,
+            "schemaVersion": NEGOTIATION_PROPOSAL_SCHEMA_VERSION,
+            "id": NEGOTIATION_PROPOSAL_ROOT_ID,
+            "proposalType": "proposal",
+            "fromAgent": delegation["creatorAgent"],
+            "toAgent": delegation["verifierAgent"],
+            "inReplyToProposalId": None,
+            "causalRefs": [_agent_message_ref(AGENT_MESSAGE_REQUEST_ID)],
+            "proposedDelta": {
+                "field": "acceptanceCriteriaClarification",
+                "appliesToDelegationRef": delegation_ref,
+                "mutatesExpectedArtifacts": False,
+                "mutatesPolicyBoundary": False,
+                "addedClause": "All required evidence must reference source-bound observation hashes captured before verifier review.",
+            },
+            "rationale": "Creator proposes a clarifying acceptance-criteria clause that does not mutate expectedArtifacts or policyBoundary.",
+            "policyBoundaryHonored": True,
+            "mayOverrideVerifierResult": False,
+            "carriesSideEffects": False,
+            "broadcastAllowed": False,
+        },
+        {
+            **base_payload,
+            "schemaVersion": NEGOTIATION_PROPOSAL_SCHEMA_VERSION,
+            "id": NEGOTIATION_PROPOSAL_COUNTER_ID,
+            "proposalType": "counter_proposal",
+            "fromAgent": delegation["verifierAgent"],
+            "toAgent": delegation["creatorAgent"],
+            "inReplyToProposalId": NEGOTIATION_PROPOSAL_ROOT_ID,
+            "causalRefs": [NEGOTIATION_PROPOSAL_ROOT_ID],
+            "proposedDelta": {
+                "field": "acceptanceCriteriaClarification",
+                "appliesToDelegationRef": delegation_ref,
+                "mutatesExpectedArtifacts": False,
+                "mutatesPolicyBoundary": False,
+                "addedClause": "All required evidence must reference source-bound observation hashes captured before verifier review AND must remain independent of creator override.",
+            },
+            "rationale": "Verifier strengthens the clarifying clause to preserve verifier independence without mutating expectedArtifacts.",
+            "policyBoundaryHonored": True,
+            "mayOverrideVerifierResult": False,
+            "carriesSideEffects": False,
+            "broadcastAllowed": False,
+        },
+        {
+            **base_payload,
+            "schemaVersion": NEGOTIATION_PROPOSAL_SCHEMA_VERSION,
+            "id": NEGOTIATION_PROPOSAL_AGREEMENT_ID,
+            "proposalType": "agreement",
+            "fromAgent": delegation["creatorAgent"],
+            "toAgent": delegation["verifierAgent"],
+            "inReplyToProposalId": NEGOTIATION_PROPOSAL_COUNTER_ID,
+            "causalRefs": [NEGOTIATION_PROPOSAL_COUNTER_ID],
+            "proposedDelta": {
+                "field": "acceptanceCriteriaClarification",
+                "appliesToDelegationRef": delegation_ref,
+                "mutatesExpectedArtifacts": False,
+                "mutatesPolicyBoundary": False,
+                "addedClause": "All required evidence must reference source-bound observation hashes captured before verifier review AND must remain independent of creator override.",
+            },
+            "rationale": "Creator agrees to the verifier counter-proposal without overriding VerifierResultV1 or mutating delegation expectedArtifacts.",
+            "policyBoundaryHonored": True,
+            "mayOverrideVerifierResult": False,
+            "carriesSideEffects": False,
+            "broadcastAllowed": False,
+        },
+    ]
+
+
+def _build_negotiation_agreement(delegation: dict[str, Any], delegation_ref: str, pairing_ref: str) -> dict[str, Any]:
+    return {
+        "schemaVersion": NEGOTIATION_AGREEMENT_SCHEMA_VERSION,
+        "id": NEGOTIATION_AGREEMENT_ID,
+        "topic": "acceptance_criteria",
+        "agreedBy": [delegation["creatorAgent"], delegation["verifierAgent"]],
+        "rootProposalId": NEGOTIATION_PROPOSAL_ROOT_ID,
+        "finalProposalId": NEGOTIATION_PROPOSAL_AGREEMENT_ID,
+        "appliesToDelegationRef": delegation_ref,
+        "appliesToPairingRef": pairing_ref,
+        "agreedClause": "All required evidence must reference source-bound observation hashes captured before verifier review AND must remain independent of creator override.",
+        "mutatesExpectedArtifacts": False,
+        "mutatesPolicyBoundary": False,
+        "overridesVerifierResult": False,
+        "carriesSideEffects": False,
+        "broadcastAllowed": False,
+    }
+
+
+def build_negotiation_record(root: Path) -> dict[str, Any]:
+    delegation_manifest = _load_json(root / DELEGATION_MANIFEST_ARTIFACT_PATH)
+    validate_delegation_manifest(delegation_manifest, root)
+    pairing = _load_json(root / CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH)
+    validate_creator_verifier_pairing(pairing, root)
+    agent_message_manifest = _load_json(root / AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH)
+    validate_agent_message_manifest(agent_message_manifest, root)
+    delegation = delegation_manifest["delegations"][0]
+    paths_by_kind = _artifact_paths_by_kind(delegation)
+    delegation_ref = _delegation_ref(delegation["id"])
+    pairing_ref = _pairing_ref()
+
+    return {
+        "schemaVersion": NEGOTIATION_RECORD_SCHEMA_VERSION,
+        "id": NEGOTIATION_RECORD_ID,
+        "generatedAt": GENERATED_AT,
+        "phase": "post_mvp",
+        "scope": "agent_coordination_negotiation_contract",
+        "mode": "static_contract_only",
+        "kernelPrimitive": "NegotiationRecord",
+        "coordinationProtocols": ["negotiation", "direct_communication", "creator_verifier"],
+        "sourceArtifacts": _build_negotiation_source_artifacts(root),
+        "delegationBinding": {
+            "delegationManifestRef": DELEGATION_MANIFEST_ARTIFACT_PATH,
+            "delegationRef": delegation_ref,
+            "pairingManifestRef": CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH,
+            "pairingRef": pairing_ref,
+            "agentMessageManifestRef": AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH,
+            "agentMessageManifestId": _agent_message_manifest_ref(),
+            "parentTaskSpecRef": delegation["parentTaskSpecRef"],
+            "parentRunRef": delegation["parentRunRef"],
+            "workloadIndependentObjective": delegation["workloadIndependentObjective"],
+        },
+        "agentBindings": _build_negotiation_agent_bindings(delegation),
+        "negotiationTopics": list(NEGOTIATION_TOPICS),
+        "proposalTypeSequence": list(NEGOTIATION_PROPOSAL_SEQUENCE_TYPES),
+        "proposals": _build_negotiation_proposals(delegation, delegation_ref, pairing_ref),
+        "agreement": _build_negotiation_agreement(delegation, delegation_ref, pairing_ref),
+        "negotiationInvariant": {
+            "creatorAgent": delegation["creatorAgent"],
+            "verifierAgent": delegation["verifierAgent"],
+            "verifierResultOwner": "verifier-runtime-v1",
+            "agreementRequiresBothParties": True,
+            "agreementMayOverrideVerifierResult": False,
+            "agreementMayMutateExpectedArtifacts": False,
+            "agreementMayMutatePolicyBoundary": False,
+            "proposalsMayCarrySideEffects": False,
+            "broadcastAllowed": False,
+            "creatorAndVerifierMustBeDistinct": True,
+        },
+        "policyBoundary": {
+            "policySchemaVersion": "policy-v1",
+            "externalSideEffectsAllowed": False,
+            "workspaceMutationAllowed": False,
+            "deliverySendAllowed": False,
+            "realMultiAgentRuntimeAllowed": False,
+            "providerExecutionAllowed": False,
+            "broadcastAllowed": False,
+        },
+        "coordinationEventRefs": [
+            _coord_event_ref(event["id"])
+            for event in delegation_manifest["coordinationEvents"]
+        ],
+        "messageRefs": {
+            "verificationRequest": _agent_message_ref(AGENT_MESSAGE_REQUEST_ID),
+            "verificationResponse": _agent_message_ref(AGENT_MESSAGE_RESPONSE_ID),
+        },
+        "expectedDelegationArtifactRefs": {
+            "ArtifactV1": paths_by_kind["ArtifactV1"],
+            "EvidenceListV1": paths_by_kind["EvidenceListV1"],
+            "VerifierResultV1": paths_by_kind["VerifierResultV1"],
+        },
+        "nonRegressionReusePath": list(NON_REGRESSION_REUSE_PATHS),
+        "invariants": [
+            "NegotiationRecordV1 is workload-independent: it captures scope/risk/policy/acceptance-criteria negotiation without adding regression/email behavior.",
+            "Negotiation proposals form a causal chain that ends with a single agreement signed by both creator and verifier.",
+            "Agreements must not override VerifierResultV1, mutate delegation expectedArtifacts, relax policyBoundary, carry side effects, or broadcast.",
+            "Proposals and agreements bind DelegationManifestV1, CreatorVerifierPairingV1, and AgentMessageManifestV1 by reference; they do not duplicate or rewrite those contracts.",
+            "The record is a static contract artifact and does not run a real negotiation runtime, scheduler, message bus, blackboard, or external delivery channel.",
+        ],
+    }
+
+
+def _validate_negotiation_source_artifacts(source_artifacts: list[Any], root: Path) -> dict[str, dict[str, Any]]:
+    if not isinstance(source_artifacts, list) or not source_artifacts:
+        raise ValueError("NegotiationRecordV1 sourceArtifacts must be a non-empty list")
+    expected_paths = _expected_negotiation_source_paths()
+    sources_by_role: dict[str, dict[str, Any]] = {}
+    for source in source_artifacts:
+        if not isinstance(source, dict):
+            raise ValueError("NegotiationRecordV1 sourceArtifacts must be objects")
+        _require_fields("NegotiationRecordV1 source artifact", source, ["role", "path", "contentHash"])
+        role = source["role"]
+        path = source["path"]
+        _validate_relative_posix_path(path)
+        if role not in expected_paths:
+            raise ValueError(f"Unexpected NegotiationRecordV1 source role: {role}")
+        if path != expected_paths[role]:
+            raise ValueError(f"NegotiationRecordV1 source role {role} must point to {expected_paths[role]}")
+        source_path = root / path
+        if not source_path.is_file():
+            raise ValueError(f"NegotiationRecordV1 source artifact does not exist: {path}")
+        if _stable_file_hash(source_path) != source["contentHash"]:
+            raise ValueError(f"NegotiationRecordV1 source hash mismatch for {path}")
+        sources_by_role[role] = source
+    if set(sources_by_role) != set(expected_paths):
+        raise ValueError(f"NegotiationRecordV1 source roles must equal {sorted(expected_paths)}")
+    return sources_by_role
+
+
+def _validate_negotiation_proposal_delta(label: str, delta: dict[str, Any], delegation_ref: str) -> None:
+    _require_fields(
+        label + " proposedDelta",
+        delta,
+        ["field", "appliesToDelegationRef", "mutatesExpectedArtifacts", "mutatesPolicyBoundary", "addedClause"],
+    )
+    if delta["appliesToDelegationRef"] != delegation_ref:
+        raise ValueError(f"{label} proposedDelta must apply to DelegationManifestV1 delegation")
+    if delta["mutatesExpectedArtifacts"] is not False:
+        raise ValueError(f"{label} proposedDelta must not mutate delegation expectedArtifacts")
+    if delta["mutatesPolicyBoundary"] is not False:
+        raise ValueError(f"{label} proposedDelta must not mutate delegation policyBoundary")
+    added_clause = delta["addedClause"]
+    if not isinstance(added_clause, str) or not added_clause.strip():
+        raise ValueError(f"{label} proposedDelta.addedClause must be a non-empty string")
+    lowered = added_clause.lower()
+    for forbidden in ("email", "send_email", "delivery_unlock"):
+        if forbidden in lowered:
+            raise ValueError(
+                f"{label} proposedDelta must not add regression/email delivery artifacts"
+            )
+
+
+def _validate_negotiation_proposal(
+    label: str,
+    proposal: dict[str, Any],
+    delegation: dict[str, Any],
+    delegation_ref: str,
+    pairing_ref: str,
+) -> None:
+    _require_fields(
+        label,
+        proposal,
+        [
+            "schemaVersion",
+            "id",
+            "proposalType",
+            "topic",
+            "delegationRef",
+            "pairingRef",
+            "fromAgent",
+            "toAgent",
+            "inReplyToProposalId",
+            "causalRefs",
+            "proposedDelta",
+            "rationale",
+            "policyBoundaryHonored",
+            "mayOverrideVerifierResult",
+            "carriesSideEffects",
+            "broadcastAllowed",
+        ],
+    )
+    if proposal["schemaVersion"] != NEGOTIATION_PROPOSAL_SCHEMA_VERSION:
+        raise ValueError(f"{label} schemaVersion must be {NEGOTIATION_PROPOSAL_SCHEMA_VERSION}")
+    if proposal["proposalType"] not in NEGOTIATION_PROPOSAL_TYPES:
+        raise ValueError(f"{label} proposalType must be one of {NEGOTIATION_PROPOSAL_TYPES}")
+    if proposal["topic"] not in NEGOTIATION_TOPICS:
+        raise ValueError(f"{label} topic must be one of {NEGOTIATION_TOPICS}")
+    if proposal["delegationRef"] != delegation_ref:
+        raise ValueError(f"{label} delegationRef must bind DelegationManifestV1 delegation")
+    if proposal["pairingRef"] != pairing_ref:
+        raise ValueError(f"{label} pairingRef must bind CreatorVerifierPairingV1")
+    if proposal["fromAgent"] == proposal["toAgent"]:
+        raise ValueError(f"{label} fromAgent and toAgent must be distinct")
+    allowed_agents = {delegation["creatorAgent"], delegation["verifierAgent"]}
+    if proposal["fromAgent"] not in allowed_agents or proposal["toAgent"] not in allowed_agents:
+        raise ValueError(f"{label} agents must come from DelegationManifestV1 creator/verifier")
+    if not isinstance(proposal["causalRefs"], list) or not proposal["causalRefs"]:
+        raise ValueError(f"{label} causalRefs must be a non-empty list")
+    if proposal["policyBoundaryHonored"] is not True:
+        raise ValueError(f"{label} must honor delegation policyBoundary")
+    if proposal["mayOverrideVerifierResult"] is not False:
+        raise ValueError(f"{label} must not override verifier results")
+    if proposal["carriesSideEffects"] is not False:
+        raise ValueError(f"{label} must not carry side effects")
+    if proposal["broadcastAllowed"] is not False:
+        raise ValueError(f"{label} must not broadcast")
+    _validate_negotiation_proposal_delta(label, proposal["proposedDelta"], delegation_ref)
+
+
+def _validate_negotiation_proposals(
+    proposals: list[Any],
+    delegation: dict[str, Any],
+    delegation_ref: str,
+    pairing_ref: str,
+    verification_request_ref: str,
+) -> list[dict[str, Any]]:
+    if not isinstance(proposals, list) or len(proposals) < 2:
+        raise ValueError("NegotiationRecordV1 proposals must contain at least a proposal and an agreement")
+    types = [proposal.get("proposalType") for proposal in proposals if isinstance(proposal, dict)]
+    if types != NEGOTIATION_PROPOSAL_SEQUENCE_TYPES:
+        raise ValueError(
+            f"NegotiationRecordV1 proposals must follow proposalTypeSequence {NEGOTIATION_PROPOSAL_SEQUENCE_TYPES}"
+        )
+    proposal_ids: set[str] = set()
+    previous: dict[str, Any] | None = None
+    for index, proposal in enumerate(proposals):
+        if not isinstance(proposal, dict):
+            raise ValueError("NegotiationRecordV1 proposals must be objects")
+        label = f"NegotiationRecordV1 proposal[{index}]"
+        _validate_negotiation_proposal(label, proposal, delegation, delegation_ref, pairing_ref)
+        if proposal["id"] in proposal_ids:
+            raise ValueError(f"{label} id must be unique within proposals")
+        proposal_ids.add(proposal["id"])
+        if index == 0:
+            if proposal["inReplyToProposalId"] is not None:
+                raise ValueError(f"{label} root proposal must not reply to another proposal")
+            if verification_request_ref not in proposal["causalRefs"]:
+                raise ValueError(
+                    f"{label} root proposal causalRefs must reference AgentMessageManifestV1 verification.request"
+                )
+            if proposal["fromAgent"] != delegation["creatorAgent"]:
+                raise ValueError(f"{label} root proposal must originate from the creator agent")
+        else:
+            assert previous is not None
+            if proposal["inReplyToProposalId"] != previous["id"]:
+                raise ValueError(f"{label} must reply to the previous proposal via inReplyToProposalId")
+            if previous["id"] not in proposal["causalRefs"]:
+                raise ValueError(f"{label} causalRefs must include the previous proposal id")
+        if index == 1 and proposal["fromAgent"] != delegation["verifierAgent"]:
+            raise ValueError(f"{label} counter_proposal must originate from the verifier agent")
+        previous = proposal
+    if types[-1] != "agreement":
+        raise ValueError("NegotiationRecordV1 proposals must end with an agreement proposal")
+    return list(proposals)
+
+
+def _validate_negotiation_agreement(
+    agreement: dict[str, Any],
+    proposals: list[dict[str, Any]],
+    delegation: dict[str, Any],
+    delegation_ref: str,
+    pairing_ref: str,
+) -> None:
+    _require_fields(
+        "NegotiationRecordV1 agreement",
+        agreement,
+        [
+            "schemaVersion",
+            "id",
+            "topic",
+            "agreedBy",
+            "rootProposalId",
+            "finalProposalId",
+            "appliesToDelegationRef",
+            "appliesToPairingRef",
+            "agreedClause",
+            "mutatesExpectedArtifacts",
+            "mutatesPolicyBoundary",
+            "overridesVerifierResult",
+            "carriesSideEffects",
+            "broadcastAllowed",
+        ],
+    )
+    if agreement["schemaVersion"] != NEGOTIATION_AGREEMENT_SCHEMA_VERSION:
+        raise ValueError(
+            f"NegotiationRecordV1 agreement schemaVersion must be {NEGOTIATION_AGREEMENT_SCHEMA_VERSION}"
+        )
+    if agreement["topic"] not in NEGOTIATION_TOPICS:
+        raise ValueError(f"NegotiationRecordV1 agreement topic must be one of {NEGOTIATION_TOPICS}")
+    if agreement["topic"] != proposals[-1]["topic"]:
+        raise ValueError("NegotiationRecordV1 agreement topic must match negotiation proposals")
+    agreed_by = agreement["agreedBy"]
+    if not isinstance(agreed_by, list) or set(agreed_by) != {delegation["creatorAgent"], delegation["verifierAgent"]}:
+        raise ValueError("NegotiationRecordV1 agreement must be agreedBy both creator and verifier")
+    if agreement["rootProposalId"] != proposals[0]["id"]:
+        raise ValueError("NegotiationRecordV1 agreement rootProposalId must bind the first proposal")
+    if agreement["finalProposalId"] != proposals[-1]["id"]:
+        raise ValueError("NegotiationRecordV1 agreement finalProposalId must bind the final proposal")
+    if agreement["appliesToDelegationRef"] != delegation_ref:
+        raise ValueError("NegotiationRecordV1 agreement appliesToDelegationRef must bind DelegationManifestV1")
+    if agreement["appliesToPairingRef"] != pairing_ref:
+        raise ValueError("NegotiationRecordV1 agreement appliesToPairingRef must bind CreatorVerifierPairingV1")
+    agreed_clause = agreement["agreedClause"]
+    if not isinstance(agreed_clause, str) or not agreed_clause.strip():
+        raise ValueError("NegotiationRecordV1 agreement agreedClause must be a non-empty string")
+    if agreed_clause != proposals[-1]["proposedDelta"]["addedClause"]:
+        raise ValueError("NegotiationRecordV1 agreement agreedClause must match final proposal addedClause")
+    lowered = agreed_clause.lower()
+    for forbidden in ("email", "send_email", "delivery_unlock"):
+        if forbidden in lowered:
+            raise ValueError("NegotiationRecordV1 agreement must not add regression/email delivery artifacts")
+    if agreement["mutatesExpectedArtifacts"] is not False:
+        raise ValueError("NegotiationRecordV1 agreement must not mutate delegation expectedArtifacts")
+    if agreement["mutatesPolicyBoundary"] is not False:
+        raise ValueError("NegotiationRecordV1 agreement must not mutate delegation policyBoundary")
+    if agreement["overridesVerifierResult"] is not False:
+        raise ValueError("NegotiationRecordV1 agreement must not override verifier results")
+    if agreement["carriesSideEffects"] is not False:
+        raise ValueError("NegotiationRecordV1 agreement must not carry side effects")
+    if agreement["broadcastAllowed"] is not False:
+        raise ValueError("NegotiationRecordV1 agreement must not broadcast")
+
+
+def validate_negotiation_record(record: dict[str, Any], root: Path) -> None:
+    _require_fields(
+        "NegotiationRecordV1",
+        record,
+        [
+            "schemaVersion",
+            "id",
+            "generatedAt",
+            "phase",
+            "scope",
+            "mode",
+            "kernelPrimitive",
+            "coordinationProtocols",
+            "sourceArtifacts",
+            "delegationBinding",
+            "agentBindings",
+            "negotiationTopics",
+            "proposalTypeSequence",
+            "proposals",
+            "agreement",
+            "negotiationInvariant",
+            "policyBoundary",
+            "coordinationEventRefs",
+            "messageRefs",
+            "expectedDelegationArtifactRefs",
+            "nonRegressionReusePath",
+            "invariants",
+        ],
+    )
+    if record["schemaVersion"] != NEGOTIATION_RECORD_SCHEMA_VERSION:
+        raise ValueError(f"NegotiationRecordV1 schemaVersion must be {NEGOTIATION_RECORD_SCHEMA_VERSION}")
+    if record["id"] != NEGOTIATION_RECORD_ID:
+        raise ValueError(f"NegotiationRecordV1 id must be {NEGOTIATION_RECORD_ID}")
+    if record["phase"] != "post_mvp":
+        raise ValueError("NegotiationRecordV1 phase must be post_mvp")
+    if record["scope"] != "agent_coordination_negotiation_contract":
+        raise ValueError("NegotiationRecordV1 scope must be agent_coordination_negotiation_contract")
+    if record["mode"] != "static_contract_only":
+        raise ValueError("NegotiationRecordV1 mode must be static_contract_only")
+    if record["kernelPrimitive"] != "NegotiationRecord":
+        raise ValueError("NegotiationRecordV1 kernelPrimitive must be NegotiationRecord")
+    if "negotiation" not in record["coordinationProtocols"]:
+        raise ValueError("NegotiationRecordV1 coordinationProtocols must include negotiation")
+    if list(record["negotiationTopics"]) != NEGOTIATION_TOPICS:
+        raise ValueError(f"NegotiationRecordV1 negotiationTopics must equal {NEGOTIATION_TOPICS}")
+    if list(record["proposalTypeSequence"]) != NEGOTIATION_PROPOSAL_SEQUENCE_TYPES:
+        raise ValueError(
+            f"NegotiationRecordV1 proposalTypeSequence must equal {NEGOTIATION_PROPOSAL_SEQUENCE_TYPES}"
+        )
+
+    delegation_manifest = _load_json(root / DELEGATION_MANIFEST_ARTIFACT_PATH)
+    validate_delegation_manifest(delegation_manifest, root)
+    pairing = _load_json(root / CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH)
+    validate_creator_verifier_pairing(pairing, root)
+    agent_message_manifest = _load_json(root / AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH)
+    validate_agent_message_manifest(agent_message_manifest, root)
+    delegation = delegation_manifest["delegations"][0]
+    paths_by_kind = _artifact_paths_by_kind(delegation)
+    delegation_ref = _delegation_ref(delegation["id"])
+    pairing_ref = _pairing_ref()
+    verification_request_ref = _agent_message_ref(AGENT_MESSAGE_REQUEST_ID)
+    verification_response_ref = _agent_message_ref(AGENT_MESSAGE_RESPONSE_ID)
+
+    _validate_negotiation_source_artifacts(record["sourceArtifacts"], root)
+
+    binding = record["delegationBinding"]
+    _require_fields(
+        "NegotiationRecordV1 delegationBinding",
+        binding,
+        [
+            "delegationManifestRef",
+            "delegationRef",
+            "pairingManifestRef",
+            "pairingRef",
+            "agentMessageManifestRef",
+            "agentMessageManifestId",
+            "parentTaskSpecRef",
+            "parentRunRef",
+            "workloadIndependentObjective",
+        ],
+    )
+    if binding["delegationManifestRef"] != DELEGATION_MANIFEST_ARTIFACT_PATH or binding["delegationRef"] != delegation_ref:
+        raise ValueError("NegotiationRecordV1 delegationBinding must reference DelegationManifestV1")
+    if binding["pairingManifestRef"] != CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH or binding["pairingRef"] != pairing_ref:
+        raise ValueError("NegotiationRecordV1 delegationBinding must reference CreatorVerifierPairingV1")
+    if binding["agentMessageManifestRef"] != AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH:
+        raise ValueError("NegotiationRecordV1 delegationBinding must reference AgentMessageManifestV1")
+    if binding["agentMessageManifestId"] != _agent_message_manifest_ref():
+        raise ValueError("NegotiationRecordV1 delegationBinding must bind AgentMessageManifestV1 id")
+    if binding["parentTaskSpecRef"] != delegation["parentTaskSpecRef"] or binding["parentRunRef"] != delegation["parentRunRef"]:
+        raise ValueError("NegotiationRecordV1 delegationBinding must inherit parent TaskSpec and Run refs")
+
+    agent_bindings = record["agentBindings"]
+    if not isinstance(agent_bindings, list) or len(agent_bindings) != 2:
+        raise ValueError("NegotiationRecordV1 agentBindings must contain creator and verifier")
+    agents_by_role: dict[str, dict[str, Any]] = {}
+    for agent in agent_bindings:
+        if not isinstance(agent, dict):
+            raise ValueError("NegotiationRecordV1 agentBindings must be objects")
+        _require_fields(
+            "NegotiationRecordV1 agent binding",
+            agent,
+            [
+                "agentId",
+                "role",
+                "owns",
+                "mayProposeAdjustment",
+                "mayAcceptProposal",
+                "mayOverrideVerifierResult",
+                "mayMutateDelegationArtifacts",
+                "mayBroadcast",
+            ],
+        )
+        if agent["mayOverrideVerifierResult"] is not False:
+            raise ValueError("NegotiationRecordV1 agentBindings must keep mayOverrideVerifierResult false")
+        if agent["mayMutateDelegationArtifacts"] is not False:
+            raise ValueError("NegotiationRecordV1 agentBindings must keep mayMutateDelegationArtifacts false")
+        if agent["mayBroadcast"] is not False:
+            raise ValueError("NegotiationRecordV1 agentBindings must keep mayBroadcast false")
+        agents_by_role[agent["role"]] = agent
+    if set(agents_by_role) != {"creator", "verifier"}:
+        raise ValueError("NegotiationRecordV1 agentBindings must cover creator and verifier roles")
+    if agents_by_role["creator"]["agentId"] != delegation["creatorAgent"]:
+        raise ValueError("NegotiationRecordV1 creator agentId must match DelegationManifestV1 creator")
+    if agents_by_role["verifier"]["agentId"] != delegation["verifierAgent"]:
+        raise ValueError("NegotiationRecordV1 verifier agentId must match DelegationManifestV1 verifier")
+    if agents_by_role["creator"]["agentId"] == agents_by_role["verifier"]["agentId"]:
+        raise ValueError("NegotiationRecordV1 creator and verifier agents must be distinct")
+
+    proposals = _validate_negotiation_proposals(
+        record["proposals"],
+        delegation,
+        delegation_ref,
+        pairing_ref,
+        verification_request_ref,
+    )
+    _validate_negotiation_agreement(record["agreement"], proposals, delegation, delegation_ref, pairing_ref)
+
+    invariant = record["negotiationInvariant"]
+    _require_fields(
+        "NegotiationRecordV1 negotiationInvariant",
+        invariant,
+        [
+            "creatorAgent",
+            "verifierAgent",
+            "verifierResultOwner",
+            "agreementRequiresBothParties",
+            "agreementMayOverrideVerifierResult",
+            "agreementMayMutateExpectedArtifacts",
+            "agreementMayMutatePolicyBoundary",
+            "proposalsMayCarrySideEffects",
+            "broadcastAllowed",
+            "creatorAndVerifierMustBeDistinct",
+        ],
+    )
+    if invariant["creatorAgent"] == invariant["verifierAgent"]:
+        raise ValueError("NegotiationRecordV1 negotiationInvariant agents must be distinct")
+    if invariant["verifierResultOwner"] != "verifier-runtime-v1":
+        raise ValueError("NegotiationRecordV1 negotiationInvariant verifierResultOwner must be verifier-runtime-v1")
+    if invariant["agreementRequiresBothParties"] is not True:
+        raise ValueError("NegotiationRecordV1 negotiationInvariant must require both parties for agreement")
+    for field in [
+        "agreementMayOverrideVerifierResult",
+        "agreementMayMutateExpectedArtifacts",
+        "agreementMayMutatePolicyBoundary",
+        "proposalsMayCarrySideEffects",
+        "broadcastAllowed",
+    ]:
+        if invariant[field] is not False:
+            raise ValueError(f"NegotiationRecordV1 negotiationInvariant must keep {field} false")
+    if invariant["creatorAndVerifierMustBeDistinct"] is not True:
+        raise ValueError("NegotiationRecordV1 negotiationInvariant must keep creatorAndVerifierMustBeDistinct true")
+
+    policy = record["policyBoundary"]
+    _require_fields(
+        "NegotiationRecordV1 policyBoundary",
+        policy,
+        [
+            "policySchemaVersion",
+            "externalSideEffectsAllowed",
+            "workspaceMutationAllowed",
+            "deliverySendAllowed",
+            "realMultiAgentRuntimeAllowed",
+            "providerExecutionAllowed",
+            "broadcastAllowed",
+        ],
+    )
+    if policy["policySchemaVersion"] != "policy-v1":
+        raise ValueError("NegotiationRecordV1 policyBoundary must use policy-v1")
+    for field in [
+        "externalSideEffectsAllowed",
+        "workspaceMutationAllowed",
+        "deliverySendAllowed",
+        "realMultiAgentRuntimeAllowed",
+        "providerExecutionAllowed",
+        "broadcastAllowed",
+    ]:
+        if policy[field] is not False:
+            raise ValueError(f"NegotiationRecordV1 policyBoundary must keep {field} false")
+
+    expected_event_refs = [
+        _coord_event_ref(event["id"])
+        for event in delegation_manifest["coordinationEvents"]
+    ]
+    if record["coordinationEventRefs"] != expected_event_refs:
+        raise ValueError("NegotiationRecordV1 coordinationEventRefs must bind DelegationManifestV1 coordination events")
+
+    message_refs = record["messageRefs"]
+    _require_fields(
+        "NegotiationRecordV1 messageRefs",
+        message_refs,
+        ["verificationRequest", "verificationResponse"],
+    )
+    if message_refs["verificationRequest"] != verification_request_ref:
+        raise ValueError("NegotiationRecordV1 messageRefs.verificationRequest must bind AgentMessageManifestV1 verification.request")
+    if message_refs["verificationResponse"] != verification_response_ref:
+        raise ValueError("NegotiationRecordV1 messageRefs.verificationResponse must bind AgentMessageManifestV1 verification.response")
+
+    expected_artifact_refs = {
+        "ArtifactV1": paths_by_kind["ArtifactV1"],
+        "EvidenceListV1": paths_by_kind["EvidenceListV1"],
+        "VerifierResultV1": paths_by_kind["VerifierResultV1"],
+    }
+    if record["expectedDelegationArtifactRefs"] != expected_artifact_refs:
+        raise ValueError("NegotiationRecordV1 expectedDelegationArtifactRefs must bind DelegationManifestV1 artifact paths")
+
+    if not set(NON_REGRESSION_REUSE_PATHS).issubset(set(record["nonRegressionReusePath"])):
+        raise ValueError("NegotiationRecordV1 must include non-regression workload reuse paths")
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="coordination-contract")
     parser.add_argument("--delegation-out", type=Path)
@@ -1587,6 +2278,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--validate-pairing", type=Path)
     parser.add_argument("--agent-message-out", type=Path)
     parser.add_argument("--validate-agent-message", type=Path)
+    parser.add_argument("--negotiation-out", type=Path)
+    parser.add_argument("--validate-negotiation", type=Path)
     return parser.parse_args(argv)
 
 
@@ -1600,6 +2293,8 @@ def main(argv: list[str] | None = None) -> int:
         and args.validate_pairing is None
         and args.agent_message_out is None
         and args.validate_agent_message is None
+        and args.negotiation_out is None
+        and args.validate_negotiation is None
     ):
         raise ValueError("No action requested")
     if args.delegation_out is not None:
@@ -1629,6 +2324,15 @@ def main(argv: list[str] | None = None) -> int:
         manifest = _load_json(args.validate_agent_message)
         validate_agent_message_manifest(manifest, root)
         print(f"Validated AgentMessageManifestV1 artifact {args.validate_agent_message}.")
+    if args.negotiation_out is not None:
+        record = build_negotiation_record(root)
+        validate_negotiation_record(record, root)
+        _write_json(args.negotiation_out, record)
+        print(f"Wrote NegotiationRecordV1 artifact to {args.negotiation_out}.")
+    if args.validate_negotiation is not None:
+        record = _load_json(args.validate_negotiation)
+        validate_negotiation_record(record, root)
+        print(f"Validated NegotiationRecordV1 artifact {args.validate_negotiation}.")
     return 0
 
 

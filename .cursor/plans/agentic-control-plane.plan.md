@@ -5733,6 +5733,92 @@ Build vs Integrate：
 基于 DelegationManifestV1、CreatorVerifierPairingV1、AgentMessageManifestV1 明确 creator/verifier 间 scope/risk/policy/acceptance-criteria 协商、proposal/counter-proposal/agreement 状态机、source hash binding 和 no-side-effect / no-override policy；字段不得依赖 regression_result/email_draft/send_email。
 ```
 
+### 2026-05-14 07:40 UTC Automation Sprint：NegotiationRecordV1 Coordination Kernel Contract Gate
+
+Active phase：post-MVP Kernel Generalization / Agent Coordination Runtime Contracts（Phase 1a-9 contract-only MVP 已满足，完整 Agentic Engineering OS 产品仍未完成）。
+
+Selected slice：
+
+```text
+Add NegotiationRecordV1 contract artifact so /usr/bin/python3 scripts/validate_repo.py verifies workload-independent creator/verifier scope/risk/policy/acceptance-criteria negotiation, proposal/counter-proposal/agreement state machine, source hash binding, and no-override / no-side-effect / no-broadcast policy on top of DelegationManifestV1, CreatorVerifierPairingV1, and AgentMessageManifestV1.
+```
+
+为什么这是下一步：
+
+- `.github/workflows/validate.yml` 和 `.github/workflows/auto-merge-cursor-pr.yml` 均存在；本轮 baseline `/usr/bin/python3 scripts/validate_repo.py` 已通过。
+- `DelegationManifestV1`、`CreatorVerifierPairingV1`、`AgentMessageManifestV1` 已 land；Agent Coordination Layer 的下一个最小 contract 是 `NegotiationRecordV1`，覆盖 negotiation primitive，避免继续深化 regression/email approval 链路。
+- Post-MVP slice priority #3（Agent Coordination Layer protocol）要求 `NegotiationRecordV1` 与 `DelegationManifestV1`、`CreatorVerifierPairingV1`、`AgentMessageV1`、`CoordinationEventV1`、`BroadcastSubscriptionV1` 并列；先证明协商状态机的 OS-level contract，再进入 broadcast。
+
+OS kernel primitive advanced：
+
+- `NegotiationRecord` / `negotiation-record-v1` 包住 proposal、counter-proposal、agreement、negotiation invariant、policyBoundary 与 coordination event refs。
+- `Agreement` / `negotiation-agreement-v1` 明确双方共同签署、不可 override VerifierResultV1、不可 mutate delegation expectedArtifacts、不可 mutate policyBoundary、不可 carry side effects、不可 broadcast。
+- `CoordinationEvent` / `AgentMessage`：proposals 通过 causal refs 引用 `AgentMessageManifestV1#messages/agent-message-verification-request` 和 `DelegationManifestV1#coordinationEvents/...`，使协商状态机继承既有事件链而非新建并行总线。
+
+Non-regression workload reuse path：
+
+- `Test Execution / Failure Triage` 可复用：creator 与 verifier 就 flake threshold、failure classification、retry policy 协商，并产出双方共同签署的 acceptance clause。
+- `Code Patch / Review Loop` 可复用：creator 与 reviewer/verifier 就 review scope、severity、blocking criteria 协商，最终 agreement 不允许 override review verdict 或 mutate patch artifact。
+- `PR Review` 可复用：reviewer 与 patch creator 就 finding severity 与 fix scope 协商，agreement 不可 override verifier 的 review verdict。
+
+Coordination protocol / invariant clarified：
+
+- `NegotiationRecordV1` / `negotiation-record-v1` 明确 negotiation primitive 与 `DelegationManifestV1`、`CreatorVerifierPairingV1`、`AgentMessageManifestV1` 的绑定关系。
+- 状态机：`proposal -> counter_proposal -> agreement`；每条 proposal 必须 causal 链到前一条；agreement 必须由 creator 与 verifier 共同签署且引用 root/final proposal。
+- 不变量：agreement 不能 override VerifierResultV1、不能 mutate delegation expectedArtifacts、不能 mutate policyBoundary、不能 carry side effects、不能 broadcast；creator 与 verifier 必须不同 agent。
+
+为什么这不是另一个 regression/email fixture：
+
+- 新 artifact 路径为 `artifacts/coordination/post_mvp_negotiation_record.json`，scope 为 `agent_coordination_negotiation_contract`，不是 regression result、email draft、approval lifecycle 或 delivery unlock。
+- schema 字段使用 generic `NegotiationRecordV1` / `NegotiationProposalV1` / `NegotiationAgreementV1`，proposals 仅允许 workload-independent topic `scope` / `risk` / `policy` / `acceptance_criteria`；validator 明确拒绝 `email` / `send_email` / `delivery_unlock` clause。
+- artifact 记录 `nonRegressionReusePath`，必须包含 `test_execution_failure_triage`、`code_patch_review_loop` 和 `pr_review`。
+
+Acceptance criteria：
+
+- `scripts/coordination_contract.py` 提供 `NegotiationRecordV1` builder / validator / CLI（`--negotiation-out` / `--validate-negotiation`）。
+- 新增 committed `artifacts/coordination/post_mvp_negotiation_record.json`，schemaVersion 为 `negotiation-record-v1`，内含 `negotiation-proposal-v1` proposal/counter_proposal/agreement 三条 proposal 与 `negotiation-agreement-v1` agreement。
+- `scripts/validate_repo.py` 验证 committed artifact、deterministic builder output，并拒绝 agreement override verifier result、agreement mutate delegation expectedArtifacts、agreement missing verifier、proposal sequence missing counter_proposal、proposals carry side effects、proposals broadcast allowed、email delivery clause added、policy broadcast allowed、缺 non-regression reuse path、AgentMessageManifestV1 source hash mismatch 和 messageRefs 未绑定 verification.request。
+- `EvaluationReportV1` 把 negotiation record artifact 纳入 source hash 汇总，并把下一推荐切片推进为 `BroadcastSubscriptionV1` 协调 contract。
+
+实现摘要：
+
+- 扩展 `scripts/coordination_contract.py`，新增 `NegotiationRecordV1`、`NegotiationProposalV1`、`NegotiationAgreementV1` builder / validator 与 CLI 参数 `--negotiation-out` / `--validate-negotiation`，保留既有 Delegation/Pairing/AgentMessage 行为。
+- 新增 committed `artifacts/coordination/post_mvp_negotiation_record.json`。
+- 更新 `scripts/validate_repo.py` 的 required files、PLAN markers (`NegotiationRecordV1`、`negotiation-record-v1`、`negotiation-proposal-v1`、`negotiation-agreement-v1`、`post_mvp_negotiation_record.json`)、artifact validation、deterministic CLI replay 与 forced-failure cases。
+- 更新 `scripts/evaluation_report.py` 与 `artifacts/evaluation/phase9_mvp_evaluation_report.json`，将 negotiation record 纳入 source hash，并推荐下一步 `BroadcastSubscriptionV1`。
+
+Build vs Integrate：
+
+- Build：`NegotiationRecordV1` schema、deterministic builder/validator/CLI、committed artifact、forced-failure validation gate、EvaluationReportV1 source hash 集成。
+- Integrate later：真实 negotiation runtime、blackboard scheduler、ChatRoom/RFC bus、LangGraph/AutoGen/CrewAI、协商策略学习、长程记忆、多 stakeholder 流程。
+
+验证计划 / 结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline `/usr/bin/python3 scripts/validate_repo.py` before edits：通过。
+- `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- `/usr/bin/python3 scripts/coordination_contract.py --negotiation-out artifacts/coordination/post_mvp_negotiation_record.json`：通过。
+- `/usr/bin/python3 scripts/coordination_contract.py --validate-negotiation artifacts/coordination/post_mvp_negotiation_record.json`：通过。
+- `/usr/bin/python3 scripts/evaluation_report.py --report-out artifacts/evaluation/phase9_mvp_evaluation_report.json`：通过。
+- `/usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json`：通过。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 NegotiationRecordV1 committed artifact、deterministic builder output 与 agreement_overrides_verifier_result / agreement_mutates_expected_artifacts / agreement_missing_verifier / proposal_sequence_missing_counter_proposal / proposals_carry_side_effects / proposals_broadcast_allowed / email_delivery_clause_added / policy_broadcast_allowed / missing_non_regression_reuse_path / agent_message_manifest_source_hash_mismatch / message_refs_request_not_bound forced-failure cases。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- `NegotiationRecordV1` 仍是 static contract artifact，不是 production negotiation runtime、message bus、blackboard、stakeholder workflow 或真实 LangGraph/AutoGen/CrewAI integration。
+- 当前 artifact 仍以 first workload 的 existing TaskSpec / artifact refs 作为 source fixture；第二 workload 尚未实现。
+- Broadcast 仍需要后续 `BroadcastSubscriptionV1` contract，才能完成 Agent Coordination Layer 的 delegation / creator-verifier / direct communication / negotiation / broadcast 五件套契约。
+
+下一轮建议：
+
+```text
+新增 workload-independent `BroadcastSubscriptionV1` contract artifact：
+基于 DelegationManifestV1、CreatorVerifierPairingV1、AgentMessageManifestV1、NegotiationRecordV1 明确事件广播订阅、subscriber white-list、no-side-effect / no-override policy、CoordinationEventV1 fan-out 与 broadcast topic 分类；字段不得依赖 regression_result/email_draft/send_email。
+```
+
 ## 22. Parking Lot
 
 以下内容仍然重要，但不进入第一版 MVP：
