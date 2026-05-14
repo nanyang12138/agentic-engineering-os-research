@@ -56,7 +56,7 @@
   "nextRecommendedSlice": {
     "mustRemainMachineVerifiable": true,
     "phase": "post_mvp",
-    "slice": "Add a workload-independent RunV1 ArtifactV1 subtype contract artifact that defines the canonical OS-kernel run primitive for any workload: declare workload-independent fields (runId / runState / startedAt / terminalAt / runControlStateMachineRef / taskSpecRef / capabilityManifestRef / runEventLogRef / observationListRef / evidenceListRef / verifierResultRef / deliveryManifestRef / policyManifestRef / approvalDecisionRef), bind by content hash to TestExecutionTaskSpecV1, CapabilityManifestV1, RunEventLogV1, ObservationListV1, EvidenceListV1, VerifierResultV1, DeliveryManifestV1, PolicyManifestV1, HumanApprovalDecisionV1 and the five Agent Coordination Layer manifests, declare verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true, force the six workload-independent permission flags to false, require RunV1.runState to equal RunEventLogV1.terminalState and RunV1 state transitions to live inside the run-state-machine-v1 allowed transitions, require RunV1.observationCount to equal ObservationListV1.observationItemCount and RunEventLogV1.eventCount, and forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1."
+    "slice": "Add a workload-independent StepListV1 / StepV1 ArtifactV1 subtype contract artifact that defines the canonical OS-kernel Step primitive for any workload: each step must declare stepId / stepKind / status / capabilityRef / sourceAgent / startedAt / completedAt / inputContract / outputContract / runEventLogRefs[] / observationRefs[] / evidenceRefs[] using only workload-independent kinds (capability_invocation_step / artifact_write_step / verifier_step / run_state_transition_step), every step's runEventLogRefs must resolve into RunEventLogV1.events by eventId, every step's observationRefs must resolve into ObservationListV1.observationItems, every step's evidenceRefs must resolve into EvidenceListV1.evidenceItems, the StepListV1 envelope must bind RunV1 / TestExecutionTaskSpecV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 by content hash plus the five Agent Coordination Layer manifests, declare verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true, force the six workload-independent permission flags to false, require StepListV1.stepCount and step ordering to match RunEventLogV1 capability invocation pairs, and forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1."
   },
   "outOfScope": [
     {
@@ -263,7 +263,7 @@
   "scope": "read_only_regression_evidence_demo_mvp_completion",
   "sourceArtifacts": [
     {
-      "contentHash": "052128ff1f25ad16952136ccb9461adbce038c2d7811eda3f0195952a72660d9",
+      "contentHash": "73b13e235ab56ffdcf2d3352bef118bd577acf2d2c63d9ddfe2458171d2ce9d5",
       "path": "scripts/validate_repo.py",
       "role": "validation_script"
     },
@@ -486,6 +486,11 @@
       "contentHash": "baa32e7f16c233f50a84e79c143b4c124df996d3e228606c4e40abc4192af076",
       "path": "artifacts/observations/post_mvp_test_execution_observation_list.json",
       "role": "post_mvp_test_execution_observation_list"
+    },
+    {
+      "contentHash": "b835da5eed98e282f078995850e702a7f17d7d0b63a43af8b86debfd2cb0977e",
+      "path": "artifacts/runs/post_mvp_test_execution_run.json",
+      "role": "post_mvp_test_execution_run"
     },
     {
       "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
