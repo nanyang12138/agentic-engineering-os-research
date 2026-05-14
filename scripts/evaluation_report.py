@@ -78,6 +78,10 @@ from evidence_artifact import (
     EVIDENCE_LIST_ARTIFACT_PATH as POST_MVP_EVIDENCE_LIST_ARTIFACT_PATH,
     validate_evidence_list_artifact,
 )
+from observation_artifact import (
+    OBSERVATION_LIST_ARTIFACT_PATH as POST_MVP_OBSERVATION_LIST_ARTIFACT_PATH,
+    validate_observation_list_artifact,
+)
 
 
 EVALUATION_REPORT_SCHEMA_VERSION = "mvp-evaluation-report-v1"
@@ -210,6 +214,7 @@ def _source_specs() -> list[tuple[str, str]]:
         ("post_mvp_test_execution_delivery_manifest", DELIVERY_MANIFEST_ARTIFACT_PATH),
         ("post_mvp_test_execution_policy_manifest", POST_MVP_POLICY_MANIFEST_ARTIFACT_PATH),
         ("post_mvp_test_execution_evidence_list", POST_MVP_EVIDENCE_LIST_ARTIFACT_PATH),
+        ("post_mvp_test_execution_observation_list", POST_MVP_OBSERVATION_LIST_ARTIFACT_PATH),
     ]
     for fixture_id in FIXTURE_IDS:
         specs.append((f"phase1a_{fixture_id}_run", f"artifacts/runs/{fixture_id}/run.json"))
@@ -362,6 +367,8 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
     validate_policy_manifest(policy_manifest, root)
     evidence_list_artifact = _load_json(root / POST_MVP_EVIDENCE_LIST_ARTIFACT_PATH)
     validate_evidence_list_artifact(evidence_list_artifact, root)
+    observation_list_artifact = _load_json(root / POST_MVP_OBSERVATION_LIST_ARTIFACT_PATH)
+    validate_observation_list_artifact(observation_list_artifact, root)
     delivery_readiness = delivery_report["readiness"]
     delivery_blocker_ids = [blocker["id"] for blocker in delivery_report["blockers"]]
     phase_coverage = _phase_coverage()
@@ -444,7 +451,7 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
         ],
         "nextRecommendedSlice": {
             "phase": "post_mvp",
-            "slice": "Add a workload-independent ObservationV1 ArtifactV1 subtype contract artifact that defines the canonical OS-kernel observation primitive for any workload: enumerate workload-independent observation kinds (capability_invocation_record, tool_call_record, artifact_write_record, verifier_rule_evaluation_record, run_state_transition_record, redaction_overlay_record), define an ObservationItemV1 envelope with stable observationId / observationKind / capturedAt / capabilityRef / runEventLogRef / evidenceRefs fields, and bind it by content hash to TestExecutionTaskSpecV1, CapabilityManifestV1, RunEventLogV1, EvidenceListV1, VerifierResultV1, DeliveryManifestV1, PolicyManifestV1 and the five Agent Coordination Layer manifests. Declare verifier-runtime-v1 as the verdict owner, force the six workload-independent permission flags to false, require every ObservationItemV1.runEventLogRef to resolve into RunEventLogV1.events and every ObservationItemV1.evidenceRefs to resolve into EvidenceListV1.evidenceItems, and forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1.",
+            "slice": "Add a workload-independent RunV1 ArtifactV1 subtype contract artifact that defines the canonical OS-kernel run primitive for any workload: declare workload-independent fields (runId / runState / startedAt / terminalAt / runControlStateMachineRef / taskSpecRef / capabilityManifestRef / runEventLogRef / observationListRef / evidenceListRef / verifierResultRef / deliveryManifestRef / policyManifestRef / approvalDecisionRef), bind by content hash to TestExecutionTaskSpecV1, CapabilityManifestV1, RunEventLogV1, ObservationListV1, EvidenceListV1, VerifierResultV1, DeliveryManifestV1, PolicyManifestV1, HumanApprovalDecisionV1 and the five Agent Coordination Layer manifests, declare verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true, force the six workload-independent permission flags to false, require RunV1.runState to equal RunEventLogV1.terminalState and RunV1 state transitions to live inside the run-state-machine-v1 allowed transitions, require RunV1.observationCount to equal ObservationListV1.observationItemCount and RunEventLogV1.eventCount, and forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1.",
             "mustRemainMachineVerifiable": True,
         },
         "invariants": [
