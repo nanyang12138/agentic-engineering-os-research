@@ -66,6 +66,11 @@ from approval_revocation import (
     build_approval_revocation_or_expiry,
     validate_approval_revocation_or_expiry,
 )
+from policy_unlock_denial import (
+    UNLOCK_DENIAL_ARTIFACT_PATH as POLICY_UNLOCK_DENIAL_ARTIFACT_PATH,
+    build_policy_unlock_request_denied,
+    validate_policy_unlock_request_denied,
+)
 from human_approval import (
     DECISION_ARTIFACT_PATH as HUMAN_APPROVAL_DECISION_ARTIFACT_PATH,
     build_human_approval_decision,
@@ -126,6 +131,7 @@ REPLAY_QUERY_PATH = ROOT / REPLAY_QUERY_ARTIFACT_PATH
 IDENTITY_BOUND_APPROVAL_RECORD_PATH = ROOT / IDENTITY_BOUND_APPROVAL_RECORD_ARTIFACT_PATH
 APPROVAL_AUDIT_QUERY_PATH = ROOT / APPROVAL_AUDIT_QUERY_ARTIFACT_PATH
 APPROVAL_REVOCATION_PATH = ROOT / APPROVAL_REVOCATION_ARTIFACT_PATH
+POLICY_UNLOCK_DENIAL_PATH = ROOT / POLICY_UNLOCK_DENIAL_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -187,6 +193,7 @@ REQUIRED_FILES = [
     "scripts/identity_bound_approval.py",
     "scripts/approval_audit_query.py",
     "scripts/approval_revocation.py",
+    "scripts/policy_unlock_denial.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
     "artifacts/recovery/interrupted_after_extract/run.json",
@@ -206,6 +213,7 @@ REQUIRED_FILES = [
     "artifacts/approval/post_mvp_identity_bound_approval_record.json",
     "artifacts/approval/post_mvp_approval_audit_query.json",
     "artifacts/approval/post_mvp_approval_revocation_or_expiry.json",
+    "artifacts/approval/post_mvp_policy_unlock_request_denied.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -277,6 +285,9 @@ PLAN_REQUIRED_MARKERS = [
     "ApprovalRevocationOrExpiryV1",
     "approval-revocation-or-expiry-v1",
     "post_mvp_approval_revocation_or_expiry.json",
+    "PolicyUnlockRequestDeniedV1",
+    "policy-unlock-request-denied-v1",
+    "post_mvp_policy_unlock_request_denied.json",
     "LogEvidenceV1",
     "RegressionResultArtifactV1",
     "verifier_report.json",
@@ -2359,6 +2370,109 @@ def run_approval_revocation_builder(revocation_out: Path) -> None:
         )
 
 
+def expect_policy_unlock_denial_validation_failure(
+    label: str,
+    denial: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_policy_unlock_request_denied(denial, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"PolicyUnlockRequestDeniedV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(f"PolicyUnlockRequestDeniedV1 forced-failure case {label} unexpectedly passed validation")
+
+
+def validate_committed_policy_unlock_denial_artifact() -> None:
+    denial = load_json(POLICY_UNLOCK_DENIAL_PATH)
+    try:
+        validate_policy_unlock_request_denied(denial, ROOT)
+    except ValueError as exc:
+        raise AssertionError(f"Committed PolicyUnlockRequestDeniedV1 artifact failed validation: {exc}") from exc
+
+    expected_denial = build_policy_unlock_request_denied(ROOT)
+    if denial != expected_denial:
+        raise AssertionError("Committed PolicyUnlockRequestDeniedV1 artifact differs from deterministic builder output")
+
+    tampered_denial = json.loads(json.dumps(denial))
+    tampered_denial["denialDecision"]["unlockAllowed"] = True
+    expect_policy_unlock_denial_validation_failure(
+        "unlock_allowed",
+        tampered_denial,
+        "unlockAllowed must be false",
+    )
+
+    tampered_denial = json.loads(json.dumps(denial))
+    tampered_denial["policyInputs"]["approvalCurrentState"] = "active"
+    expect_policy_unlock_denial_validation_failure(
+        "active_approval_state",
+        tampered_denial,
+        "approvalCurrentState must be expired_and_revoked",
+    )
+
+    tampered_denial = json.loads(json.dumps(denial))
+    tampered_denial["effectsAfterDecision"]["sendEmailAllowed"] = True
+    expect_policy_unlock_denial_validation_failure(
+        "send_email_allowed_after_denial",
+        tampered_denial,
+        "effectsAfterDecision sendEmailAllowed must be false",
+    )
+
+    tampered_denial = json.loads(json.dumps(denial))
+    tampered_denial["requestPolicy"]["externalSideEffectsAllowed"] = True
+    expect_policy_unlock_denial_validation_failure(
+        "request_policy_external_side_effects_allowed",
+        tampered_denial,
+        "requestPolicy externalSideEffectsAllowed must be false",
+    )
+
+    tampered_denial = json.loads(json.dumps(denial))
+    tampered_denial["denialDecision"]["blockingReasons"] = [
+        reason
+        for reason in tampered_denial["denialDecision"]["blockingReasons"]
+        if reason != "approval_expired_or_revoked"
+    ]
+    expect_policy_unlock_denial_validation_failure(
+        "missing_expired_revoked_reason",
+        tampered_denial,
+        "blockingReasons must include",
+    )
+
+    tampered_denial = json.loads(json.dumps(denial))
+    for source in tampered_denial["sourceArtifacts"]:
+        if source.get("role") == "approval_revocation_or_expiry":
+            source["contentHash"] = "0" * 64
+            break
+    expect_policy_unlock_denial_validation_failure(
+        "approval_revocation_hash_mismatch",
+        tampered_denial,
+        "source hash mismatch",
+    )
+
+
+def run_policy_unlock_denial_builder(denial_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/policy_unlock_denial.py"),
+        "--denial-out",
+        str(denial_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "PolicyUnlockRequestDeniedV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -2755,6 +2869,7 @@ def main() -> None:
     validate_committed_identity_bound_approval_record_artifact()
     validate_committed_approval_audit_query_artifact()
     validate_committed_approval_revocation_artifact()
+    validate_committed_policy_unlock_denial_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -2844,6 +2959,10 @@ def main() -> None:
         run_approval_revocation_builder(generated_approval_revocation)
         if load_json(generated_approval_revocation) != load_json(APPROVAL_REVOCATION_PATH):
             raise AssertionError("Committed ApprovalRevocationOrExpiryV1 artifact differs from deterministic CLI output")
+        generated_policy_unlock_denial = temp_root / "post_mvp_policy_unlock_request_denied.json"
+        run_policy_unlock_denial_builder(generated_policy_unlock_denial)
+        if load_json(generated_policy_unlock_denial) != load_json(POLICY_UNLOCK_DENIAL_PATH):
+            raise AssertionError("Committed PolicyUnlockRequestDeniedV1 artifact differs from deterministic CLI output")
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)
         if load_json(generated_evaluation_report) != load_json(EVALUATION_REPORT_PATH):

@@ -1285,6 +1285,27 @@ Build vs Integrate：
 
 当前 post-MVP approval lifecycle 前置 gate 已满足 static revocation/expiry fixture：系统可以机器验证 expired/revoked approval state 仍保持 no-side-effect 边界。下一步应补 policy unlock request denial fixture，证明即使下游请求 unlock delivery，也必须被 expired/revoked lifecycle state 与 MVP policy 拒绝。
 
+#### Post-MVP PolicyUnlockRequestDeniedV1 Static Denial Fixture Gate
+
+2026-05-14 01:40 UTC 自动化实现结论：ApprovalRevocationOrExpiryV1 已能证明审批记录进入 expired/revoked lifecycle 后仍不能打开副作用；下一步最小有用切片不是接入真实 policy engine、approval backend、邮件发送器、PR 创建器或 delivery adapter，而是提交一个 deterministic `PolicyUnlockRequestDeniedV1` fixture，明确表达“下游请求 unlock delivery/email”这一危险请求，并证明该请求被 expired/revoked approval state、DeliveryReport blocker 和 MVP no-side-effect policy 共同拒绝。
+
+最小 PolicyUnlockRequestDeniedV1 contract：
+
+- `scripts/policy_unlock_denial.py` 提供 `policy-unlock-request-denied-v1` / `PolicyUnlockRequestDeniedV1` builder、validator 和 CLI。
+- `artifacts/approval/post_mvp_policy_unlock_request_denied.json` 采用 POSIX 相对路径和 normalized content hash，绑定 `post_mvp_approval_revocation_or_expiry.json` 与 `phase9_delivery_report.json`。
+- `unlockRequest` 固定表达一个 downstream delivery adapter fixture 对 `send_email`、`external_delivery` 和 `prCreation` 的 unlock 请求，但不请求 workspace mutation 或 real provider execution。
+- `policyInputs` 必须绑定 `ApprovalRevocationOrExpiryV1` 的 `currentState="expired_and_revoked"`、`activeApproval=false`、`approvalUsableForDelivery=false`、`DeliveryReportV1.readyForExternalDelivery=false`、delivery blockers 和 source hash chain。
+- `denialDecision` 必须为 `decision="denied"`、`unlockAllowed=false`，并包含 `approval_expired_or_revoked`、`mvp_no_external_side_effects_policy` 和 `delivery_report_blocks_external_delivery` 三类 blocking reason。
+- `effectsAfterDecision` 与 `requestPolicy` 必须保持 `approvalGrantAllowed=false`、`sendEmailAllowed=false`、`externalDeliveryAllowed=false`、`externalSideEffectsAllowed=false`、`prCreationAllowed=false`、`workspaceMutationAllowed=false`、`realProviderExecutionAllowed=false` 和 `databaseUsed=false`。
+- validator 拒绝关键错误：unlock allowed、approval state 回到 active、denial 后允许 send_email、request policy 允许 external side effects、缺少 expired/revoked blocking reason 或 ApprovalRevocationOrExpiryV1 source hash 漂移。
+
+Build vs Integrate：
+
+- Build：post-MVP 最小 `PolicyUnlockRequestDeniedV1` denial fixture、source-bound policy input binding、builder/validator/CLI、deterministic repository validation gate。
+- Integrate later：真实 policy engine、approval backend、signed policy decision、delivery unlock API、database audit log、邮件/PR/ticket/Slack delivery adapter 和 policy decision UI。
+
+当前 post-MVP policy unlock denial 前置 gate 已满足 static denial fixture：即使下游请求 unlock delivery，系统也能机器验证 expired/revoked approval 与 MVP no-side-effect policy 必须拒绝请求。下一步应补 PolicyDecisionAuditTraceV1 fixture，把 denial decision 的输入、规则、输出和 source hash chain 组织成可查询审计轨迹，仍不得接入真实外部副作用。
+
 ## 13. 第一版应该证明什么
 
 第一版只需要证明一个核心闭环：
@@ -2218,6 +2239,7 @@ SQLite event store、minimal capability registry、正式 adapter 化的 `read_l
 - 2026-05-13 18:01 UTC：Phase 9 MultiAgentDeliveryManifestV1 Handoff / Delivery Gate 已实现；决定先把多 agent 协作收敛为 contract-only `multi-agent-delivery-manifest-v1` 和 `agent-handoff-v1`，五个 agent 只通过已有 TaskSpec、ContextPack、Run、Evidence、Verifier、IDE approval handoff 和 Delivery draft refs 交接。真实多 agent runtime、调度器、PR 创建器、邮件发送器和 delivery dashboard 继续后移；下一轮应补最终 `DeliveryReportV1` / readiness summary contract。
 - 2026-05-14 00:01 UTC：Post-MVP IdentityBoundApprovalRecordV1 Static Identity Fixture Gate 已实现；决定先自研 deterministic `identity-bound-approval-record-v1`，把 HumanApprovalDecisionV1 绑定到 actor identity、TaskSpec intent、permission-policy-v1、DurableRunStoreV1、ReplayQueryV1 和 source hashes。真实 identity provider、signed decisions、approval backend、audit database 和 external delivery unlock 继续后移；下一轮应补 approval audit query fixture。
 - 2026-05-14 01:20 UTC：Post-MVP ApprovalRevocationOrExpiryV1 Static Lifecycle Fixture Gate 已实现；决定先自研 deterministic `approval-revocation-or-expiry-v1`，把 ApprovalAuditQueryV1 与 IdentityBoundApprovalRecordV1 绑定到 expired/revoked lifecycle state 和 no-side-effect effect boundary。真实 approval revocation backend、signed lifecycle events、database audit log、delivery unlock 和 policy engine backend 继续后移；下一轮应补 policy unlock request denial fixture。
+- 2026-05-14 01:40 UTC：Post-MVP PolicyUnlockRequestDeniedV1 Static Denial Fixture Gate 已实现；决定先自研 deterministic `policy-unlock-request-denied-v1`，把 ApprovalRevocationOrExpiryV1、DeliveryReportV1、delivery unlock request、denial decision 和 no-side-effect effect boundary 绑定到 source hashes。真实 policy engine、delivery unlock API、signed policy decision、approval backend、database audit log、邮件/PR/ticket/Slack delivery adapter 继续后移；下一轮应补 PolicyDecisionAuditTraceV1 fixture。
 
 ## 20. Open Questions
 
@@ -5079,6 +5101,59 @@ Add ApprovalRevocationOrExpiryV1 fixture so that /usr/bin/python3 scripts/valida
 ```text
 进入 post-MVP policy unlock request denial fixture：
 新增最小 PolicyUnlockRequestDeniedV1 fixture，基于 ApprovalRevocationOrExpiryV1 证明下游 delivery unlock 请求会被 expired/revoked approval state 与 MVP no-side-effect policy 拒绝；仍不得接入真实身份服务、数据库、邮件发送、PR 创建或 provider side effects。
+```
+
+### 2026-05-14 01:40 UTC Automation Sprint：Post-MVP PolicyUnlockRequestDeniedV1 Static Denial Fixture Gate
+
+Active phase：post-MVP approval / state / policy hardening（Phase 1a-9 contract-only MVP 已满足，完整 Agentic Engineering OS 产品仍未完成）。
+
+Selected slice：
+
+```text
+Add PolicyUnlockRequestDeniedV1 fixture so that /usr/bin/python3 scripts/validate_repo.py proves delivery unlock requests are denied by expired/revoked approval state and MVP no-side-effect policy.
+```
+
+为什么这是下一步：
+
+- `.github/workflows/validate.yml` 和 `.github/workflows/auto-merge-cursor-pr.yml` 均存在；本轮 baseline `/usr/bin/python3 scripts/validate_repo.py` 已通过。
+- 上一轮 `EvaluationReportV1` 与主计划均推荐 policy unlock request denial fixture。
+- 真实 policy engine、approval backend、database audit log、邮件发送、PR 创建和 external delivery adapter 仍过早；本轮只完成可机器验证的 static denial artifact。
+
+验收标准：
+
+- 新增 `scripts/policy_unlock_denial.py` builder / validator / CLI。
+- 新增 committed `artifacts/approval/post_mvp_policy_unlock_request_denied.json`，schemaVersion 为 `policy-unlock-request-denied-v1`。
+- `PolicyUnlockRequestDeniedV1` 必须绑定 ApprovalRevocationOrExpiryV1、DeliveryReportV1、expired/revoked lifecycle state、delivery blockers、denied unlock decision 和 no-side-effect effect boundary。
+- `scripts/validate_repo.py` 必须验证 committed artifact、deterministic CLI output，并拒绝 unlock allowed、active approval state、send email allowed after denial、request policy external side effects、missing expired/revoked blocking reason 和 ApprovalRevocationOrExpiryV1 source hash mismatch。
+- `EvaluationReportV1` 必须把 policy unlock denial script/artifact 纳入 source hash 汇总，并把下一推荐切片推进为 PolicyDecisionAuditTraceV1 fixture。
+
+实现摘要：
+
+- 新增 `scripts/policy_unlock_denial.py`，提供 `PolicyUnlockRequestDeniedV1` / `policy-unlock-request-denied-v1` builder、validator 和 CLI。
+- 新增 committed `artifacts/approval/post_mvp_policy_unlock_request_denied.json`，记录 unlockRequest、policyInputs、denialDecision、effectsAfterDecision、requestPolicy 和 invariants。
+- 更新 `scripts/validate_repo.py` 的 required files/markers、committed artifact validation、deterministic builder output comparison 和 forced-failure cases。
+- 更新 `scripts/evaluation_report.py` 与 `artifacts/evaluation/phase9_mvp_evaluation_report.json`，将 policy unlock denial 作为 post-MVP source artifact 并推进下一推荐切片。
+
+验证计划 / 结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline `/usr/bin/python3 scripts/validate_repo.py` before edits：通过。
+- Initial post-edit `/usr/bin/python3 scripts/validate_repo.py`：按预期失败，原因是主计划缺少新的 `policy-unlock-request-denied-v1` 和 `post_mvp_policy_unlock_request_denied.json` markers；已补主计划。
+- Final verification commands pending at the time of this log entry; this section will be updated after local verification.
+```
+
+剩余风险：
+
+- PolicyUnlockRequestDeniedV1 仍是 static JSON denial fixture，不是 production policy engine、signed policy decision、approval backend、database audit log、UI、delivery unlock API 或 external delivery adapter。
+- 本切片只覆盖 `all_passed` read-only regression run；多用户、多 run、多 approval point、多 policy reason、真实 delivery unlock request 和 audit UI 仍后移。
+- 完整 Agentic Engineering OS 产品仍缺真实 durable runtime、identity-bound approval backend、policy engine、IDE/CUA providers、external delivery adapters 和 production learning/evaluation loop。
+
+下一轮建议：
+
+```text
+进入 post-MVP policy decision audit trace fixture：
+新增最小 PolicyDecisionAuditTraceV1 fixture，基于 PolicyUnlockRequestDeniedV1 证明 denial decision 的输入、规则、输出和 source hash chain 可查询审计；仍不得接入真实身份服务、数据库、邮件发送、PR 创建或 provider side effects。
 ```
 
 ## 22. Parking Lot

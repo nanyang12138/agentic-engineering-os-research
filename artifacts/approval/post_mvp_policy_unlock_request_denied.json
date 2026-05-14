@@ -1,0 +1,137 @@
+{
+  "denialDecision": {
+    "blockingReasons": [
+      "approval_expired_or_revoked",
+      "mvp_no_external_side_effects_policy",
+      "delivery_report_blocks_external_delivery"
+    ],
+    "decision": "denied",
+    "policyOwner": "permission-policy-v1",
+    "reasonCode": "expired_revoked_approval_and_mvp_no_side_effect_policy",
+    "unlockAllowed": false,
+    "verifierVerdictOwner": "verifier-runtime-v1"
+  },
+  "effectsAfterDecision": {
+    "approvalGrantAllowed": false,
+    "databaseUsed": false,
+    "externalDeliveryAllowed": false,
+    "externalSideEffectsAllowed": false,
+    "prCreationAllowed": false,
+    "realProviderExecutionAllowed": false,
+    "sendEmailAllowed": false,
+    "workspaceMutationAllowed": false
+  },
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "post-mvp-policy-unlock-request-denied-all_passed",
+  "invariants": [
+    "PolicyUnlockRequestDeniedV1 records a denied downstream unlock request; it does not grant delivery permission.",
+    "Expired or revoked approval state and MVP no-side-effect policy must block send_email, external delivery, PR creation, workspace mutation, and provider execution.",
+    "Policy unlock denial remains a static JSON fixture, not a production policy engine, approval backend, or delivery adapter."
+  ],
+  "mode": "static_json_policy_request_fixture_only",
+  "phase": "post_mvp",
+  "policyInputs": {
+    "activeApproval": false,
+    "approvalCurrentState": "expired_and_revoked",
+    "approvalRevocationId": "post-mvp-approval-revocation-or-expiry-all_passed",
+    "approvalRevocationRef": "artifacts/approval/post_mvp_approval_revocation_or_expiry.json",
+    "approvalUsableForDelivery": false,
+    "deliveryBlockerIds": [
+      "human_approval_missing",
+      "external_delivery_disabled_by_mvp_policy"
+    ],
+    "deliveryReportRef": "artifacts/delivery/phase9_delivery_report.json",
+    "effectBoundary": {
+      "approvalGrantAllowed": false,
+      "databaseUsed": false,
+      "externalDeliveryAllowed": false,
+      "externalSideEffectsAllowed": false,
+      "prCreationAllowed": false,
+      "realProviderExecutionAllowed": false,
+      "sendEmailAllowed": false,
+      "workspaceMutationAllowed": false
+    },
+    "expired": true,
+    "readyForExternalDelivery": false,
+    "revoked": true,
+    "sourceHashChain": [
+      {
+        "contentHash": "b51f80b454220889502783bcecd4149198db96fe132b40d01f3b12b867818cd8",
+        "path": "artifacts/approval/post_mvp_approval_audit_query.json",
+        "role": "approval_audit_query"
+      },
+      {
+        "contentHash": "706b9659c784b139ca6a219d19dc9db3e203e977b312c742b789c3ac91e9bc92",
+        "path": "artifacts/approval/post_mvp_identity_bound_approval_record.json",
+        "role": "identity_bound_approval_record"
+      },
+      {
+        "contentHash": "9dc9ceb06e47e90975f3100466397d4d3eab3839a72ddaf5dd2078391db889ba",
+        "path": "artifacts/delivery/phase9_multi_agent_delivery_manifest.json",
+        "role": "multi_agent_delivery_manifest"
+      },
+      {
+        "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
+        "path": "artifacts/runs/all_passed/run.json",
+        "role": "run"
+      },
+      {
+        "contentHash": "f6ec06f8bcc35f325451778d8b3d4985b5e75242b2d7ac9cad20bde244676f66",
+        "path": "artifacts/runs/all_passed/verifier_report.json",
+        "role": "verifier_report"
+      },
+      {
+        "contentHash": "dc3f7d5b17d569e2acd9247fae6f0d6cb08638132e8fcfd1dd0b77b75b464bcd",
+        "path": "artifacts/runs/all_passed/email_draft.md",
+        "role": "email_draft"
+      },
+      {
+        "contentHash": "94c54703ba84302b8e1146150d0f2d768b4d19ae1b16605ea8a4b52839d9ef39",
+        "path": "artifacts/ide_adapter/phase8_ide_approval_handoff_manifest.json",
+        "role": "ide_approval_handoff"
+      }
+    ]
+  },
+  "requestPolicy": {
+    "approvalLifecycleRequiredState": "expired_and_revoked",
+    "auditOnly": true,
+    "databaseUsed": false,
+    "denyWhenApprovalExpiredOrRevoked": true,
+    "denyWhenMvpNoSideEffects": true,
+    "externalSideEffectsAllowed": false,
+    "policySchemaVersion": "policy-unlock-request-denied-v1",
+    "realProviderExecutionAllowed": false,
+    "sourceHashValidationRequired": true
+  },
+  "schemaVersion": "policy-unlock-request-denied-v1",
+  "scope": "policy_unlock_request_denial_fixture",
+  "sourceArtifacts": [
+    {
+      "contentHash": "5132776f3f70fbc6f24ba7feb69b1478bc6d18624848f0ada6d0de44467f3dc5",
+      "path": "artifacts/approval/post_mvp_approval_revocation_or_expiry.json",
+      "role": "approval_revocation_or_expiry"
+    },
+    {
+      "contentHash": "2a340e1323b927385a2844f59110439d3ff12078c37f63a874287b006bdf8e5e",
+      "path": "artifacts/delivery/phase9_delivery_report.json",
+      "role": "delivery_report"
+    }
+  ],
+  "unlockRequest": {
+    "approvalPoint": "send_email_requires_human_approval",
+    "decisionId": "human-decision-all_passed-send-email-rejected",
+    "fixtureId": "all_passed",
+    "requestId": "unlock-request-all_passed-send-email-delivery",
+    "requestType": "delivery_unlock_request",
+    "requestedBy": "static_downstream_delivery_adapter_fixture",
+    "requestedEffects": {
+      "externalDelivery": true,
+      "prCreation": true,
+      "realProviderExecution": false,
+      "sendEmail": true,
+      "workspaceMutation": false
+    },
+    "runId": "run-all_passed-988940c2",
+    "sourceRef": "artifacts/delivery/phase9_delivery_report.json"
+  }
+}
