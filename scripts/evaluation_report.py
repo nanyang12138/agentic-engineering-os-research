@@ -90,6 +90,10 @@ from step_list_artifact import (
     STEP_LIST_ARTIFACT_PATH as POST_MVP_STEP_LIST_ARTIFACT_PATH,
     validate_step_list_artifact,
 )
+from tool_call_list_artifact import (
+    TOOL_CALL_LIST_ARTIFACT_PATH as POST_MVP_TOOL_CALL_LIST_ARTIFACT_PATH,
+    validate_tool_call_list_artifact,
+)
 
 
 EVALUATION_REPORT_SCHEMA_VERSION = "mvp-evaluation-report-v1"
@@ -225,6 +229,7 @@ def _source_specs() -> list[tuple[str, str]]:
         ("post_mvp_test_execution_observation_list", POST_MVP_OBSERVATION_LIST_ARTIFACT_PATH),
         ("post_mvp_test_execution_run", POST_MVP_RUN_ARTIFACT_PATH),
         ("post_mvp_test_execution_step_list", POST_MVP_STEP_LIST_ARTIFACT_PATH),
+        ("post_mvp_test_execution_tool_call_list", POST_MVP_TOOL_CALL_LIST_ARTIFACT_PATH),
     ]
     for fixture_id in FIXTURE_IDS:
         specs.append((f"phase1a_{fixture_id}_run", f"artifacts/runs/{fixture_id}/run.json"))
@@ -383,6 +388,8 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
     validate_run_artifact(run_artifact, root)
     step_list_artifact = _load_json(root / POST_MVP_STEP_LIST_ARTIFACT_PATH)
     validate_step_list_artifact(step_list_artifact, root)
+    tool_call_list_artifact = _load_json(root / POST_MVP_TOOL_CALL_LIST_ARTIFACT_PATH)
+    validate_tool_call_list_artifact(tool_call_list_artifact, root)
     delivery_readiness = delivery_report["readiness"]
     delivery_blocker_ids = [blocker["id"] for blocker in delivery_report["blockers"]]
     phase_coverage = _phase_coverage()
@@ -465,7 +472,7 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
         ],
         "nextRecommendedSlice": {
             "phase": "post_mvp",
-            "slice": "Add a workload-independent ToolCallV1 / ToolCallListV1 ArtifactV1 subtype contract artifact at artifacts/tool_calls/post_mvp_test_execution_tool_call_list.json that defines the canonical OS-kernel ToolCall primitive for any workload: each tool call must declare toolCallId / capabilityRef / sourceAgent / status / startedAt / completedAt / inputSchemaRef / outputSchemaRef / inputPayloadHash / outputPayloadHash / runEventLogRefs[] / observationRefs[] / stepRef / sideEffectClass using only workload-independent vocabulary; every tool call's runEventLogRefs must resolve into RunEventLogV1.events by eventId pair (capability.invoked + capability.completed / artifact.written / verifier.completed); every tool call's observationRefs must resolve into ObservationListV1.observationItems; every tool call's stepRef must resolve into StepListV1.stepItems by stepId; ToolCallListV1 envelope must bind StepListV1 / RunV1 / TestExecutionTaskSpecV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 by content hash plus the five Agent Coordination Layer manifests; toolCallCount must equal the number of capability_invocation_step / artifact_write_step / verifier_step entries in StepListV1; declare verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true; force the six workload-independent permission flags to false; require every ToolCallV1.sideEffectClass to be one of [read_only, evidence_writer, artifact_writer, verifier_check] with sideEffectClass!=external; forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 / reusesRegressionRunStepArray=false.",
+            "slice": "Add a workload-independent IntentV1 / TaskSpecEnvelopeV1 ArtifactV1 subtype contract artifact at artifacts/intents/post_mvp_test_execution_intent.json that defines the canonical OS-kernel Intent primitive for any workload: each intent must declare intentId / intentNarrative / intentOriginAgent / intentOriginChannel / requestedWorkloadType / requestedCapabilityClasses / requestedArtifactKinds / requestedVerifierClass / requestedDeliveryClass / requestedPolicyClass / intentLifecycleState / acceptedTaskSpecRef using only workload-independent vocabulary; intent envelope must bind TestExecutionTaskSpecV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 by content hash plus the five Agent Coordination Layer manifests; intentLifecycleState must lie in [drafted, refined, accepted_into_task_spec, rejected, withdrawn] and IntentV1.acceptedTaskSpecRef must resolve to TestExecutionTaskSpecV1.id with workloadType=test_execution_failure_triage; requestedCapabilityClasses must be a subset of [read_only_inspection, evidence_collection, artifact_writing, verifier_check, human_approval_request] and reject [external_communication, repository_mutation, release_or_deploy, gui_or_browser_or_desktop_call, public_access]; declare verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true; force the six workload-independent permission flags to false; forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 / reusesRegressionIntentArtifact=false.",
             "mustRemainMachineVerifiable": True,
         },
         "invariants": [

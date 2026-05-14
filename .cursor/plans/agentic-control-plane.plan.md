@@ -6971,6 +6971,97 @@ Build vs Integrate：
 为 OS kernel 抽象一个 workload-independent 的 ToolCallV1 / ToolCallListV1 ArtifactV1 子类型，定义 toolCallId / capabilityRef / sourceAgent / status / startedAt / completedAt / inputSchemaRef / outputSchemaRef / inputPayloadHash / outputPayloadHash / runEventLogRefs[] / observationRefs[] / stepRef / sideEffectClass 等 workload-independent 字段；绑定 StepListV1 / RunV1 / TestExecutionTaskSpecV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 与 Agent Coordination Layer 五件套；每个 ToolCallV1.stepRef 必须解析到 StepListV1.stepItems 中的 capability_invocation_step / artifact_write_step / verifier_step；sideEffectClass 必须落在 read_only / evidence_writer / artifact_writer / verifier_check 集合内；字段不得依赖 regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1。
 ```
 
+### 2026-05-14 12:20 UTC Automation Sprint：ToolCallListV1 / ToolCallV1 Workload-Independent ToolCall Primitive Gate
+
+Active phase：post-MVP Kernel Generalization / Multi-Workload Expansion（Phase 1a-9 contract-only MVP 已满足，Agent Coordination Layer 五件套 contract 完成，第二 workload 的 TaskSpec envelope、TestExecutionResultV1、FailureTriageReportV1、VerifierResultV1、CapabilityManifestV1、RunEventLogV1、DeliveryManifestV1、PolicyManifestV1、EvidenceListV1、ObservationListV1、RunV1、StepListV1 均已 land，正在闭合 OS kernel 的 ToolCall 原语：把「Step 之内、调用某 Capability 的一次具体 invocation」从 first-workload regression `events.jsonl` / `StepListV1.stepItems` 的隐式索引抽象为 workload-independent ArtifactV1 子类型，并把 (Run → Step → ToolCall → RunEvent → Observation) 六层因果链显式化）。
+
+Selected slice：
+
+```text
+Add ToolCallListV1 / ToolCallV1 ArtifactV1 subtype contract artifact at artifacts/tool_calls/post_mvp_test_execution_tool_call_list.json so /usr/bin/python3 scripts/validate_repo.py verifies a workload-independent ToolCall primitive for Test Execution / Failure Triage, declaring tool-call-list-artifact-v1 / tool-call-v1 schemas distinct from the first-workload regression run.json steps array and events.jsonl, partitioning the sideEffectClassDomain into the workload-independent set (read_only / evidence_writer / artifact_writer / verifier_check) and forbiddenSideEffectClasses (external / email_send_call / release_or_deploy / repository_mutation / gui_or_browser_or_desktop_call / public_access), enforcing the six permission flags to false, binding StepListV1 / RunV1 / TestExecutionTaskSpecV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 by content hash plus the five Agent Coordination Layer contracts, requiring toolCallCount=5 (one per StepListV1 tool-bearing step: 3 capability_invocation_step + 1 artifact_write_step + 1 verifier_step), every ToolCallV1.stepRef to resolve into StepListV1.stepItems by stepId of a tool-bearing stepKind, every ToolCallV1.runEventLogRefs / observationRefs to equal the step's refs and resolve into RunEventLogV1.events / ObservationListV1.observationItems, every ToolCallV1.inputPayloadHash / outputPayloadHash to equal sha256 of canonicalized inputPayloadShape / outputPayloadShape, declaring verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true, and explicitly forbidding regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 / reusesRegressionRunStepArray=false / reusesRegressionToolCallArtifact=false / reusesSendEmailCapability=false.
+```
+
+为什么这是下一步：
+
+- 上一轮 `EvaluationReportV1.nextRecommendedSlice` 明确要求新增 workload-independent `ToolCallV1 / ToolCallListV1` ArtifactV1 subtype，把 OS kernel 的 ToolCall 原语在第二 workload 上独立抽象出来。
+- Post-MVP slice priority #1（generalize workload-independent kernel primitive：`ToolCallV1 / ToolCallListV1`）与 #2（add second workload：`Test Execution / Failure Triage`）继续叠加：在 `ArtifactV1` envelope 上引入第十三个具体 subtype `tool-call-list-artifact-v1`，与既有十二个 subtype 并列。
+- 这是 OS kernel 的 `ToolCall` 抽象第一次以 workload-independent 形式独立成 ArtifactV1 子类型。既有 first-workload `artifacts/runs/<fixture>/events.jsonl` 中的 `capability.read_log.completed` / `capability.extract_regression_result.completed` / `artifact.write.completed` / `verifier.completed` 是隐式 tool call 流水；既有 StepListV1.stepItems 把 capability_invocation_step / artifact_write_step / verifier_step 显式化，但每个 step 仍内嵌着「调用了哪个工具、用了什么 schema、产生了什么 payload hash」。新 artifact 在显式 `regressionWorkloadIsolation.reusesRegressionToolCallArtifact=false` 的前提下，用新的 `tool-call-list-artifact-v1` envelope、`tool-call-v1` 子 schema，把每一次 tool 调用抽出来成为独立可绑定 / 可审计 / 可校验的 workload-independent 对象，并与 `StepListV1.stepItems` / `RunEventLogV1.events` / `ObservationListV1.observationItems` 三向对齐。
+- `.github/workflows/validate.yml` 与 `.github/workflows/auto-merge-cursor-pr.yml` 均存在；本轮 baseline `/usr/bin/python3 scripts/validate_repo.py` 已通过。
+
+OS kernel primitive advanced：
+
+- 在 `ArtifactV1` envelope 上引入第十三个 subtype `tool-call-list-artifact-v1`；`artifactEnvelopeSchemaVersion=artifact-v1` 显式声明 envelope 复用。未来 `CodePatchToolCallListV1`、`PRReviewToolCallListV1`、`DocumentationUpdateToolCallListV1`、`IncidentAnalysisToolCallListV1` 等可以复用同一 envelope。
+- `ToolCallV1` / `tool-call-v1`：第一次把 OS kernel 中的 `ToolCall` 抽象作为独立 schema 落地；toolCallStatusDomain（`completed` / `failed`）、sideEffectClassDomain（`read_only` / `evidence_writer` / `artifact_writer` / `verifier_check`）、forbiddenSideEffectClasses（`external` / `email_send_call` / `release_or_deploy` / `repository_mutation` / `gui_or_browser_or_desktop_call` / `public_access`）、sourceAgentDomain（`creator_agent` / `verifier-runtime-v1`）、toolBearingStepKinds（`capability_invocation_step` / `artifact_write_step` / `verifier_step`）、tool-call → step / capability / runEvent / observation 绑定全部 workload-independent。
+- `Run → Step → ToolCall → RunEvent → Observation` 因果链：6 层 (Run → Step → ToolCall → RunEvent → Observation → Evidence) 现在第一次在 ArtifactV1 envelope 上由 content hash 一站绑定；validator 强制 tool call → step → runEvent / observation 一一对齐。
+- `StepListV1 ↔ ToolCallListV1` 一致性：`stepCoverage.everyToolBearingStepCovered=true` 是 invariant；ToolCallListV1 是 StepListV1 tool-bearing 子集的规范化「materialization」。
+- `Verifier ↔ RunEvent ↔ Policy ↔ ToolCall` 三重门：`promotionConditions` 把 `VerifierResultV1.verdict==passed` / `RunEventLogV1.terminalState==completed` / `PolicyManifestV1.unlockConditions.unlocked==true` 钉为 tool-call promotion 条件；任何一个 gate 失败 → `promoted=false`。
+- `inputPayloadHash` / `outputPayloadHash`：第一次把 OS kernel 的 ToolCall payload 通过 sha256 over canonicalized JSON 钉死成不可变 hash。
+
+Non-regression workload reuse path：
+
+- `Test Execution / Failure Triage`：本 artifact 直接覆盖；5 个 tool call 覆盖完整 StepListV1 的 3 capability_invocation + 1 artifact_write + 1 verifier 全集 + 完整 10 件套 + Run + StepList 件套 binding。
+- `Code Patch / Review Loop`：未来 `CodePatchToolCallListV1` 可复用同一 `tool-call-list-artifact-v1` envelope、`tool-call-v1` 子 schema、sideEffectClassDomain、forbiddenSideEffectClasses、sourceAgentDomain、toolBearingStepKinds；只需要替换上游 9 件套 contract artifact，并把 capability_invocation_step 串成 patch generate / patch lint / patch test 链对应的 ToolCallV1。
+- `PR Review` / `Documentation Update` / `Incident / Log Analysis`：同理。本 artifact 的 `nonRegressionReusePath` 字段已声明 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review` 三条路径。
+
+Coordination protocol / invariant clarified：
+
+- `coordinationBinding` 字段强制 ToolCallListV1 绑定 Agent Coordination Layer 五件套 contract artifact，并通过 `sourceArtifacts[].contentHash` 把上游 10 件套 + Run + StepList contract 当作不可变前提；任何一个上游 contract 漂移都会让本 artifact validate 失败。
+- `verifierVerdictOwner=verifier-runtime-v1` 与 `verifierExpectations.creatorMustNotOwnVerdict=true` 把 CreatorVerifierPairingV1 不变量延伸到 ToolCall 层：creator 写入 tool-call draft，但 verifier 拥有 acceptance；envelope 的 `promotionConditions.promoted=true` 不能由 creator 单方面声明。
+- `permissionFlagDomain` / `permissionFlags` 对 6 个 workload-independent 权限位全部强制为 `false`；`forbiddenSideEffectClasses` 显式禁止 `external` / `email_send_call` / `release_or_deploy` / `repository_mutation` / `gui_or_browser_or_desktop_call` / `public_access` 等 6 类副作用，与既有 BroadcastSubscriptionManifestV1 / NegotiationRecordV1 / DelegationManifestV1 / TestExecutionTaskSpecV1 / TestExecutionResultV1 / FailureTriageReportV1 / VerifierResultV1 / CapabilityManifestV1 / RunEventLogV1 / DeliveryManifestV1 / PolicyManifestV1 / EvidenceListV1 / ObservationListV1 / RunV1 / StepListV1 的 policy invariant 对齐：ToolCall 原语自身不允许触发任何 side effect / external communication / public access。
+
+为什么这不是另一个 regression/email fixture：
+
+- artifact 路径为 `artifacts/tool_calls/post_mvp_test_execution_tool_call_list.json`（独立于 `artifacts/runs/<fixture>/events.jsonl` 与 `artifacts/runs/<fixture>/run.json` 这些 first-workload regression run/event 目录），scope 为 `test_execution_failure_triage_tool_call_list_contract`，不是 regression run、email draft、approval lifecycle、delivery unlock 或 policy unlock。
+- `workloadType` 必须等于 `test_execution_failure_triage`，validator 显式拒绝把它改成 `read_only_regression_evidence_demo` 或任何 regression workload；`kind` 必须为 `ToolCallListV1`，`schemaVersion` 必须为 `tool-call-list-artifact-v1`（区别于任何 first-workload schema），每个 toolCallItem 的 `schemaVersion` 必须为 `tool-call-v1`。
+- `regressionWorkloadIsolation.forbiddenFields` 包含 `regression_result` / `regression_result.json` / `email_draft` / `email_draft.md` / `send_email` / `regression-task-spec-v1` / `regression-result-artifact-v1`；新增 `reusesRegressionRunArtifact=false` / `reusesRegressionResultArtifact=false` / `reusesRegressionEventsArtifact=false` / `reusesRegressionRunStepArray=false` / `reusesRegressionToolCallArtifact=false` / `reusesSendEmailCapability=false` 把本 artifact 与 first-workload regression run / events / result / steps array / tool call artifact 显式隔离。defensive scan 拒绝这些 token 在 forbiddenFields 之外再次出现。
+- `nonRegressionReusePath` 必须包含 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review`，强制本 artifact 至少有两个 non-regression 复用路径。
+
+Acceptance criteria：
+
+- `scripts/tool_call_list_artifact.py` 提供 `build_tool_call_list_artifact` / `validate_tool_call_list_artifact` 与 CLI（`--out` / `--validate`）。
+- 新增 committed `artifacts/tool_calls/post_mvp_test_execution_tool_call_list.json`，schemaVersion 为 `tool-call-list-artifact-v1`，artifactEnvelopeSchemaVersion 为 `artifact-v1`，toolCallItemSchemaVersion 为 `tool-call-v1`，toolCallCount=5。
+- `scripts/validate_repo.py` 验证 committed artifact、deterministic builder output 与约 60 条 forced-failure case（workload_type / kind / schema / envelope / verdict ownership / permission flags / side effect class domain / forbidden side effect classes / source agent domain / tool bearing step kinds / tool call status domain / runIdentifier / toolCallCount / toolCallItems length / tool call item schema / sequence / toolCallId / stepRef / stepKind / capabilityRef / sourceAgent / status / startedAt / completedAt / inputSchemaRef / outputSchemaRef / inputPayloadShape / outputPayloadShape / inputPayloadHash / outputPayloadHash / runEventLogRefs / observationRefs / side effect class / step coverage / 11 binding pair regression-schema reuse / hash drift / approvalGranted drift / promotion gates / coordination binding / regression isolation / non-regression reuse path / 12 source hash mismatches）。
+- `EvaluationReportV1` 把 ToolCallListV1 artifact 纳入 source hash，并把下一推荐切片推进为 workload-independent `IntentV1 / TaskSpecEnvelopeV1` ArtifactV1 subtype。
+
+实现摘要：
+
+- 新增 `scripts/tool_call_list_artifact.py`，包含 schema 常量、5 条 deterministic TOOL_CALL_BLUEPRINT、builder、validator、deterministic CLI（`--out` / `--validate`），以及 ArtifactV1 envelope / 11 向 binding（含 StepList + RunV1）/ 五件套 coordination binding 逻辑；`stepCoverage` 自动从 toolCallItems 与上游 StepListV1 推导；`inputPayloadHash` / `outputPayloadHash` 由 sha256 over canonicalized JSON of inputPayloadShape / outputPayloadShape 派生；`promotionConditions` 由 verdict / run terminal state / policy unlock 三重门派生。
+- 新增 committed `artifacts/tool_calls/post_mvp_test_execution_tool_call_list.json`，共 5 个 tool call：3 个 capability_invocation_step 的 ToolCallV1（`read_test_execution_result` / `collect_test_failure_evidence` / `classify_test_failure`）+ 1 个 artifact_write_step 的 ToolCallV1（`write_artifact`）+ 1 个 verifier_step 的 ToolCallV1（`__run_kernel__`）。
+- 更新 `scripts/validate_repo.py`：REQUIRED_FILES 增加 `scripts/tool_call_list_artifact.py` 与 `artifacts/tool_calls/post_mvp_test_execution_tool_call_list.json`，PLAN markers 增加 `ToolCallListV1` / `tool-call-list-artifact-v1` / `tool-call-v1` / `post_mvp_test_execution_tool_call_list.json`，新增 committed artifact 校验、deterministic CLI replay 与约 60 条 forced-failure case。
+- 更新 `scripts/evaluation_report.py` 与 `artifacts/evaluation/phase9_mvp_evaluation_report.json`：把 ToolCallListV1 加入 source hash，并把 `nextRecommendedSlice` 推进为 workload-independent `IntentV1 / TaskSpecEnvelopeV1` ArtifactV1 subtype。
+
+Build vs Integrate：
+
+- Build：`ToolCallListV1 / ToolCallV1` schema、deterministic builder / validator / CLI、committed artifact、约 60 条 forced-failure case、`EvaluationReportV1` source hash 集成、(Run → Step → ToolCall → RunEvent → Observation) 六层因果链显式化、Verifier ↔ RunEventLog ↔ Policy 三重 promotion 门、11 向 binding、`inputPayloadHash` / `outputPayloadHash` 不变量。
+- Integrate later：真实 ToolCall 调度 runtime / capability registry / 真实 tool-call retry / fallback / 超时 runtime；跨 workload `ToolCallListV1` catalogue；`ArtifactV1` envelope 抽取为独立 schema 文件；`IntentV1` / `TaskSpecEnvelopeV1` / 真实 intent 解析 runtime 等下一批 OS kernel primitive。
+
+验证计划 / 结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline /usr/bin/python3 scripts/validate_repo.py before edits：通过。
+- /usr/bin/python3 -m py_compile scripts/*.py：通过。
+- /usr/bin/python3 scripts/tool_call_list_artifact.py --out artifacts/tool_calls/post_mvp_test_execution_tool_call_list.json：通过。
+- /usr/bin/python3 scripts/tool_call_list_artifact.py --validate artifacts/tool_calls/post_mvp_test_execution_tool_call_list.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --report-out artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/validate_repo.py：通过，覆盖 ToolCallListV1 committed artifact、deterministic builder output 与约 60 条 forced-failure case。
+- git diff --check：通过。
+```
+
+剩余风险：
+
+- `ToolCallListV1` 仍是 static contract artifact，不驱动任何真实 ToolCall 调度 / capability registry / 真实 retry / fallback runtime；下一切片应给出 workload-independent `IntentV1 / TaskSpecEnvelopeV1` ArtifactV1 subtype，把 OS kernel 的 Intent 原语在第二 workload 上独立抽象出来，并把 (Intent → TaskSpec → Run → Step → ToolCall → RunEvent → Observation) 七层因果链显式化。
+- 当前 artifact 复用 first workload 的 5 件套 coordination contract artifact 与 phase9 human approval decision fixture 作为 source fixture；`Code Patch / Review Loop` 与 `PR Review` 的 TaskSpec / Artifact / ToolCallListV1 subtype 仍未实现。
+- `ArtifactV1` envelope 目前仍通过 `artifactEnvelopeSchemaVersion` 字段表达；未来需要把所有 13 个 subtype（`regression-result-artifact-v1` / `test-execution-result-v1` / `failure-triage-report-v1` / `verifier-result-v1` / `capability-manifest-v1` / `run-event-log-v1` / `delivery-manifest-v1` / `policy-manifest-v1` / `evidence-list-artifact-v1` / `observation-list-artifact-v1` / `run-artifact-v1` / `step-list-artifact-v1` / `tool-call-list-artifact-v1`）抽出共同 base schema（真正的 `artifact-v1` envelope）。
+
+下一轮建议：
+
+```text
+新增 workload-independent IntentV1 / TaskSpecEnvelopeV1 ArtifactV1 subtype contract artifact：
+为 OS kernel 抽象一个 workload-independent 的 IntentV1 ArtifactV1 子类型，定义 intentId / intentNarrative / intentOriginAgent / intentOriginChannel / requestedWorkloadType / requestedCapabilityClasses / requestedArtifactKinds / requestedVerifierClass / requestedDeliveryClass / requestedPolicyClass / intentLifecycleState / acceptedTaskSpecRef 等 workload-independent 字段；绑定 TestExecutionTaskSpecV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 与 Agent Coordination Layer 五件套；IntentV1.acceptedTaskSpecRef 必须解析到 TestExecutionTaskSpecV1.id；requestedCapabilityClasses 必须是 [read_only_inspection, evidence_collection, artifact_writing, verifier_check, human_approval_request] 的子集；字段不得依赖 regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1。
+```
+
 ## 22. Parking Lot
 
 以下内容仍然重要，但不进入第一版 MVP：

@@ -175,6 +175,11 @@ from step_list_artifact import (
     build_step_list_artifact,
     validate_step_list_artifact,
 )
+from tool_call_list_artifact import (
+    TOOL_CALL_LIST_ARTIFACT_PATH as POST_MVP_TOOL_CALL_LIST_ARTIFACT_PATH,
+    build_tool_call_list_artifact,
+    validate_tool_call_list_artifact,
+)
 from verifier_runtime import (
     REQUIRED_ARTIFACT_CHECK_IDS,
     REQUIRED_VERIFIER_RULE_IDS,
@@ -226,6 +231,7 @@ EVIDENCE_LIST_ARTIFACT_PATH = ROOT / POST_MVP_EVIDENCE_LIST_ARTIFACT_PATH
 OBSERVATION_LIST_ARTIFACT_PATH = ROOT / POST_MVP_OBSERVATION_LIST_ARTIFACT_PATH
 RUN_ARTIFACT_PATH = ROOT / POST_MVP_RUN_ARTIFACT_PATH
 STEP_LIST_ARTIFACT_PATH = ROOT / POST_MVP_STEP_LIST_ARTIFACT_PATH
+TOOL_CALL_LIST_ARTIFACT_PATH = ROOT / POST_MVP_TOOL_CALL_LIST_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -301,6 +307,7 @@ REQUIRED_FILES = [
     "scripts/observation_artifact.py",
     "scripts/run_artifact.py",
     "scripts/step_list_artifact.py",
+    "scripts/tool_call_list_artifact.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
@@ -338,6 +345,7 @@ REQUIRED_FILES = [
     "artifacts/observations/post_mvp_test_execution_observation_list.json",
     "artifacts/runs/post_mvp_test_execution_run.json",
     "artifacts/steps/post_mvp_test_execution_step_list.json",
+    "artifacts/tool_calls/post_mvp_test_execution_tool_call_list.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -483,6 +491,10 @@ PLAN_REQUIRED_MARKERS = [
     "step-list-artifact-v1",
     "step-v1",
     "post_mvp_test_execution_step_list.json",
+    "ToolCallListV1",
+    "tool-call-list-artifact-v1",
+    "tool-call-v1",
+    "post_mvp_test_execution_tool_call_list.json",
     "Agentic Engineering OS Kernel",
     "workload-independent primitives",
     "first workload: Read-only Regression Evidence Demo",
@@ -8200,6 +8212,629 @@ def run_step_list_artifact_builder(artifact_out: Path) -> None:
         )
 
 
+def expect_tool_call_list_artifact_validation_failure(
+    label: str,
+    manifest: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_tool_call_list_artifact(manifest, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"ToolCallListV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(
+        f"ToolCallListV1 forced-failure case {label} unexpectedly passed validation"
+    )
+
+
+def validate_committed_tool_call_list_artifact() -> None:
+    artifact = load_json(TOOL_CALL_LIST_ARTIFACT_PATH)
+    try:
+        validate_tool_call_list_artifact(artifact, ROOT)
+    except ValueError as exc:
+        raise AssertionError(
+            f"Committed ToolCallListV1 artifact failed validation: {exc}"
+        ) from exc
+
+    expected_artifact = build_tool_call_list_artifact(ROOT)
+    if artifact != expected_artifact:
+        raise AssertionError(
+            "Committed ToolCallListV1 artifact differs from deterministic builder output"
+        )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["workloadType"] = "read_only_regression_evidence_demo"
+    expect_tool_call_list_artifact_validation_failure(
+        "workload_type_regression_reuse",
+        tampered,
+        "workloadType must be test_execution_failure_triage",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["kind"] = "RegressionResultArtifactV1"
+    expect_tool_call_list_artifact_validation_failure(
+        "kind_regression_reuse",
+        tampered,
+        "kind must be ToolCallListV1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["schemaVersion"] = "regression-result-artifact-v1"
+    expect_tool_call_list_artifact_validation_failure(
+        "schema_regression_reuse",
+        tampered,
+        "schemaVersion must be tool-call-list-artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["artifactEnvelopeSchemaVersion"] = "regression-result-artifact-v1"
+    expect_tool_call_list_artifact_validation_failure(
+        "envelope_schema_regression_reuse",
+        tampered,
+        "artifactEnvelopeSchemaVersion must be artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItemSchemaVersion"] = "tool-call-v0"
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_schema_version_drift",
+        tampered,
+        "toolCallItemSchemaVersion must be tool-call-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierVerdictOwner"] = "creator_agent"
+    expect_tool_call_list_artifact_validation_failure(
+        "creator_owns_verdict",
+        tampered,
+        "verifierVerdictOwner must be verifier-runtime-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierExpectations"]["creatorMustNotOwnVerdict"] = False
+    expect_tool_call_list_artifact_validation_failure(
+        "creator_must_not_own_verdict_disabled",
+        tampered,
+        "verifierExpectations.creatorMustNotOwnVerdict must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["permissionFlags"]["externalSideEffectsAllowed"] = True
+    expect_tool_call_list_artifact_validation_failure(
+        "permission_flag_external_side_effects_true",
+        tampered,
+        "permissionFlags.externalSideEffectsAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["permissionFlagDomain"] = ["externalSideEffectsAllowed"]
+    expect_tool_call_list_artifact_validation_failure(
+        "permission_flag_domain_drift",
+        tampered,
+        "permissionFlagDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["sideEffectClassDomain"] = ["read_only"]
+    expect_tool_call_list_artifact_validation_failure(
+        "side_effect_class_domain_drift",
+        tampered,
+        "sideEffectClassDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["forbiddenSideEffectClasses"] = ["external"]
+    expect_tool_call_list_artifact_validation_failure(
+        "forbidden_side_effect_classes_drift",
+        tampered,
+        "forbiddenSideEffectClasses must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["sourceAgentDomain"] = ["creator_agent"]
+    expect_tool_call_list_artifact_validation_failure(
+        "source_agent_domain_drift",
+        tampered,
+        "sourceAgentDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolBearingStepKinds"] = ["capability_invocation_step"]
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_bearing_step_kinds_drift",
+        tampered,
+        "toolBearingStepKinds must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallStatusDomain"] = ["passed"]
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_status_domain_drift",
+        tampered,
+        "toolCallStatusDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runIdentifier"] = "run-regression-all-passed"
+    expect_tool_call_list_artifact_validation_failure(
+        "run_identifier_regression_reuse",
+        tampered,
+        "runIdentifier must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallCount"] = 4
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_count_drift",
+        tampered,
+        "toolCallCount must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"] = tampered["toolCallItems"][:-1]
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_items_length_drift",
+        tampered,
+        "toolCallItems must be a list of length",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][0]["schemaVersion"] = "tool-call-v2"
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_schema_drift",
+        tampered,
+        "schemaVersion must be tool-call-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["sequence"] = 99
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_sequence_drift",
+        tampered,
+        "sequence must equal its position",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["toolCallId"] = "toolcall-regression-all-passed-0001"
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_id_regression_reuse",
+        tampered,
+        "toolCallId must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["stepRef"] = "step-run-post-mvp-test-execution-failure-triage-9999"
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_step_ref_drift",
+        tampered,
+        "stepRef must equal StepListV1 tool-bearing step",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["stepKind"] = "run_state_transition_step"
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_step_kind_non_tool_bearing",
+        tampered,
+        "stepKind must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["stepKind"] = "verifier_step"
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_step_kind_mismatch",
+        tampered,
+        "stepKind must equal StepListV1 step.stepKind",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["capabilityRef"] = "totally_invalid_capability"
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_capability_ref_drift",
+        tampered,
+        "capabilityRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["sourceAgent"] = "unknown_agent"
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_source_agent_domain_drift",
+        tampered,
+        "sourceAgent must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["sourceAgent"] = "verifier-runtime-v1"
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_source_agent_blueprint_drift",
+        tampered,
+        "sourceAgent must equal creator_agent",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["status"] = "passed"
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_status_domain_drift",
+        tampered,
+        "status must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["startedAt"] = 99999
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_started_at_drift",
+        tampered,
+        "startedAt must equal StepListV1 step.startedAt",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["completedAt"] = 0
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_completed_at_drift",
+        tampered,
+        "completedAt must equal StepListV1 step.completedAt",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["sideEffectClass"] = "external"
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_side_effect_class_forbidden",
+        tampered,
+        "sideEffectClass must not be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["sideEffectClass"] = "unknown_class"
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_side_effect_class_domain_drift",
+        tampered,
+        "sideEffectClass must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["sideEffectClass"] = "read_only"
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_side_effect_class_blueprint_drift",
+        tampered,
+        "sideEffectClass must equal evidence_writer",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["inputSchemaRef"] = "ReadLogInputV1"
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_input_schema_ref_drift",
+        tampered,
+        "inputSchemaRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["outputSchemaRef"] = "ReadLogOutputV1"
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_output_schema_ref_drift",
+        tampered,
+        "outputSchemaRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["inputPayloadHash"] = "0" * 64
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_input_payload_hash_drift",
+        tampered,
+        "inputPayloadHash must equal sha256",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["outputPayloadHash"] = "0" * 64
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_output_payload_hash_drift",
+        tampered,
+        "outputPayloadHash must equal sha256",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["inputPayloadShape"] = {"type": "Tampered"}
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_input_payload_shape_drift",
+        tampered,
+        "inputPayloadShape must equal blueprint inputPayloadShape",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["outputPayloadShape"] = {"type": "Tampered"}
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_output_payload_shape_drift",
+        tampered,
+        "outputPayloadShape must equal blueprint outputPayloadShape",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["runEventLogRefs"] = ["evt-foo"]
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_run_event_log_refs_drift",
+        tampered,
+        "runEventLogRefs must equal StepListV1 step.runEventLogRefs",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["toolCallItems"][1]["observationRefs"] = ["obs-foo"]
+    expect_tool_call_list_artifact_validation_failure(
+        "tool_call_item_observation_refs_drift",
+        tampered,
+        "observationRefs must equal StepListV1 step.observationRefs",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepCoverage"]["everyToolBearingStepCovered"] = False
+    expect_tool_call_list_artifact_validation_failure(
+        "step_coverage_every_step_false",
+        tampered,
+        "stepCoverage.everyToolBearingStepCovered must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepCoverage"]["toolBearingStepCount"] = 1
+    expect_tool_call_list_artifact_validation_failure(
+        "step_coverage_tool_bearing_count_drift",
+        tampered,
+        "stepCoverage.toolBearingStepCount must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepCoverage"]["missingSteps"] = ["step-foo"]
+    expect_tool_call_list_artifact_validation_failure(
+        "step_coverage_missing_steps_not_empty",
+        tampered,
+        "stepCoverage.missingSteps must be empty",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepCoverage"]["duplicateSteps"] = ["step-foo"]
+    expect_tool_call_list_artifact_validation_failure(
+        "step_coverage_duplicate_steps_not_empty",
+        tampered,
+        "stepCoverage.duplicateSteps must be empty",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepListBinding"]["stepListSchemaVersion"] = "regression-run-step-array-v1"
+    expect_tool_call_list_artifact_validation_failure(
+        "step_list_binding_regression_schema_reuse",
+        tampered,
+        "stepListBinding.stepListSchemaVersion must equal step-list-artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepListBinding"]["stepListContentHash"] = "0" * 64
+    expect_tool_call_list_artifact_validation_failure(
+        "step_list_binding_hash_drift",
+        tampered,
+        "stepListBinding.stepListContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepListBinding"]["toolBearingStepCount"] = 1
+    expect_tool_call_list_artifact_validation_failure(
+        "step_list_binding_tool_bearing_count_drift",
+        tampered,
+        "stepListBinding.toolBearingStepCount must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runBinding"]["runSchemaVersion"] = "regression-run-v1"
+    expect_tool_call_list_artifact_validation_failure(
+        "run_binding_regression_schema_reuse",
+        tampered,
+        "runBinding.runSchemaVersion must equal run-artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runBinding"]["runState"] = "failed"
+    expect_tool_call_list_artifact_validation_failure(
+        "run_binding_state_drift",
+        tampered,
+        "runBinding.runState must equal RunV1.runState",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["taskSpecBinding"]["taskSpecSchemaVersion"] = "regression-task-spec-v1"
+    expect_tool_call_list_artifact_validation_failure(
+        "task_spec_binding_regression_schema_reuse",
+        tampered,
+        "taskSpecSchemaVersion must equal test-execution-task-spec-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityManifestBinding"]["capabilityManifestSchemaVersion"] = "capability-envelope-v1"
+    expect_tool_call_list_artifact_validation_failure(
+        "capability_manifest_binding_regression_schema_reuse",
+        tampered,
+        "capabilityManifestSchemaVersion must equal capability-manifest-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventLogBinding"]["runEventLogSchemaVersion"] = "regression-events-v1"
+    expect_tool_call_list_artifact_validation_failure(
+        "run_event_log_binding_regression_schema_reuse",
+        tampered,
+        "runEventLogSchemaVersion must equal run-event-log-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["observationListBinding"]["observationListSchemaVersion"] = "regression-observation-list-v1"
+    expect_tool_call_list_artifact_validation_failure(
+        "observation_list_binding_regression_schema_reuse",
+        tampered,
+        "observationListSchemaVersion must equal observation-list-artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["evidenceListBinding"]["evidenceListSchemaVersion"] = "evidence-list-v1"
+    expect_tool_call_list_artifact_validation_failure(
+        "evidence_list_binding_regression_schema_reuse",
+        tampered,
+        "evidenceListSchemaVersion must equal evidence-list-artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierResultBinding"]["verifierResultSchemaVersion"] = "regression-result-artifact-v1"
+    expect_tool_call_list_artifact_validation_failure(
+        "verifier_result_binding_regression_schema_reuse",
+        tampered,
+        "verifierResultSchemaVersion must equal verifier-result-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["deliveryManifestBinding"]["deliveryManifestSchemaVersion"] = "multi-agent-delivery-manifest-v1"
+    expect_tool_call_list_artifact_validation_failure(
+        "delivery_manifest_binding_regression_schema_reuse",
+        tampered,
+        "deliveryManifestSchemaVersion must equal delivery-manifest-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyManifestBinding"]["policyManifestSchemaVersion"] = "adapter-policy-manifest-v1"
+    expect_tool_call_list_artifact_validation_failure(
+        "policy_manifest_binding_regression_schema_reuse",
+        tampered,
+        "policyManifestSchemaVersion must equal policy-manifest-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyManifestBinding"]["unlocked"] = not tampered["policyManifestBinding"]["unlocked"]
+    expect_tool_call_list_artifact_validation_failure(
+        "policy_manifest_binding_unlocked_drift",
+        tampered,
+        "policyManifestBinding.unlocked must equal PolicyManifestV1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["approvalDecisionBinding"]["approvalDecisionSchemaVersion"] = "regression-approval-v1"
+    expect_tool_call_list_artifact_validation_failure(
+        "approval_decision_binding_schema_drift",
+        tampered,
+        "approvalDecisionSchemaVersion must equal human-approval-decision-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["approvalDecisionBinding"]["approvalGranted"] = True
+    expect_tool_call_list_artifact_validation_failure(
+        "approval_decision_binding_granted_drift",
+        tampered,
+        "approvalGranted must equal HumanApprovalDecisionV1.decision.approvalGranted",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["promotionConditions"]["requiredVerdict"] = "needs_human_check"
+    expect_tool_call_list_artifact_validation_failure(
+        "promotion_required_verdict_not_passed",
+        tampered,
+        "promotionConditions.requiredVerdict must be passed",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["promotionConditions"]["promoted"] = True
+    expect_tool_call_list_artifact_validation_failure(
+        "promotion_unlocked_when_blocked",
+        tampered,
+        "promotionConditions.promoted must be true only when verdict",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["coordinationBinding"].pop("broadcastSubscriptionManifestRef")
+    expect_tool_call_list_artifact_validation_failure(
+        "coordination_binding_missing_broadcast",
+        tampered,
+        "coordinationBinding must include",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["coordinationBinding"]["delegationManifestRef"] = "artifacts/runs/all_passed/run.json"
+    expect_tool_call_list_artifact_validation_failure(
+        "coordination_binding_wrong_path",
+        tampered,
+        "coordinationBinding.delegationManifestRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesRegressionRunStepArray"] = True
+    expect_tool_call_list_artifact_validation_failure(
+        "reuses_regression_run_step_array",
+        tampered,
+        "must not reuse the first-workload regression run.json steps array",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesRegressionToolCallArtifact"] = True
+    expect_tool_call_list_artifact_validation_failure(
+        "reuses_regression_tool_call_artifact",
+        tampered,
+        "must not reuse any first-workload regression tool-call artifact",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesSendEmailCapability"] = True
+    expect_tool_call_list_artifact_validation_failure(
+        "reuses_send_email_capability",
+        tampered,
+        "must not reuse the send_email capability",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["nonRegressionReusePath"] = ["read_only_regression_evidence_demo"]
+    expect_tool_call_list_artifact_validation_failure(
+        "non_regression_reuse_path_missing",
+        tampered,
+        "nonRegressionReusePath must equal",
+    )
+
+    for hash_role, label in [
+        ("test_execution_task_spec", "source_hash_mismatch_task_spec"),
+        ("test_execution_capability_manifest", "source_hash_mismatch_capability_manifest"),
+        ("test_execution_run_event_log", "source_hash_mismatch_run_event_log"),
+        ("test_execution_observation_list", "source_hash_mismatch_observation_list"),
+        ("test_execution_evidence_list", "source_hash_mismatch_evidence_list"),
+        ("test_execution_verifier_result", "source_hash_mismatch_verifier_result"),
+        ("test_execution_delivery_manifest", "source_hash_mismatch_delivery_manifest"),
+        ("test_execution_policy_manifest", "source_hash_mismatch_policy_manifest"),
+        ("test_execution_run_artifact", "source_hash_mismatch_run_artifact"),
+        ("test_execution_step_list", "source_hash_mismatch_step_list"),
+        ("human_approval_decision", "source_hash_mismatch_human_approval_decision"),
+        ("broadcast_subscription_manifest", "source_hash_mismatch_broadcast"),
+    ]:
+        tampered = json.loads(json.dumps(artifact))
+        for source in tampered["sourceArtifacts"]:
+            if source.get("role") == hash_role:
+                source["contentHash"] = "0" * 64
+                break
+        expect_tool_call_list_artifact_validation_failure(
+            label,
+            tampered,
+            "source hash mismatch",
+        )
+
+
+def run_tool_call_list_artifact_builder(artifact_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/tool_call_list_artifact.py"),
+        "--out",
+        str(artifact_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "ToolCallListV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -8614,6 +9249,7 @@ def main() -> None:
     validate_committed_observation_list_artifact()
     validate_committed_run_artifact()
     validate_committed_step_list_artifact()
+    validate_committed_tool_call_list_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -8800,6 +9436,12 @@ def main() -> None:
         if load_json(generated_step_list_artifact) != load_json(STEP_LIST_ARTIFACT_PATH):
             raise AssertionError(
                 "Committed StepListV1 artifact differs from deterministic CLI output"
+            )
+        generated_tool_call_list_artifact = temp_root / "post_mvp_test_execution_tool_call_list.json"
+        run_tool_call_list_artifact_builder(generated_tool_call_list_artifact)
+        if load_json(generated_tool_call_list_artifact) != load_json(TOOL_CALL_LIST_ARTIFACT_PATH):
+            raise AssertionError(
+                "Committed ToolCallListV1 artifact differs from deterministic CLI output"
             )
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)
