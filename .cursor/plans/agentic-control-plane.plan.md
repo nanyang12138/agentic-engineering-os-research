@@ -7331,6 +7331,95 @@ Build vs Integrate：
 为 OS kernel 抽象一个 workload-independent 的 RunEventV1 ArtifactV1 子类型，区别于既有的 workload-specific RunEventLogV1。定义 runEventId / runEventClass (run_lifecycle / step_lifecycle / tool_call_lifecycle / verifier_lifecycle / artifact_lifecycle / approval_lifecycle / policy_lifecycle / coordination_lifecycle) / runEventScope (workload_independent_kernel / workload_specific / coordination_layer) / runEventLifecycleState (drafted / emitted / replayed / deprecated) / requiredFlag / verifierVerdictOwner / sourceEventRef 等 workload-independent 字段；绑定 TestExecutionTaskSpecV1 / IntentV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyV1 / PolicyManifestV1 / HumanApprovalDecisionV1 与 Agent Coordination Layer 五件套；每个 RunEventLogV1.events[*].type 必须解析到 RunEventV1.runEventItems[*].sourceEventRef；字段不得依赖 regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1。
 ```
 
+### 2026-05-14 14:00 UTC Automation Sprint：RunEventV1 Workload-Independent RunEvent Primitive Gate
+
+Active phase：post-MVP Kernel Generalization / Multi-Workload Expansion（Phase 1a-9 contract-only MVP 已满足，Agent Coordination Layer 五件套 contract 完成，第二 workload 的 TaskSpec envelope、TestExecutionResultV1、FailureTriageReportV1、VerifierResultV1、CapabilityManifestV1、RunEventLogV1、DeliveryManifestV1、PolicyManifestV1、EvidenceListV1、ObservationListV1、RunV1、StepListV1、ToolCallListV1、IntentV1、CapabilityV1、PolicyV1 均已 land，正在闭合 OS kernel 的 RunEvent 原语：把「运行事件」从 workload-specific `RunEventLogV1` 抽象为 workload-independent ArtifactV1 子类型 `RunEventV1` / `run-event-v1` / `run-event-item-v1`，并把 `RunEventLogV1.events[*].eventType` → `RunEventV1.runEventItems[*].sourceEventRef` 的解析链路显式化）。
+
+Selected slice：
+
+```text
+Add RunEventV1 / run-event-v1 ArtifactV1 subtype contract artifact at artifacts/state/post_mvp_run_event_v1_catalog.json so /usr/bin/python3 scripts/validate_repo.py verifies a workload-independent RunEvent primitive distinct from workload-specific RunEventLogV1: declare run-event-v1 / run-event-item-v1 schemas, partition the runEventClassDomain into the workload-independent set (run_lifecycle / step_lifecycle / tool_call_lifecycle / verifier_lifecycle / artifact_lifecycle / approval_lifecycle / policy_lifecycle / coordination_lifecycle) and forbiddenRunEventClasses (regression_run_event / email_event / send_email_event), partition the runEventScopeDomain into (workload_independent_kernel / workload_specific / coordination_layer) and allowedCommittedRunEventScopes (workload_independent_kernel / coordination_layer), enforce the six permission flags and per-runEventItem permissionFlagOverrides to false, force every run event item to runEventLifecycleState=emitted and requiredFlag=false, bind TestExecutionTaskSpecV1 / IntentV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyV1 / PolicyManifestV1 / HumanApprovalDecisionV1 by content hash plus the five Agent Coordination Layer contracts, require every RunEventLogV1.eventTypeDomain entry to resolve into RunEventV1.runEventItems[*].sourceEventRef with everyEventTypeDomainCovered=true / everyRunEventItemReferencesValidEventType=true / everyLogEventTypeResolved=true, declare verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true, and explicitly forbid regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 / reusesRegressionRunEventArtifact=false / reusesRegressionEventsArtifact=false / reusesPhase7AdapterPolicyManifest=false / reusesPolicyUnlockDenialFixture=false / reusesSendEmailCapability=false.
+```
+
+为什么这是下一步：
+
+- 上一轮 `EvaluationReportV1.nextRecommendedSlice` 明确要求新增 workload-independent `RunEventV1` ArtifactV1 subtype，把 OS kernel 的 RunEvent 原语从 workload-specific `RunEventLogV1` 中抽出来，并显式表达 `RunEventLogV1.events[*].eventType → RunEventV1.runEventItems[*].sourceEventRef` 的解析关系。
+- Post-MVP slice priority #1（generalize workload-independent kernel primitive：`RunEventV1`）与 #2（add second workload：`Test Execution / Failure Triage`）继续叠加：在 `ArtifactV1` envelope 上引入第十六个具体 subtype `run-event-v1`，与既有十五个 subtype 并列。
+- 这是 OS kernel 的 `RunEvent` 抽象第一次以 workload-independent 形式独立成 ArtifactV1 子类型。既有 `artifacts/state/post_mvp_test_execution_run_event_log.json` 把运行事件的运行细节（events / payloadHash / runControlStateAfter / allowedRunControlTransitions）封装成 workload-specific log；新 artifact 在显式 `regressionWorkloadIsolation.reusesRegressionEventsArtifact=false` / `reusesRegressionRunEventArtifact=false` / `reusesPhase7AdapterPolicyManifest=false` 的前提下，用新的 `run-event-v1` envelope、`run-event-item-v1` 子 schema，把每一个 eventType 抽出来成为独立可绑定 / 可审计 / 可校验的 workload-independent 对象，并通过 `sourceEventCoverage` 把 `RunEventLogV1.events[*].eventType` 与 `RunEventLogV1.eventTypeDomain` → `RunEventV1.runEventItems[*].sourceEventRef` 钉成不变量。
+- `.github/workflows/validate.yml` 与 `.github/workflows/auto-merge-cursor-pr.yml` 均存在；本轮 baseline `/usr/bin/python3 scripts/validate_repo.py` 已通过。
+
+OS kernel primitive advanced：
+
+- 在 `ArtifactV1` envelope 上引入第十六个 subtype `run-event-v1`；`artifactEnvelopeSchemaVersion=artifact-v1` 显式声明 envelope 复用。未来 `CodePatchRunEventV1`、`PRReviewRunEventV1`、`DocumentationUpdateRunEventV1` 等可以复用同一 envelope。
+- `RunEventV1` / `run-event-v1`：第一次把 OS kernel 中的 `RunEvent` 抽象作为独立 schema 落地；runEventClassDomain（`run_lifecycle` / `step_lifecycle` / `tool_call_lifecycle` / `verifier_lifecycle` / `artifact_lifecycle` / `approval_lifecycle` / `policy_lifecycle` / `coordination_lifecycle`）、runEventScopeDomain（`workload_independent_kernel` / `workload_specific` / `coordination_layer`）、forbiddenRunEventClasses（`regression_run_event` / `email_event` / `send_email_event`）、runEventLifecycleStateDomain（`drafted` / `emitted` / `replayed` / `deprecated`）全部 workload-independent。
+- `run-event-item-v1`：每个 run event 条目都拥有独立的 `runEventId` / `runEventClass` / `runEventScope` / `runEventLifecycleState` / `requiredFlag` / `verifierVerdictOwner` / `sourceEventRef` / `permissionFlagOverrides` / `description`，与 workload-specific `RunEventLogV1.events[*]` 完全解耦。
+- `RunEventLogV1.events ↔ RunEventV1.runEventItems` 一致性：`sourceEventCoverage.everyEventTypeDomainCovered=true` / `everyRunEventItemReferencesValidEventType=true` / `everyLogEventTypeResolved=true` 钉为 invariant；`RunEventV1.runEventItems[*].sourceEventRef` 的唯一集合必须等于 `RunEventLogV1.eventTypeDomain` 的元素集合，并且 `RunEventLogV1.events[*].eventType` 全部映射回去。OS kernel 第一次拥有「每一个真实发出的 run event 都能解析到一个 workload-independent run event 条目」的机器可验证证据。
+- `Verifier ↔ RunEventLog ↔ PolicyManifest` 三重门继续被 `RunEventV1.promotionConditions` 沿用：`VerifierResultV1.verdict==passed` / `RunEventLogV1.terminalState==completed` / `PolicyManifestV1.unlockConditions.unlocked==true` → `promoted=true`，否则 `promoted=false`。
+
+Non-regression workload reuse path：
+
+- `Test Execution / Failure Triage`：本 artifact 直接覆盖；8 个 run event item 一一映射到 `RunEventLogV1.eventTypeDomain` 的 8 个 entry（`run.created` / `task_spec.generated` / `capability.invoked` / `capability.completed` / `artifact.written` / `verifier.completed` / `run.completed` / `run.failed`），并把 5 个 run event class 用满（run_lifecycle / step_lifecycle / tool_call_lifecycle / artifact_lifecycle / verifier_lifecycle）。
+- `Code Patch / Review Loop` / `PR Review` / `Documentation Update` / `Incident / Log Analysis`：未来 `CodePatchRunEventV1` / `PRReviewRunEventV1` 等可复用同一 `run-event-v1` envelope、`run-event-item-v1` 子 schema、runEventClassDomain、runEventScopeDomain、runEventLifecycleStateDomain；只需要替换 `runEventItems` 内容并把 runEventClass 落在同一 workload-independent 集合里。本 artifact 的 `nonRegressionReusePath` 字段已声明 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review` 三条路径。
+
+Coordination protocol / invariant clarified：
+
+- `coordinationBinding` 字段强制 RunEventV1 绑定 Agent Coordination Layer 五件套 contract artifact，并通过 `sourceArtifacts[].contentHash` 把上游 13 件套 + Run + StepList + ToolCallList + Intent + CapabilityV1 + PolicyV1 contract 当作不可变前提；任何一个上游 contract 漂移都会让本 artifact validate 失败。
+- `verifierVerdictOwner=verifier-runtime-v1` 与 `verifierExpectations.creatorMustNotOwnVerdict=true` 把 CreatorVerifierPairingV1 不变量延伸到 RunEvent 层：creator 可以发出 run event draft，但 verifier-runtime-v1 拥有 `verifier.completed` 事件签发权；envelope 的 `promotionConditions.promoted=true` 不能由 creator 单方面声明。
+- `permissionFlagDomain` / `permissionFlags` / 每个 runEventItem 的 `permissionFlagOverrides` 都对 6 个 workload-independent 权限位强制为 `false`；`forbiddenRunEventClasses` 显式禁止 `regression_run_event` / `email_event` / `send_email_event`，与既有 PolicyV1 / BroadcastSubscriptionManifestV1 / NegotiationRecordV1 / DelegationManifestV1 / TestExecutionTaskSpecV1 / TestExecutionResultV1 / FailureTriageReportV1 / VerifierResultV1 / CapabilityManifestV1 / RunEventLogV1 / DeliveryManifestV1 / PolicyManifestV1 / EvidenceListV1 / ObservationListV1 / RunV1 / StepListV1 / ToolCallListV1 / IntentV1 / CapabilityV1 的 policy invariant 对齐：RunEvent 原语自身不允许携带任何 regression 或 email 子类，也不允许触发任何 side effect / external communication / public access。
+
+为什么这不是另一个 regression/email fixture：
+
+- artifact 路径为 `artifacts/state/post_mvp_run_event_v1_catalog.json`（独立于既有 `artifacts/state/post_mvp_test_execution_run_event_log.json` 这个 workload-specific run event log、`artifacts/state/post_mvp_durable_run_store.json` 这个 durable replay index 与 `artifacts/runs/all_passed/run.json` 这个第一 workload regression run），scope 为 `workload_independent_run_event_v1_kernel_contract`，不是 regression run、email draft、approval lifecycle、delivery unlock 或 policy unlock。
+- `workloadType` 必须等于 `test_execution_failure_triage`，validator 显式拒绝把它改成 `read_only_regression_evidence_demo` 或任何 regression workload；`kind` 必须为 `RunEventV1`，`schemaVersion` 必须为 `run-event-v1`（区别于任何 first-workload `run-event-log-v1` / `regression-run-events-v1` schema），每个 runEventItem 的 `schemaVersion` 必须为 `run-event-item-v1`。
+- `regressionWorkloadIsolation.forbiddenFields` 包含 `regression_result` / `regression_result.json` / `email_draft` / `email_draft.md` / `send_email` / `regression-task-spec-v1` / `regression-result-artifact-v1`；新增 `reusesRegressionRunEventArtifact=false` / `reusesRegressionEventsArtifact=false` / `reusesRegressionTaskSpec=false` / `reusesRegressionResultArtifact=false` / `reusesPhase7AdapterPolicyManifest=false` / `reusesPolicyUnlockDenialFixture=false` / `reusesSendEmailCapability=false` 把本 artifact 与 first-workload regression run event / adapter policy / policy unlock denial / regression task spec / regression result / send_email 显式隔离。defensive scan 拒绝这些 token 在 forbiddenFields 之外再次出现。
+- `nonRegressionReusePath` 必须包含 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review`，强制本 artifact 至少有两个 non-regression 复用路径。
+
+Acceptance criteria：
+
+- `scripts/run_event_kernel.py` 提供 `build_run_event_kernel_artifact` / `validate_run_event_kernel_artifact` 与 CLI（`--out` / `--validate`）。
+- 新增 committed `artifacts/state/post_mvp_run_event_v1_catalog.json`，schemaVersion 为 `run-event-v1`，artifactEnvelopeSchemaVersion 为 `artifact-v1`，runEventItemSchemaVersion 为 `run-event-item-v1`，runEventCount=8。
+- `scripts/validate_repo.py` 验证 committed artifact、deterministic builder output、deterministic CLI replay 与约 50 条 forced-failure case（workload_type / kind / schema / envelope / item schema / verdict ownership / permission flags / run event class domain / forbidden run event classes / run event scope domain / allowed committed scopes / lifecycle state domain / required lifecycle state / required flag / per-item lifecycle state / per-item permission overrides / per-item verifier owner / per-item source event ref / per-item runEventId / per-item sequence / count drift / 14 binding pair / source-event coverage everyDomainCovered / everyValid / everyLogResolved / keys drift / refs drift / policy-kernel binding schema / policy count / promotion gates / coordination binding / regression isolation / non-regression reuse path / 16 source hash mismatches）。
+- `EvaluationReportV1` 把 RunEventV1 artifact 纳入 source hash，并把下一推荐切片推进为 workload-independent `MemoryV1` ArtifactV1 subtype。
+
+实现摘要：
+
+- 新增 `scripts/run_event_kernel.py`，包含 schema 常量、8 条 deterministic RUN_EVENT_BLUEPRINT、builder、validator、deterministic CLI（`--out` / `--validate`），以及 ArtifactV1 envelope / 14 向 binding（含 CapabilityV1 + IntentV1 + RunV1 + StepList + ToolCallList + PolicyV1）/ 五件套 coordination binding 逻辑；`sourceEventCoverage` 自动从 runEventItems 与上游 RunEventLogV1 推导；`promotionConditions` 由 verdict / run terminal state / policy unlock 三重门派生。
+- 新增 committed `artifacts/state/post_mvp_run_event_v1_catalog.json`，共 8 个 run event item：3 个 `run_lifecycle` / 1 个 `step_lifecycle` / 2 个 `tool_call_lifecycle` / 1 个 `artifact_lifecycle` / 1 个 `verifier_lifecycle`，全部 `runEventLifecycleState=emitted` 且 `requiredFlag=false`；`verifier.completed` 项的 `runEventScope=coordination_layer`，其余项 `runEventScope=workload_independent_kernel`。
+- 更新 `scripts/validate_repo.py`：REQUIRED_FILES 增加 `scripts/run_event_kernel.py` 与 `artifacts/state/post_mvp_run_event_v1_catalog.json`，PLAN markers 增加 `RunEventV1` / `run-event-v1` / `run-event-item-v1` / `post_mvp_run_event_v1_catalog.json`，新增 committed artifact 校验、deterministic CLI replay 与约 50 条 forced-failure case。
+- 更新 `scripts/evaluation_report.py` 与 `artifacts/evaluation/phase9_mvp_evaluation_report.json`：把 RunEventV1 加入 source hash，并把 `nextRecommendedSlice` 推进为 workload-independent `MemoryV1` ArtifactV1 subtype（memory-v1 / memory-entry-v1 / memoryClass / memoryScope / memoryLifecycleState / sourceRef / contentHash / confidence）。
+
+Build vs Integrate：
+
+- Build：`RunEventV1 / run-event-item-v1` schema、deterministic builder / validator / CLI、committed artifact、约 50 条 forced-failure case、`EvaluationReportV1` source hash 集成、`RunEventLogV1.events[*].eventType → RunEventV1.runEventItems[*].sourceEventRef` 解析链路显式化、Verifier ↔ RunEventLog ↔ PolicyManifest 三重 promotion 门、14 向 binding、permissionFlagOverrides / requiredFlag 不变量。
+- Integrate later：真实 RunEvent 事件总线 / 真实 emit-replay pipeline / 真实 run event lifecycle 调度 / event sourcing runtime；跨 workload `RunEventV1` catalogue；`ArtifactV1` envelope 抽取为独立 schema 文件；`MemoryV1` / 真实 memory store / 真实 LLM RAG / 真实 capability ↔ policy enforcement runtime 等下一批 OS kernel primitive。
+
+验证计划 / 结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline /usr/bin/python3 scripts/validate_repo.py before edits：通过。
+- /usr/bin/python3 -m py_compile scripts/*.py：通过。
+- /usr/bin/python3 scripts/run_event_kernel.py --out artifacts/state/post_mvp_run_event_v1_catalog.json：通过。
+- /usr/bin/python3 scripts/run_event_kernel.py --validate artifacts/state/post_mvp_run_event_v1_catalog.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --report-out artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/validate_repo.py：通过，覆盖 RunEventV1 committed artifact、deterministic CLI replay 与约 50 条 forced-failure case。
+- git diff --check：通过。
+```
+
+剩余风险：
+
+- `RunEventV1` 仍是 static contract artifact，不驱动任何真实 run event bus / emit-replay pipeline / event sourcing runtime / memory subscription；下一切片应给出 workload-independent `MemoryV1` ArtifactV1 subtype，把 OS kernel 的 Memory 原语在第二 workload 上独立抽象出来，并把 `EvidenceListV1.items[*].evidenceId` / `VerifierResultV1.observations[*]` 显式 binding 到 `MemoryV1.memoryEntries[*].sourceRef`。
+- 当前 artifact 复用 first workload 的 5 件套 coordination contract artifact 与 phase9 human approval decision fixture 作为 source fixture；`Code Patch / Review Loop` 与 `PR Review` 的 RunEventV1 subtype 仍未实现。
+- `ArtifactV1` envelope 目前仍通过 `artifactEnvelopeSchemaVersion` 字段表达；未来需要把所有 17 个 subtype（`regression-result-artifact-v1` / `test-execution-result-v1` / `failure-triage-report-v1` / `verifier-result-v1` / `capability-manifest-v1` / `run-event-log-v1` / `delivery-manifest-v1` / `policy-manifest-v1` / `evidence-list-artifact-v1` / `observation-list-artifact-v1` / `run-artifact-v1` / `step-list-artifact-v1` / `tool-call-list-artifact-v1` / `intent-v1` / `capability-v1` / `policy-v1` / `run-event-v1`）抽出共同 base schema（真正的 `artifact-v1` envelope）。
+
+下一轮建议：
+
+```text
+新增 workload-independent MemoryV1 / memory-v1 / memory-entry-v1 ArtifactV1 subtype contract artifact：
+为 OS kernel 抽象一个 workload-independent 的 MemoryV1 ArtifactV1 子类型，承载 agent 跨 run 长期记忆契约 + verifier 可审计的 memory 引用。定义 memoryEntryId / memoryClass (run_observation_memory / verifier_evidence_memory / approval_memory / capability_memory / policy_memory / coordination_memory / regression_isolation_memory) / memoryScope (workload_independent_kernel / workload_specific / coordination_layer) / memoryLifecycleState (drafted / committed / superseded / withdrawn / forgotten) / requiredFlag / verifierVerdictOwner / sourceRef / contentHash / confidence 等 workload-independent 字段；绑定 TestExecutionTaskSpecV1 / IntentV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityV1 / CapabilityManifestV1 / RunEventLogV1 / RunEventV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyV1 / PolicyManifestV1 / HumanApprovalDecisionV1 与 Agent Coordination Layer 五件套；每个 memoryEntry 必须 backlink 到 EvidenceListV1 / VerifierResultV1（保留 creator-verifier 分离）；字段不得依赖 regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1。
+```
+
 ## 22. Hard Boundary Rule（Kernel / Workload / Adapter 三层硬边界）
 
 学自 PraisonAI（MervinPraison/PraisonAI）的「Core SDK / Wrapper / Tools」物理包边界规则，把 Agentic Engineering OS 的三层抽象写成可强制约束：
@@ -7358,10 +7447,10 @@ Build vs Integrate：
 `EvaluationReportV1.nextRecommendedSlice` 在 PolicyV1 ✅ 已 land（PR #104 已合并到 `main`）之后，按以下顺序推进，automation sprint 不能跳级：
 
 0. **PolicyV1 / policy-v1 / policy-item-v1** ✅ landed（PR #104） — workload-independent policy 原语，区别于 workload-specific PolicyManifestV1；每个 PolicyManifestV1.unlockConditions key 解析到 PolicyV1.policyItems[*].unlockConditionRef。
-1. **RunEventV1 / run-event-v1 / run-event-item-v1**（当前 `nextRecommendedSlice`） — workload-independent run-event 原语，区别于 workload-specific RunEventLogV1；每个 RunEventLogV1.events[*].type 必须解析到 RunEventV1.runEventItems[*].sourceEventRef。
-2. **MemoryV1 / MemoryReferenceV1** — agent 跨 run 长期记忆契约 + verifier 可审计的 memory 引用。受 PraisonAI memory primitive 启发，但要求每条 memory entry 携带 sourceRef / contentHash / confidence，并被 EvidenceListV1 / VerifierResultV1 引用以保留 creator-verifier 分离。盲区补齐。
+1. **RunEventV1 / run-event-v1 / run-event-item-v1** ✅ landed — workload-independent run-event 原语，区别于 workload-specific RunEventLogV1；每个 RunEventLogV1.events[*].eventType 解析到 RunEventV1.runEventItems[*].sourceEventRef，并把 RunEventLogV1.eventTypeDomain 钉为 source-event coverage invariant。
+2. **MemoryV1 / memory-v1 / memory-entry-v1**（当前 `nextRecommendedSlice`） — agent 跨 run 长期记忆契约 + verifier 可审计的 memory 引用。受 PraisonAI memory primitive 启发，但要求每条 memoryEntry 携带 sourceRef / contentHash / confidence，并被 EvidenceListV1 / VerifierResultV1 引用以保留 creator-verifier 分离。盲区补齐。
 3. **MCPAdapterV1** — 把 [Model Context Protocol](https://modelcontextprotocol.io/) server 当作 CapabilityV1 子分类 `capabilityClass=mcp_external_tool`，sideEffectClass 受 MCP server 声明约束；引入社区生态而不破坏 OS kernel 边界。
-4. **ArtifactBaseV1 / artifact-v1** — 把 16+ 个 ArtifactV1 子类型（regression-result / test-execution-result / failure-triage-report / verifier-result / capability-manifest / run-event-log / delivery-manifest / policy-manifest / evidence-list-artifact / observation-list-artifact / run-artifact / step-list-artifact / tool-call-list-artifact / intent / capability / policy / run-event / memory / ...）的共同 envelope 抽取为独立 base schema 文件；目前用 `artifactEnvelopeSchemaVersion` 字段隐式表达的 envelope 升级为显式 base schema。
+4. **ArtifactBaseV1 / artifact-v1** — 把 17+ 个 ArtifactV1 子类型（regression-result / test-execution-result / failure-triage-report / verifier-result / capability-manifest / run-event-log / delivery-manifest / policy-manifest / evidence-list-artifact / observation-list-artifact / run-artifact / step-list-artifact / tool-call-list-artifact / intent / capability / policy / run-event / memory / ...）的共同 envelope 抽取为独立 base schema 文件；目前用 `artifactEnvelopeSchemaVersion` 字段隐式表达的 envelope 升级为显式 base schema。
 5. **AgenticOSFacadeSDK / aeos.Intent(...).run() 雏形** — 详见 §24。
 
 后续 backlog（更靠后）：
