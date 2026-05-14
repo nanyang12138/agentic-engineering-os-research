@@ -5140,7 +5140,16 @@ Add PolicyUnlockRequestDeniedV1 fixture so that /usr/bin/python3 scripts/validat
 - Python executable resolved for this run: /usr/bin/python3.
 - Baseline `/usr/bin/python3 scripts/validate_repo.py` before edits：通过。
 - Initial post-edit `/usr/bin/python3 scripts/validate_repo.py`：按预期失败，原因是主计划缺少新的 `policy-unlock-request-denied-v1` 和 `post_mvp_policy_unlock_request_denied.json` markers；已补主计划。
-- Final verification commands pending at the time of this log entry; this section will be updated after local verification.
+- `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 PolicyUnlockRequestDeniedV1 committed artifact、deterministic builder output，以及 unlock allowed / active approval state / send email allowed after denial / request policy external side effects / missing expired-revoked blocking reason / ApprovalRevocationOrExpiryV1 source hash mismatch forced-failure cases。
+- `/usr/bin/python3 scripts/policy_unlock_denial.py --validate-denial artifacts/approval/post_mvp_policy_unlock_request_denied.json`：通过。
+- `/usr/bin/python3 scripts/policy_unlock_denial.py --denial-out /tmp/post-mvp-policy-unlock-checks/post_mvp_policy_unlock_request_denied.json`：通过，可 deterministic 生成 PolicyUnlockRequestDeniedV1 artifact。
+- `/usr/bin/python3 scripts/approval_revocation.py --validate-revocation artifacts/approval/post_mvp_approval_revocation_or_expiry.json`：通过。
+- `/usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json`：通过。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/post-mvp-policy-unlock-checks/fixture-smoke`：通过。
+- `/usr/bin/python3 scripts/task_spec.py --goal ... --input-log-path fixtures/regression/all_passed/input.log --out /tmp/post-mvp-policy-unlock-checks/task-spec.json`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json`：通过。
+- `git diff --check`：通过。
 ```
 
 剩余风险：
