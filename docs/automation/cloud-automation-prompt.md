@@ -87,11 +87,29 @@ Regression boundary rule:
 Post-MVP slice selection priority:
 After the contract-only Read-only Regression Evidence Demo is complete, select the next slice in this order:
 
-1. Generalize a workload-independent kernel primitive (`TaskSpecV1`, `ArtifactV1`, `VerifierResultV1`, `CapabilityV1`, `RunEventV1`, `PolicyV1`, `DeliveryV1`).
-2. Add or prepare a second workload, preferably Test Execution / Failure Triage, using the same kernel contracts.
-3. Add an Agent Coordination Layer protocol (`DelegationManifestV1`, `CreatorVerifierPairingV1`, `AgentMessageV1`, `NegotiationRecordV1`, `CoordinationEventV1` / broadcast event bus).
+1. Generalize a workload-independent kernel primitive. The current ordered queue (do not skip a step unless the predecessor is on `main`):
+   - `IntentV1` ✅ landed
+   - `RunV1 / StepListV1 / ToolCallListV1` ✅ landed
+   - `CapabilityV1` (workload-independent kernel primitive, distinct from workload-specific `CapabilityManifestV1`) ✅ landed
+   - `PolicyV1 / policy-v1 / policy-item-v1` (workload-independent policy primitive, distinct from workload-specific `PolicyManifestV1`; each `PolicyManifestV1.unlockConditions` key must resolve into `PolicyV1.policyItems[*].unlockConditionRef`) — next in queue
+   - `MemoryV1 / MemoryReferenceV1` (agent long-term memory + verifier-auditable memory references with sourceRef / contentHash / confidence; inspired by PraisonAI memory primitive but preserves creator-verifier separation)
+   - `MCPAdapterV1` (Model Context Protocol server as a `CapabilityV1.capabilityClass=mcp_external_tool` sub-category, with sideEffectClass constrained by MCP server declaration)
+   - `ArtifactBaseV1 / artifact-v1` (extract the common envelope of every ArtifactV1 subtype into a dedicated base schema file; today the envelope is implicit through `artifactEnvelopeSchemaVersion`)
+2. Add or prepare a second workload, preferably Test Execution / Failure Triage, using the same kernel contracts. Then Code Patch / Review Loop, PR Review, Issue Triage, Documentation Update, Release Readiness, Incident / Log Analysis.
+3. Add an Agent Coordination Layer protocol (`DelegationManifestV1` ✅, `CreatorVerifierPairingV1` ✅, `AgentMessageV1` ✅, `NegotiationRecordV1` ✅, `BroadcastSubscriptionManifestV1` ✅; future `CoordinationEventV1` event bus runtime).
 4. Strengthen a verifier, evidence, policy, or delivery invariant that is workload-independent.
-5. Only then extend the first regression/email workload.
+5. **Facade SDK pilot — `aeos.Intent(...).run()`**: After `PolicyV1` + `MemoryV1` + `MCPAdapterV1` + `ArtifactBaseV1` are on `main`, build a thin Python facade that lets a user run `aeos.Intent("...").run()` in five lines and receive a `RunHandle` with `.verdict`, `.artifact_paths`, `.evidence`, and `.promoted`. The facade must not bypass any verifier / policy / delivery invariant — it merely wires existing builders/validators into a single call. Ship Python API + CLI (`python -m aeos.cli run "..."`); YAML entrypoint can follow later. Detailed spec lives in `.cursor/plans/agentic-control-plane.plan.md` §24.
+6. Only then extend the first regression/email workload.
+
+Hard Boundary Rule (learned from MervinPraison/PraisonAI's Core SDK / Wrapper / Tools physical-package boundary; full table in `.cursor/plans/agentic-control-plane.plan.md` §22):
+
+- Kernel never imports any Adapter or Workload.
+- A Workload never imports another Workload.
+- An Adapter never makes a verdict, policy unlock, or evidence decision. Adapters emit observations only.
+- Every new feature must ship Python API + CLI + YAML config (YAML may be deferred until the Facade SDK pilot lands).
+- TDD-first: every new ArtifactV1 subtype must add ≥ 30 forced-failure cases in `scripts/validate_repo.py` before its builder lands.
+- No perf bloat: kernel package import target stays under 200 ms; no module-level heavy work or global singleton.
+- DRY: one source of truth per concept; do not redeclare schema constants in `scripts/validate_repo.py`.
 
 Slice rejection rule:
 Reject or rewrite a candidate slice if it cannot answer:
@@ -100,6 +118,7 @@ Reject or rewrite a candidate slice if it cannot answer:
 - Which non-regression workload could reuse it?
 - Which coordination protocol or creator-verifier invariant does it clarify?
 - Why is this not merely another regression/email fixture?
+- Does it respect the Hard Boundary Rule (Kernel / Workload / Adapter)?
 
 Branch and merge policy:
 - Start each run from the latest main branch.

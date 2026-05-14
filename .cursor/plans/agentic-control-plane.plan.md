@@ -7241,7 +7241,129 @@ Build vs Integrate：
 为 OS kernel 抽象一个 workload-independent 的 PolicyV1 ArtifactV1 子类型，区别于既有的 workload-specific PolicyManifestV1。定义 policyId / policyClass (permission_policy / approval_policy / delivery_policy / external_side_effect_policy / regression_isolation_policy / coordination_policy) / policyScope (workload_independent_kernel / workload_specific / coordination_layer) / policyLifecycleState (drafted / active / deprecated / withdrawn) / requiredFlag / verifierVerdictOwner / unlockConditionRef 等 workload-independent 字段；绑定 TestExecutionTaskSpecV1 / IntentV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 与 Agent Coordination Layer 五件套；每个 PolicyManifestV1.unlockConditions key 必须解析到 PolicyV1.policyItems[*].unlockConditionRef；字段不得依赖 regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1。
 ```
 
-## 22. Parking Lot
+## 22. Hard Boundary Rule（Kernel / Workload / Adapter 三层硬边界）
+
+学自 PraisonAI（MervinPraison/PraisonAI）的「Core SDK / Wrapper / Tools」物理包边界规则，把 Agentic Engineering OS 的三层抽象写成可强制约束：
+
+| 层 | 包名（建议） | 允许 | 禁止 |
+|----|---|---|---|
+| Kernel  | `aeos_kernel`     | 契约 / Protocol / Validator / Scheduler 抽象 / 不可变 envelope | 真实 LLM 调用 / 真实 DB / 真实 IDE / 真实 delivery |
+| Workload| `aeos_workloads.*`| TaskSpec / Capability 注册 / Verifier rule / Workload-specific schema | 跨 workload 共享状态 / kernel 内部细节 / 别的 workload import |
+| Adapter | `aeos_adapters.*` | 真实 IDE / CUA / Slack / Email / MCP / Browser / sandbox | 任何 verifier / policy / evidence / verdict 决策逻辑 |
+
+铁律：
+
+- **Kernel 不准 import 任何 Adapter / Workload**。Adapter 通过协议挂载到 Kernel，反向依赖。
+- **Workload 不准 import 别的 Workload**。共用部分必须沉到 Kernel。
+- **Adapter 不准做 verdict / policy unlock / evidence 决策**。Adapter 只产生 observation，verifier-runtime-v1 才能签发 verdict。
+- **新 feature 每条都要 ship 3 个口**：Python API + CLI + YAML 配置（YAML 入口可延后到 Facade SDK land 之后落地）。
+- **TDD-first**：新 ArtifactV1 子类型必须先写 forced-failure case 再写 builder，validate_repo.py 必须替每个新原语跑 ≥ 30 条 forced-failure。
+- **No perf bloat**：Kernel package import 目标 < 200ms，禁止 module-level heavy work / global singleton。
+- **DRY**：一个概念只允许有一个 source of truth。Schema 常量集中在对应 builder script 中，不允许在 validate_repo.py 重新定义。
+
+违反铁律 → CI failed（未来在 `validate_repo.py` 中加 import-graph 静态检查）。
+
+## 23. Post-PolicyV1 Slice Backlog
+
+`EvaluationReportV1.nextRecommendedSlice` 推到 `PolicyV1` 之后，按以下顺序推进，automation sprint 不能跳级：
+
+1. **PolicyV1 / policy-v1 / policy-item-v1**（已在 nextRecommendedSlice 队列） — workload-independent policy 原语，区别于 workload-specific PolicyManifestV1；每个 PolicyManifestV1.unlockConditions key 必须解析到 PolicyV1.policyItems[*].unlockConditionRef。
+2. **MemoryV1 / MemoryReferenceV1** — agent 跨 run 长期记忆契约 + verifier 可审计的 memory 引用。受 PraisonAI memory primitive 启发，但要求每条 memory entry 携带 sourceRef / contentHash / confidence，并被 EvidenceListV1 / VerifierResultV1 引用以保留 creator-verifier 分离。盲区补齐。
+3. **MCPAdapterV1** — 把 [Model Context Protocol](https://modelcontextprotocol.io/) server 当作 CapabilityV1 子分类 `capabilityClass=mcp_external_tool`，sideEffectClass 受 MCP server 声明约束；引入社区生态而不破坏 OS kernel 边界。
+4. **ArtifactBaseV1 / artifact-v1** — 把 15+ 个 ArtifactV1 子类型（regression-result / test-execution-result / failure-triage-report / verifier-result / capability-manifest / run-event-log / delivery-manifest / policy-manifest / evidence-list-artifact / observation-list-artifact / run-artifact / step-list-artifact / tool-call-list-artifact / intent / capability / policy / memory / ...）的共同 envelope 抽取为独立 base schema 文件；目前用 `artifactEnvelopeSchemaVersion` 字段隐式表达的 envelope 升级为显式 base schema。
+5. **AgenticOSFacadeSDK / aeos.Intent(...).run() 雏形** — 详见 §24。
+
+后续 backlog（更靠后）：
+
+- 第三 workload（Code Patch / Review Loop） 的 TaskSpec / Capability 注册 / Verifier rule。
+- 真实 capability runtime（capability registry / sandboxed executor / retry / fallback）。
+- 真实 Step DAG scheduler / event sourcing runtime。
+- 真实 IDE Adapter（Cursor / VS Code）执行而非 contract-only。
+- 真实 CUA Adapter（trycua/cua）GUI trajectory 录制和回放。
+
+## 24. Facade SDK 雏形（`aeos.Intent(...).run()`）
+
+目标：让最终用户 5 行代码就能跑通 contract-only kernel，**不暴露任何 IntentV1 / TaskSpecV1 / StepListV1 / ToolCallListV1 等内部 schema 名字**。
+
+### 设计哲学（学自 PraisonAI 的 "few lines, full power"）
+
+- 最小 3 行能跑：
+  ```python
+  from aeos import Intent
+  run = Intent("triage failures in artifacts/test_execution/post_mvp_test_execution_result.json").run()
+  print(run.verdict, run.artifact_paths)
+  ```
+- 显式 5-7 行控制 workload / capability：
+  ```python
+  from aeos import Intent, Workload, Capability
+  run = Intent(
+      narrative="review this PR and produce a verified review draft",
+      workload=Workload.PR_REVIEW,
+      requested_capabilities=[
+          Capability.READ_ONLY_INSPECTION,
+          Capability.EVIDENCE_COLLECTION,
+          Capability.ARTIFACT_WRITING,
+          Capability.VERIFIER_CHECK,
+      ],
+  ).run()
+  ```
+- 完整 10+ 行接管 policy / approval / delivery：
+  ```python
+  from aeos import Intent, Policy, Delivery
+  intent = Intent("...").with_policy(Policy.STRICT_READ_ONLY)
+  run = intent.run(
+      on_human_approval_required=my_slack_callback,
+      delivery=Delivery.LOCAL_ARTIFACTS_ONLY,
+  )
+  ```
+
+### Facade 翻译关系（用户不可见）
+
+```
+Intent("...")
+   ↓ 生成 IntentV1 (intent-v1 ArtifactV1 subtype)
+   ↓ 解析 acceptedTaskSpecRef → 加载 TaskSpecV1
+.run()
+   ↓ 创建 RunV1 / 编排 StepListV1 / 派发 ToolCallListV1
+   ↓ 绑定 CapabilityV1.capabilityItems
+   ↓ 记录 RunEventLogV1 / ObservationListV1 / EvidenceListV1
+   ↓ verifier-runtime-v1 产出 VerifierResultV1
+   ↓ PolicyV1 / PolicyManifestV1 校验 unlockConditions
+   ↓ DeliveryManifestV1（默认 local-only）
+   ↓ 返回 RunHandle（verdict / artifact_paths / evidence / promoted）
+```
+
+### 雏形要做 vs 不做
+
+| ✅ 雏形要做 | ❌ 雏形不做 |
+|---|---|
+| `aeos.Intent("...").run()` 能跑通至少 1 个 workload（contract-only replay） | 真实 LLM 调用 |
+| 返回 `RunHandle` 对象（.verdict / .artifact_paths / .evidence / .promoted） | 真实 capability runtime / sandbox 执行 |
+| 把现有 15+ ArtifactV1 子类型 builder 串成一条调用链 | 跨多 LLM provider 适配 |
+| `python -m aeos.cli run "..."` CLI 等价入口 | YAML 入口（先 Python，YAML 放后面） |
+| 抛**人话**异常：`ContractViolation` / `PolicyUnlockBlocked` / `VerifierFailed` / `CapabilityNotRegistered` | Memory / RAG / MCP / Web dashboard |
+| README 顶部 5 行 Quickstart + 1 个 pytest 用例 | UI / dashboard |
+
+### 验收标准
+
+- 新增 `aeos/__init__.py` 暴露 `Intent`、`Workload`、`Capability`、`Policy`、`Delivery`、`RunHandle` 类；package import 时间 < 200ms。
+- 新增 `aeos/intent.py`、`aeos/run_handle.py`、`aeos/orchestrator.py`、`aeos/cli.py`、`aeos/exceptions.py`。
+- `tests/test_facade_smoke.py` 用 5 行 Python 跑出 `RunHandle.verdict == "passed"`。
+- `python3 -m aeos.cli run "triage failures ..."` CLI 入口在 README 中有 1 行 demo。
+- `validate_repo.py` 校验 facade 不破坏既有 15+ ArtifactV1 子类型的 deterministic builder output 与 forced-failure case。
+
+### Facade SDK 作为契约设计压力测试
+
+写第一行 facade 会立刻暴露当前契约设计中的盲区：
+
+- IntentV1.acceptedTaskSpecRef 目前是 hardcode，**真实 narrative → TaskSpec 解析 runtime** 还没有；
+- 用户拿 `RunHandle.artifacts()` 应该是什么 Python 数据结构 → 推动 `ArtifactBaseV1` 抽取；
+- 调用失败时如何把 14+ binding 哪个挂了告诉用户 → 推动统一的 `ContractViolation` 异常类与 verifier violation report；
+- 5 行 DX 是否同样适用于第二、第三 workload → 推动 Workload registry 抽象。
+
+这些都是单独跑 kernel sprint 发现不了的设计漏洞。
+
+## 25. Parking Lot
 
 以下内容仍然重要，但不进入第一版 MVP：
 
