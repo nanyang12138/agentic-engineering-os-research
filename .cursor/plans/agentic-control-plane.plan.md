@@ -6434,6 +6434,96 @@ Build vs Integrate：
 为 OS kernel 抽象一个 workload-independent 的 DeliveryV1 / DeliveryManifestV1 ArtifactV1 子类型，绑定 VerifierResultV1 verdict、RunEventLogV1 terminal state 与 approval/policy gate 到 channel-agnostic kind / status / approvalRef / policyBoundary 字段，强制 externalSideEffectsAllowed=false，绑定 TestExecutionTaskSpecV1 / CapabilityManifestV1 / VerifierResultV1 / RunEventLogV1 与 Agent Coordination Layer 五件套；字段不得依赖 regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1。
 ```
 
+### 2026-05-14 10:20 UTC Automation Sprint：DeliveryManifestV1 Workload-Independent Delivery Primitive Gate
+
+Active phase：post-MVP Kernel Generalization / Multi-Workload Expansion（Phase 1a-9 contract-only MVP 已满足，Agent Coordination Layer 五件套 contract 完成，第二 workload 的 TaskSpec envelope、TestExecutionResultV1、FailureTriageReportV1、VerifierResultV1、CapabilityManifestV1、RunEventLogV1 均已 land，正在闭合 OS kernel 的 Delivery 原语，把「交付」从 first-workload regression `email_draft.md` / phase9 delivery report 抽象为 workload-independent ArtifactV1 子类型）。
+
+Selected slice：
+
+```text
+Add DeliveryManifestV1 ArtifactV1 subtype contract artifact at artifacts/delivery/post_mvp_test_execution_delivery_manifest.json so /usr/bin/python3 scripts/validate_repo.py verifies a workload-independent Delivery primitive for Test Execution / Failure Triage, bound to TestExecutionTaskSpecV1 (test-execution-task-spec-v1), CapabilityManifestV1 (capability-manifest-v1), VerifierResultV1 (verifier-result-v1), RunEventLogV1 (run-event-log-v1), and HumanApprovalDecisionV1 (human-approval-decision-v1) by content hash, and to DelegationManifestV1 / CreatorVerifierPairingV1 / AgentMessageManifestV1 / NegotiationRecordV1 / BroadcastSubscriptionManifestV1 by ref and source content hash, with regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1 explicitly forbidden, channels drawn from a workload-independent kind domain (internal_run_summary_card / verifier_verdict_record / human_review_queue_entry / triage_artifact_handoff / internal_event_log_archive), channelStatus drawn from a closed domain that excludes any sent / delivered / published terminal status, requiredVerdictForUnlock=passed, requiredTerminalRunState=completed, per-channel policyBoundary forcing externalSideEffectsAllowed=false / externalCommunicationAllowed=false / repositoryMutationAllowed=false / releaseOrDeploymentAllowed=false / guiOrBrowserOrDesktopCallAllowed=false / publicAccessAllowed=false, and verifierVerdictOwner=verifier-runtime-v1.
+```
+
+为什么这是下一步：
+
+- 上一轮 `EvaluationReportV1.nextRecommendedSlice` 明确要求新增 workload-independent `DeliveryV1 / DeliveryManifestV1` ArtifactV1 subtype，把 OS kernel 的交付原语在第二 workload 上独立抽象出来。
+- Post-MVP slice priority #1（generalize workload-independent kernel primitive：`DeliveryV1`）与 #2（add second workload：`Test Execution / Failure Triage`）继续叠加：在 `ArtifactV1` envelope 上引入第七个具体 subtype `delivery-manifest-v1`，与 `regression-result-artifact-v1`、`test-execution-result-v1`、`failure-triage-report-v1`、`verifier-result-v1`、`capability-manifest-v1`、`run-event-log-v1` 并列。
+- 这是 OS kernel 的 `Delivery` 抽象第一次以 workload-independent 形式独立成 ArtifactV1 子类型。既有的 `phase9_delivery_report.json` 与 `phase9_multi_agent_delivery_manifest.json` 是 first-workload regression demo bound 的 `multi-agent-delivery-manifest-v1` / `delivery-report-v1` 旧 schema；新 manifest 在显式 `regressionWorkloadIsolation.reusesPhase9DeliveryReport=false` 的前提下，用新的 `delivery-manifest-v1` envelope 和 `delivery-channel-v1` channel schema 描述第二 workload 的 channel-agnostic 交付集合。
+- `.github/workflows/validate.yml` 与 `.github/workflows/auto-merge-cursor-pr.yml` 均存在；本轮 baseline `/usr/bin/python3 scripts/validate_repo.py` 已通过。
+
+OS kernel primitive advanced：
+
+- 在 `ArtifactV1` envelope 上引入第七个 subtype `delivery-manifest-v1`；`artifactEnvelopeSchemaVersion=artifact-v1` 显式声明 envelope 复用。未来 `CodePatchDeliveryManifestV1`、`PRReviewDeliveryManifestV1`、`DocumentationUpdateDeliveryManifestV1`、`IncidentAnalysisDeliveryManifestV1` 等可以复用同一 envelope。
+- `DeliveryV1` / `delivery-channel-v1`：第一次把 OS kernel 中的 `Delivery` 抽象作为独立 schema 落地，每个 channel 的字段为 `schemaVersion / channelName / channelKind / channelStatus / unlocked / approvalRef / evidenceContract / payloadContract / policyBoundary`，全部 workload-independent。
+- `Verifier ↔ RunEventLog ↔ Approval ↔ Delivery` 一致性：`verdictGate` 把 `VerifierResultV1.verdict` 钉到 `requiredVerdictForUnlock=passed`；`runTerminalStateGate` 把 `RunEventLogV1.terminalState` 钉到 `requiredTerminalState=completed`；`approvalGate` 把 `HumanApprovalDecisionV1.decision.approvalGranted` 钉到 `requiredDecision=approved`。任何 channel 只有当三个 gate 全部 `unlocked` 时才允许 `channelStatus=drafted_internal_only / unlocked=true`；否则 channel 必须等于 gate-derived blocked 状态（`blocked_by_verdict` / `blocked_by_policy` / `blocked_by_approval`）。OS kernel 第一次拥有机器可验证的 Delivery 三重门约束。
+- `Policy ↔ Delivery` 一致性：manifest 自身与每个 channel 的 6 个 policy flag 全部 `false`；validator 显式拒绝任何 `sent` / `delivered` / `published` 终态 channelStatus。
+
+Non-regression workload reuse path：
+
+- `Test Execution / Failure Triage`：本 artifact 直接覆盖；5 个 channel 全部使用 workload-independent kind / status。
+- `Code Patch / Review Loop`：未来 `CodePatchDeliveryManifestV1` 可复用同一 `delivery-manifest-v1` envelope、`delivery-channel-v1` channel schema、verdictGate / runTerminalStateGate / approvalGate 三重门；`channels` 切换到 `code_patch_diff_summary` / `code_review_handoff_queue_entry` 等仍然 workload-independent 的 kind。
+- `PR Review` / `Documentation Update` / `Incident / Log Analysis`：同理。本 artifact 的 `nonRegressionReusePath` 字段已声明 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review` 三条路径。
+
+Coordination protocol / invariant clarified：
+
+- `coordinationBinding` 字段强制 DeliveryManifestV1 绑定 Agent Coordination Layer 五件套 contract artifact，并通过 `sourceArtifacts[].contentHash` 把上游 coordination / task spec / capability manifest / verifier result / run event log / approval decision contract 当作不可变前提；任何一个上游 contract 漂移都会让本 artifact validate 失败。
+- `verifierVerdictOwner=verifier-runtime-v1` 与 `verifierExpectations.creatorMustNotOwnVerdict=true` 把 CreatorVerifierPairingV1 不变量延伸到交付层：creator 写入 channel 草稿，但 verifier 拥有 acceptance；channel 的 `unlocked=true` 不能由 creator 单方面声明。
+- `policyBoundary` 对 `externalSideEffectsAllowed` / `repositoryMutationAllowed` / `externalCommunicationAllowed` / `releaseOrDeploymentAllowed` / `guiOrBrowserOrDesktopCallAllowed` / `publicAccessAllowed` 全部强制为 `false`，与既有 BroadcastSubscriptionManifestV1 / NegotiationRecordV1 / DelegationManifestV1 / TestExecutionTaskSpecV1 / TestExecutionResultV1 / FailureTriageReportV1 / VerifierResultV1 / CapabilityManifestV1 / RunEventLogV1 的 policy invariant 对齐：交付原语自身不允许触发 side effect / external communication / public access。
+
+为什么这不是另一个 regression/email fixture：
+
+- artifact 路径为 `artifacts/delivery/post_mvp_test_execution_delivery_manifest.json`（独立于 `artifacts/delivery/phase9_delivery_report.json` 与 `artifacts/delivery/phase9_multi_agent_delivery_manifest.json` 这两个 first-workload regression demo artifact），scope 为 `test_execution_failure_triage_delivery_manifest_contract`，不是 regression result、email draft、approval lifecycle、delivery unlock 或 policy unlock。
+- `workloadType` 必须等于 `test_execution_failure_triage`，validator 显式拒绝把它改成 `read_only_regression_evidence_demo` 或任何 regression workload；`kind` 必须为 `DeliveryManifestV1`，`schemaVersion` 必须为 `delivery-manifest-v1`，每个 channel 的 `schemaVersion` 必须为 `delivery-channel-v1`。
+- `regressionWorkloadIsolation.forbiddenFields` 包含 `regression_result` / `regression_result.json` / `email_draft` / `email_draft.md` / `send_email` / `regression-task-spec-v1` / `regression-result-artifact-v1`；新增 `reusesRegressionEmailDraft=false` / `reusesPhase9DeliveryReport=false` / `reusesSendEmailCapability=false` 把本 artifact 与 first-workload regression delivery artifact 显式隔离。defensive scan 拒绝这些 token 在 forbiddenFields 之外再次出现。
+- `channelKindDomain` 不包含 `email` / `pr_comment` / `slack` / `webhook` / `external_*` 等任何外部 channel；`channelStatusDomain` 不包含 `sent` / `delivered` / `published` / `dispatched` 等任何 real-delivery 终态。所有 channel 永远只能停留在 `drafted_internal_only` / `pending_*` / `blocked_*`。
+- `nonRegressionReusePath` 必须包含 `test_execution_failure_triage` / `code_patch_review_loop` / `pr_review`，强制本 artifact 至少有两个 non-regression 复用路径。
+
+Acceptance criteria：
+
+- `scripts/delivery_manifest.py` 提供 `build_delivery_manifest` / `validate_delivery_manifest` 与 CLI（`--out` / `--validate`）。
+- 新增 committed `artifacts/delivery/post_mvp_test_execution_delivery_manifest.json`，schemaVersion 为 `delivery-manifest-v1`，artifactEnvelopeSchemaVersion 为 `artifact-v1`，每个 channel 的 `schemaVersion` 为 `delivery-channel-v1`。
+- `scripts/validate_repo.py` 验证 committed artifact、deterministic builder output 与多条 forced-failure case：workload_type_regression_reuse / kind_regression_reuse / schema_regression_reuse / envelope_schema_regression_reuse / channel_envelope_schema_regression_reuse / creator_owns_verdict / creator_must_not_own_verdict_disabled / task_spec_binding_regression_schema_reuse / task_spec_binding_hash_drift / capability_manifest_binding_regression_schema_reuse / capability_manifest_binding_hash_drift / verifier_result_binding_regression_schema_reuse / verifier_result_binding_hash_drift / run_event_log_binding_regression_schema_reuse / run_event_log_binding_hash_drift / policy_external_side_effects_allowed / policy_external_communication_allowed / policy_repository_mutation_allowed / channels_empty / channel_missing_required / channel_duplicate_name / channel_kind_unknown / channel_status_real_delivery / channel_status_inconsistent_with_gates / channel_unlocked_when_blocked / channel_policy_external_side_effects_allowed / channel_policy_external_communication_allowed / channel_approval_ref_path_invalid / channel_evidence_ref_mismatch / channel_payload_rendering_external / channel_schema_regression_reuse / required_verdict_not_passed / verdict_gate_unlocked_when_verdict_failed / run_terminal_state_gate_drift / approval_gate_granted_when_rejected / approval_gate_unlocked_when_not_granted / coordination_binding_missing_broadcast / coordination_binding_wrong_path / reuses_regression_email_draft / reuses_phase9_delivery_report / reuses_send_email_capability / non_regression_reuse_path_missing / channel_count_drift / any_channel_unlocked_drift / source_hash_mismatch_task_spec / source_hash_mismatch_capability_manifest / source_hash_mismatch_verifier_result / source_hash_mismatch_run_event_log / source_hash_mismatch_broadcast。
+- `EvaluationReportV1` 把 DeliveryManifestV1 artifact 纳入 source hash，并把下一推荐切片推进为 workload-independent `PolicyV1 / PolicyManifestV1` ArtifactV1 subtype。
+
+实现摘要：
+
+- 新增 `scripts/delivery_manifest.py`，包含 schema 常量、5 个 synthetic deterministic channel、builder、validator、deterministic CLI（`--out` / `--validate`），以及 ArtifactV1 envelope / TaskSpec & CapabilityManifest & VerifierResult & RunEventLog quad binding / 五件套 coordination binding 逻辑；channelStatus 由 verdict / run terminal state / approval 三重门派生。
+- 新增 committed `artifacts/delivery/post_mvp_test_execution_delivery_manifest.json`。
+- 更新 `scripts/validate_repo.py`：REQUIRED_FILES 增加 `scripts/delivery_manifest.py` 与 `artifacts/delivery/post_mvp_test_execution_delivery_manifest.json`，PLAN markers 增加 `DeliveryManifestV1` / `delivery-manifest-v1` / `delivery-channel-v1` / `post_mvp_test_execution_delivery_manifest.json`，新增 committed artifact 校验、deterministic CLI replay 与 47 条 forced-failure case。
+- 更新 `scripts/evaluation_report.py` 与 `artifacts/evaluation/phase9_mvp_evaluation_report.json`：把 DeliveryManifestV1 加入 source hash，并把 `nextRecommendedSlice` 推进为 workload-independent `PolicyV1 / PolicyManifestV1` ArtifactV1 subtype。
+
+Build vs Integrate：
+
+- Build：`DeliveryManifestV1` schema、deterministic builder / validator / CLI、committed artifact、47 条 forced-failure case、`EvaluationReportV1` source hash 集成、Verifier ↔ RunEventLog ↔ Approval ↔ Delivery 一致性约束。
+- Integrate later：真实交付通道（IDE review surface、ticket system、PR review feed、internal dashboard）、跨 workload `DeliveryManifestV1` catalogue、ArtifactV1 envelope 抽取为独立 schema 文件、`PolicyV1` / `RunV1` / `StepV1` 等下一批 OS kernel primitive。
+
+验证计划 / 结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline /usr/bin/python3 scripts/validate_repo.py before edits：通过。
+- /usr/bin/python3 -m py_compile scripts/*.py：通过。
+- /usr/bin/python3 scripts/delivery_manifest.py --out artifacts/delivery/post_mvp_test_execution_delivery_manifest.json：通过。
+- /usr/bin/python3 scripts/delivery_manifest.py --validate artifacts/delivery/post_mvp_test_execution_delivery_manifest.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --report-out artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json：通过。
+- /usr/bin/python3 scripts/validate_repo.py：通过，覆盖 DeliveryManifestV1 committed artifact、deterministic builder output 与 47 条 forced-failure case。
+- git diff --check：通过。
+```
+
+剩余风险：
+
+- `DeliveryManifestV1` 仍是 static contract artifact，不驱动任何真实交付通道；下一切片应给出 workload-independent `PolicyV1 / PolicyManifestV1` ArtifactV1 subtype，把 OS kernel 的策略原语在第二 workload 上独立抽象出来。
+- 当前 artifact 复用 first workload 的 5 件套 coordination contract artifact 与 phase9 human approval decision fixture 作为 source fixture；`Code Patch / Review Loop` 与 `PR Review` 的 TaskSpec / Artifact / DeliveryManifest subtype 仍未实现。
+- `ArtifactV1` envelope 目前仍通过 `artifactEnvelopeSchemaVersion` 字段表达；未来需要把 `regression-result-artifact-v1` / `test-execution-result-v1` / `failure-triage-report-v1` / `verifier-result-v1` / `capability-manifest-v1` / `run-event-log-v1` / `delivery-manifest-v1` 抽出共同 base schema（真正的 `artifact-v1` envelope）。
+
+下一轮建议：
+
+```text
+新增 workload-independent PolicyV1 / PolicyManifestV1 ArtifactV1 subtype contract artifact：
+为 OS kernel 抽象一个 workload-independent 的 PolicyV1 / PolicyManifestV1 ArtifactV1 子类型，定义 6 个 workload-independent permission flag、每个 effect-class 的 allow/deny 规则、policy ownership（policy-runtime-v1）、unlock conditions 与 revocation rules 字段，绑定 TestExecutionTaskSpecV1 / CapabilityManifestV1 / RunEventLogV1 / VerifierResultV1 / DeliveryManifestV1 与 Agent Coordination Layer 五件套；字段不得依赖 regression_result / email_draft / send_email / regression-task-spec-v1 / regression-result-artifact-v1。
+```
+
 ## 22. Parking Lot
 
 以下内容仍然重要，但不进入第一版 MVP：

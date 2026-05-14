@@ -145,6 +145,11 @@ from run_event_log import (
     build_run_event_log,
     validate_run_event_log,
 )
+from delivery_manifest import (
+    DELIVERY_MANIFEST_ARTIFACT_PATH,
+    build_delivery_manifest,
+    validate_delivery_manifest,
+)
 from verifier_runtime import (
     REQUIRED_ARTIFACT_CHECK_IDS,
     REQUIRED_VERIFIER_RULE_IDS,
@@ -190,6 +195,7 @@ FAILURE_TRIAGE_REPORT_PATH = ROOT / FAILURE_TRIAGE_REPORT_ARTIFACT_PATH
 VERIFIER_RESULT_PATH = ROOT / VERIFIER_RESULT_ARTIFACT_PATH
 CAPABILITY_MANIFEST_PATH = ROOT / CAPABILITY_MANIFEST_ARTIFACT_PATH
 RUN_EVENT_LOG_PATH = ROOT / RUN_EVENT_LOG_ARTIFACT_PATH
+DELIVERY_MANIFEST_PATH = ROOT / DELIVERY_MANIFEST_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -259,6 +265,7 @@ REQUIRED_FILES = [
     "scripts/verifier_result.py",
     "scripts/capability_manifest.py",
     "scripts/run_event_log.py",
+    "scripts/delivery_manifest.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
@@ -290,6 +297,7 @@ REQUIRED_FILES = [
     "artifacts/test_execution/post_mvp_failure_triage_report.json",
     "artifacts/verifier/post_mvp_verifier_result_test_execution.json",
     "artifacts/state/post_mvp_test_execution_run_event_log.json",
+    "artifacts/delivery/post_mvp_test_execution_delivery_manifest.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -409,6 +417,10 @@ PLAN_REQUIRED_MARKERS = [
     "run-event-v1",
     "run-state-machine-v1",
     "post_mvp_test_execution_run_event_log.json",
+    "DeliveryManifestV1",
+    "delivery-manifest-v1",
+    "delivery-channel-v1",
+    "post_mvp_test_execution_delivery_manifest.json",
     "Agentic Engineering OS Kernel",
     "workload-independent primitives",
     "first workload: Read-only Regression Evidence Demo",
@@ -5002,6 +5014,430 @@ def run_run_event_log_builder(artifact_out: Path) -> None:
         )
 
 
+def expect_delivery_manifest_validation_failure(
+    label: str,
+    manifest: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_delivery_manifest(manifest, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"DeliveryManifestV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(
+        f"DeliveryManifestV1 forced-failure case {label} unexpectedly passed validation"
+    )
+
+
+def validate_committed_delivery_manifest_artifact() -> None:
+    artifact = load_json(DELIVERY_MANIFEST_PATH)
+    try:
+        validate_delivery_manifest(artifact, ROOT)
+    except ValueError as exc:
+        raise AssertionError(
+            f"Committed DeliveryManifestV1 artifact failed validation: {exc}"
+        ) from exc
+
+    expected_artifact = build_delivery_manifest(ROOT)
+    if artifact != expected_artifact:
+        raise AssertionError(
+            "Committed DeliveryManifestV1 artifact differs from deterministic builder output"
+        )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["workloadType"] = "read_only_regression_evidence_demo"
+    expect_delivery_manifest_validation_failure(
+        "workload_type_regression_reuse",
+        tampered,
+        "workloadType must be test_execution_failure_triage",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["kind"] = "RegressionResultArtifactV1"
+    expect_delivery_manifest_validation_failure(
+        "kind_regression_reuse",
+        tampered,
+        "kind must be DeliveryManifestV1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["schemaVersion"] = "regression-result-artifact-v1"
+    expect_delivery_manifest_validation_failure(
+        "schema_regression_reuse",
+        tampered,
+        "schemaVersion must be delivery-manifest-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["artifactEnvelopeSchemaVersion"] = "regression-result-artifact-v1"
+    expect_delivery_manifest_validation_failure(
+        "envelope_schema_regression_reuse",
+        tampered,
+        "artifactEnvelopeSchemaVersion must be artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["deliveryChannelSchemaVersion"] = "regression-channel-v1"
+    expect_delivery_manifest_validation_failure(
+        "channel_envelope_schema_regression_reuse",
+        tampered,
+        "deliveryChannelSchemaVersion must be delivery-channel-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierVerdictOwner"] = "creator_agent"
+    expect_delivery_manifest_validation_failure(
+        "creator_owns_verdict",
+        tampered,
+        "verifierVerdictOwner must be verifier-runtime-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierExpectations"]["creatorMustNotOwnVerdict"] = False
+    expect_delivery_manifest_validation_failure(
+        "creator_must_not_own_verdict_disabled",
+        tampered,
+        "verifierExpectations.creatorMustNotOwnVerdict must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["taskSpecBinding"]["taskSpecSchemaVersion"] = "regression-task-spec-v1"
+    expect_delivery_manifest_validation_failure(
+        "task_spec_binding_regression_schema_reuse",
+        tampered,
+        "taskSpecSchemaVersion must equal test-execution-task-spec-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["taskSpecBinding"]["taskSpecContentHash"] = "0" * 64
+    expect_delivery_manifest_validation_failure(
+        "task_spec_binding_hash_drift",
+        tampered,
+        "taskSpecContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityManifestBinding"]["capabilityManifestSchemaVersion"] = "capability-envelope-v1"
+    expect_delivery_manifest_validation_failure(
+        "capability_manifest_binding_regression_schema_reuse",
+        tampered,
+        "capabilityManifestSchemaVersion must equal capability-manifest-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityManifestBinding"]["capabilityManifestContentHash"] = "0" * 64
+    expect_delivery_manifest_validation_failure(
+        "capability_manifest_binding_hash_drift",
+        tampered,
+        "capabilityManifestContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierResultBinding"]["verifierResultSchemaVersion"] = "regression-result-artifact-v1"
+    expect_delivery_manifest_validation_failure(
+        "verifier_result_binding_regression_schema_reuse",
+        tampered,
+        "verifierResultSchemaVersion must equal verifier-result-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierResultBinding"]["verifierResultContentHash"] = "0" * 64
+    expect_delivery_manifest_validation_failure(
+        "verifier_result_binding_hash_drift",
+        tampered,
+        "verifierResultContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventLogBinding"]["runEventLogSchemaVersion"] = "regression-events-v1"
+    expect_delivery_manifest_validation_failure(
+        "run_event_log_binding_regression_schema_reuse",
+        tampered,
+        "runEventLogSchemaVersion must equal run-event-log-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventLogBinding"]["runEventLogContentHash"] = "0" * 64
+    expect_delivery_manifest_validation_failure(
+        "run_event_log_binding_hash_drift",
+        tampered,
+        "runEventLogContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyBoundary"]["externalSideEffectsAllowed"] = True
+    expect_delivery_manifest_validation_failure(
+        "policy_external_side_effects_allowed",
+        tampered,
+        "policyBoundary.externalSideEffectsAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyBoundary"]["externalCommunicationAllowed"] = True
+    expect_delivery_manifest_validation_failure(
+        "policy_external_communication_allowed",
+        tampered,
+        "policyBoundary.externalCommunicationAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyBoundary"]["repositoryMutationAllowed"] = True
+    expect_delivery_manifest_validation_failure(
+        "policy_repository_mutation_allowed",
+        tampered,
+        "policyBoundary.repositoryMutationAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["channels"] = []
+    expect_delivery_manifest_validation_failure(
+        "channels_empty",
+        tampered,
+        "channels must be a non-empty list",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    del tampered["channels"][0]["channelKind"]
+    expect_delivery_manifest_validation_failure(
+        "channel_missing_required",
+        tampered,
+        "missing required fields",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["channels"][1]["channelName"] = tampered["channels"][0]["channelName"]
+    expect_delivery_manifest_validation_failure(
+        "channel_duplicate_name",
+        tampered,
+        "duplicate channelName",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["channels"][0]["channelKind"] = "external_email"
+    expect_delivery_manifest_validation_failure(
+        "channel_kind_unknown",
+        tampered,
+        "channelKind must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["channels"][0]["channelStatus"] = "sent"
+    expect_delivery_manifest_validation_failure(
+        "channel_status_real_delivery",
+        tampered,
+        "channelStatus must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["channels"][0]["channelStatus"] = "drafted_internal_only"
+    expect_delivery_manifest_validation_failure(
+        "channel_status_inconsistent_with_gates",
+        tampered,
+        "channelStatus must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["channels"][0]["unlocked"] = True
+    expect_delivery_manifest_validation_failure(
+        "channel_unlocked_when_blocked",
+        tampered,
+        "unlocked must equal the gate-derived",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["channels"][0]["policyBoundary"]["externalSideEffectsAllowed"] = True
+    expect_delivery_manifest_validation_failure(
+        "channel_policy_external_side_effects_allowed",
+        tampered,
+        "policyBoundary.externalSideEffectsAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["channels"][0]["policyBoundary"]["externalCommunicationAllowed"] = True
+    expect_delivery_manifest_validation_failure(
+        "channel_policy_external_communication_allowed",
+        tampered,
+        "policyBoundary.externalCommunicationAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["channels"][0]["approvalRef"] = "artifacts/runs/all_passed/run.json"
+    expect_delivery_manifest_validation_failure(
+        "channel_approval_ref_path_invalid",
+        tampered,
+        "approvalRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["channels"][0]["evidenceContract"]["verifierResultRef"] = "artifacts/runs/all_passed/run.json"
+    expect_delivery_manifest_validation_failure(
+        "channel_evidence_ref_mismatch",
+        tampered,
+        "evidenceContract.verifierResultRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["channels"][0]["payloadContract"]["rendering"] = "external_publish"
+    expect_delivery_manifest_validation_failure(
+        "channel_payload_rendering_external",
+        tampered,
+        "payloadContract.rendering must be internal_only",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["channels"][0]["schemaVersion"] = "regression-channel-v1"
+    expect_delivery_manifest_validation_failure(
+        "channel_schema_regression_reuse",
+        tampered,
+        "schemaVersion must be delivery-channel-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["requiredVerdictForUnlock"] = "needs_human_check"
+    expect_delivery_manifest_validation_failure(
+        "required_verdict_not_passed",
+        tampered,
+        "requiredVerdictForUnlock must be passed",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verdictGate"]["unlocked"] = True
+    expect_delivery_manifest_validation_failure(
+        "verdict_gate_unlocked_when_verdict_failed",
+        tampered,
+        "verdictGate.unlocked must be true only when currentVerdict equals",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runTerminalStateGate"]["currentTerminalState"] = "running"
+    expect_delivery_manifest_validation_failure(
+        "run_terminal_state_gate_drift",
+        tampered,
+        "runTerminalStateGate.currentTerminalState must equal RunEventLogV1.terminalState",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["approvalGate"]["granted"] = True
+    expect_delivery_manifest_validation_failure(
+        "approval_gate_granted_when_rejected",
+        tampered,
+        "approvalGate.granted must equal HumanApprovalDecisionV1.decision.approvalGranted",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["approvalGate"]["unlocked"] = True
+    expect_delivery_manifest_validation_failure(
+        "approval_gate_unlocked_when_not_granted",
+        tampered,
+        "approvalGate.unlocked must equal approvalGate.granted",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["coordinationBinding"].pop("broadcastSubscriptionManifestRef")
+    expect_delivery_manifest_validation_failure(
+        "coordination_binding_missing_broadcast",
+        tampered,
+        "coordinationBinding must include",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["coordinationBinding"]["delegationManifestRef"] = "artifacts/runs/all_passed/run.json"
+    expect_delivery_manifest_validation_failure(
+        "coordination_binding_wrong_path",
+        tampered,
+        "coordinationBinding.delegationManifestRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesRegressionEmailDraft"] = True
+    expect_delivery_manifest_validation_failure(
+        "reuses_regression_email_draft",
+        tampered,
+        "must not reuse the regression email_draft.md artifact",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesPhase9DeliveryReport"] = True
+    expect_delivery_manifest_validation_failure(
+        "reuses_phase9_delivery_report",
+        tampered,
+        "must not reuse phase9_delivery_report.json",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesSendEmailCapability"] = True
+    expect_delivery_manifest_validation_failure(
+        "reuses_send_email_capability",
+        tampered,
+        "must not reuse the send_email capability",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["nonRegressionReusePath"] = ["read_only_regression_evidence_demo"]
+    expect_delivery_manifest_validation_failure(
+        "non_regression_reuse_path_missing",
+        tampered,
+        "nonRegressionReusePath must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["channelCount"] = 0
+    expect_delivery_manifest_validation_failure(
+        "channel_count_drift",
+        tampered,
+        "channelCount must equal len(channels)",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["anyChannelUnlocked"] = True
+    expect_delivery_manifest_validation_failure(
+        "any_channel_unlocked_drift",
+        tampered,
+        "anyChannelUnlocked must reflect channels",
+    )
+
+    for hash_role, label in [
+        ("test_execution_task_spec", "source_hash_mismatch_task_spec"),
+        ("test_execution_capability_manifest", "source_hash_mismatch_capability_manifest"),
+        ("test_execution_verifier_result", "source_hash_mismatch_verifier_result"),
+        ("test_execution_run_event_log", "source_hash_mismatch_run_event_log"),
+        ("broadcast_subscription_manifest", "source_hash_mismatch_broadcast"),
+    ]:
+        tampered = json.loads(json.dumps(artifact))
+        for source in tampered["sourceArtifacts"]:
+            if source.get("role") == hash_role:
+                source["contentHash"] = "0" * 64
+                break
+        expect_delivery_manifest_validation_failure(
+            label,
+            tampered,
+            "source hash mismatch",
+        )
+
+
+def run_delivery_manifest_builder(artifact_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/delivery_manifest.py"),
+        "--out",
+        str(artifact_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "DeliveryManifestV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -5410,6 +5846,7 @@ def main() -> None:
     validate_committed_verifier_result_artifact()
     validate_committed_capability_manifest_artifact()
     validate_committed_run_event_log_artifact()
+    validate_committed_delivery_manifest_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -5560,6 +5997,12 @@ def main() -> None:
         if load_json(generated_run_event_log) != load_json(RUN_EVENT_LOG_PATH):
             raise AssertionError(
                 "Committed RunEventLogV1 artifact differs from deterministic CLI output"
+            )
+        generated_delivery_manifest = temp_root / "post_mvp_test_execution_delivery_manifest.json"
+        run_delivery_manifest_builder(generated_delivery_manifest)
+        if load_json(generated_delivery_manifest) != load_json(DELIVERY_MANIFEST_PATH):
+            raise AssertionError(
+                "Committed DeliveryManifestV1 artifact differs from deterministic CLI output"
             )
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)
