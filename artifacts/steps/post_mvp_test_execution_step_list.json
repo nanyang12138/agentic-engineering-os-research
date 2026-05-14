@@ -1,0 +1,483 @@
+{
+  "approvalDecisionBinding": {
+    "approvalDecisionContentHash": "99b6e4391d1fd0111b375c3393f20374f3c37419f3c4d6a043c1dc2eebdcb017",
+    "approvalDecisionId": "phase9-human-approval-decision-fixture-all_passed",
+    "approvalDecisionRef": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+    "approvalDecisionSchemaVersion": "human-approval-decision-v1",
+    "approvalGranted": false
+  },
+  "artifactEnvelopeSchemaVersion": "artifact-v1",
+  "capabilityManifestBinding": {
+    "capabilityManifestContentHash": "39d71c8275fb5432a8db3b10caae9c4602fa8a0e6f330d797e656f4a1df0e764",
+    "capabilityManifestEnvelopeSchemaVersion": "artifact-v1",
+    "capabilityManifestId": "post-mvp-test-execution-capability-manifest-kernel-contract",
+    "capabilityManifestRef": "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
+    "capabilityManifestSchemaVersion": "capability-manifest-v1"
+  },
+  "coordinationBinding": {
+    "agentMessageManifestRef": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+    "broadcastSubscriptionManifestRef": "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
+    "creatorVerifierPairingRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+    "delegationManifestRef": "artifacts/coordination/post_mvp_delegation_manifest.json",
+    "negotiationRecordRef": "artifacts/coordination/post_mvp_negotiation_record.json"
+  },
+  "creatorAgent": "creator_agent",
+  "deliveryManifestBinding": {
+    "deliveryManifestContentHash": "8074c4224a63cf99902e20d0cfd7373c4c7907e74b82a01a61897d23fd5404ec",
+    "deliveryManifestEnvelopeSchemaVersion": "artifact-v1",
+    "deliveryManifestId": "post-mvp-test-execution-delivery-manifest-kernel-contract",
+    "deliveryManifestRef": "artifacts/delivery/post_mvp_test_execution_delivery_manifest.json",
+    "deliveryManifestSchemaVersion": "delivery-manifest-v1"
+  },
+  "evidenceCoverage": {
+    "coveredEvidenceCount": 4,
+    "distinctCoveredEvidenceCount": 4,
+    "duplicateEvidence": [],
+    "everyEvidenceItemCovered": true,
+    "evidenceItemCount": 4,
+    "missingEvidence": []
+  },
+  "evidenceListBinding": {
+    "evidenceItemCount": 4,
+    "evidenceListContentHash": "b6bbb11ba37751a02ae7554c0c2dd182beda8d939f833ef81dbdb03fa38657bb",
+    "evidenceListEnvelopeSchemaVersion": "artifact-v1",
+    "evidenceListId": "post-mvp-test-execution-evidence-list-kernel-contract",
+    "evidenceListRef": "artifacts/evidence/post_mvp_test_execution_evidence_list.json",
+    "evidenceListSchemaVersion": "evidence-list-artifact-v1"
+  },
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "post-mvp-test-execution-step-list-kernel-contract",
+  "invariants": [
+    "StepListV1 is an ArtifactV1 subtype distinct from every workload-specific result subtype and from the first-workload regression run.json step array.",
+    "StepListV1 must bind RunV1, TestExecutionTaskSpecV1, CapabilityManifestV1, RunEventLogV1, ObservationListV1, EvidenceListV1, VerifierResultV1, DeliveryManifestV1, PolicyManifestV1, HumanApprovalDecisionV1, and all five coordination contracts by content hash.",
+    "Every StepV1.runEventLogRefs entry must resolve to an existing RunEventLogV1.events.eventId; every StepV1.observationRefs entry must resolve into ObservationListV1.observationItems; every StepV1.evidenceRefs entry must resolve into EvidenceListV1.evidenceItems.",
+    "StepListV1 must cover every event, observation and evidence item exactly once across all steps: runEventCoverage.everyEventCovered, observationCoverage.everyObservationCovered and evidenceCoverage.everyEvidenceItemCovered must all be true.",
+    "StepV1.startedAt must equal the timestamp of the first event it references; StepV1.completedAt must equal the timestamp of the last event it references.",
+    "StepListV1 must not own the verifier verdict; verifier-runtime-v1 owns acceptance and creator agents may only stage drafts.",
+    "StepListV1 promotionConditions require verdict=passed, terminal run state=completed and PolicyManifestV1 unlock=true.",
+    "StepListV1 must not reuse regression-task-spec-v1, regression-result-artifact-v1, regression run.json, regression events.jsonl or any regression_result / email_draft / send_email field."
+  ],
+  "kind": "StepListV1",
+  "nonRegressionReusePath": [
+    "test_execution_failure_triage",
+    "code_patch_review_loop",
+    "pr_review"
+  ],
+  "observationCoverage": {
+    "coveredObservationCount": 12,
+    "distinctCoveredObservationCount": 12,
+    "duplicateObservations": [],
+    "everyObservationCovered": true,
+    "missingObservations": [],
+    "observationItemCount": 12
+  },
+  "observationListBinding": {
+    "observationItemCount": 12,
+    "observationListContentHash": "baa32e7f16c233f50a84e79c143b4c124df996d3e228606c4e40abc4192af076",
+    "observationListEnvelopeSchemaVersion": "artifact-v1",
+    "observationListId": "post-mvp-test-execution-observation-list-kernel-contract",
+    "observationListRef": "artifacts/observations/post_mvp_test_execution_observation_list.json",
+    "observationListSchemaVersion": "observation-list-artifact-v1"
+  },
+  "permissionFlagDomain": [
+    "externalSideEffectsAllowed",
+    "repositoryMutationAllowed",
+    "externalCommunicationAllowed",
+    "releaseOrDeploymentAllowed",
+    "guiOrBrowserOrDesktopCallAllowed",
+    "publicAccessAllowed"
+  ],
+  "permissionFlags": {
+    "externalCommunicationAllowed": false,
+    "externalSideEffectsAllowed": false,
+    "guiOrBrowserOrDesktopCallAllowed": false,
+    "publicAccessAllowed": false,
+    "releaseOrDeploymentAllowed": false,
+    "repositoryMutationAllowed": false
+  },
+  "policyManifestBinding": {
+    "policyManifestContentHash": "1c95304f5b2ef724737cc980bdc5df85305d56ad4cb484e27025ab8fe5764054",
+    "policyManifestEnvelopeSchemaVersion": "artifact-v1",
+    "policyManifestId": "post-mvp-test-execution-policy-manifest-kernel-contract",
+    "policyManifestRef": "artifacts/policy/post_mvp_test_execution_policy_manifest.json",
+    "policyManifestSchemaVersion": "policy-manifest-v1",
+    "unlocked": false
+  },
+  "promotionConditions": {
+    "currentPolicyUnlocked": false,
+    "currentTerminalRunState": "completed",
+    "currentVerdict": "needs_human_check",
+    "promoted": false,
+    "requiredPolicyUnlocked": true,
+    "requiredTerminalRunState": "completed",
+    "requiredVerdict": "passed",
+    "verdictOwner": "verifier-runtime-v1"
+  },
+  "regressionWorkloadIsolation": {
+    "forbiddenFields": [
+      "regression_result",
+      "regression_result.json",
+      "email_draft",
+      "email_draft.md",
+      "send_email",
+      "regression-task-spec-v1",
+      "regression-result-artifact-v1"
+    ],
+    "reusesRegressionEventsArtifact": false,
+    "reusesRegressionResultArtifact": false,
+    "reusesRegressionRunArtifact": false,
+    "reusesRegressionRunStepArray": false,
+    "reusesSendEmailCapability": false
+  },
+  "runBinding": {
+    "eventCount": 12,
+    "evidenceCount": 4,
+    "observationCount": 12,
+    "runContentHash": "b835da5eed98e282f078995850e702a7f17d7d0b63a43af8b86debfd2cb0977e",
+    "runEnvelopeSchemaVersion": "artifact-v1",
+    "runId": "post-mvp-test-execution-run-kernel-contract",
+    "runIdentifier": "run-post-mvp-test-execution-failure-triage",
+    "runRef": "artifacts/runs/post_mvp_test_execution_run.json",
+    "runSchemaVersion": "run-artifact-v1",
+    "runState": "completed"
+  },
+  "runEventCoverage": {
+    "coveredEventCount": 12,
+    "distinctCoveredEventCount": 12,
+    "duplicateEvents": [],
+    "eventCount": 12,
+    "everyEventCovered": true,
+    "missingEvents": []
+  },
+  "runEventLogBinding": {
+    "eventCount": 12,
+    "runEventLogContentHash": "f1a32305df32fde0cdf212bcd67a9368fc8cccbedb362b38ad1059c099f2793d",
+    "runEventLogEnvelopeSchemaVersion": "artifact-v1",
+    "runEventLogId": "post-mvp-test-execution-run-event-log-kernel-contract",
+    "runEventLogRef": "artifacts/state/post_mvp_test_execution_run_event_log.json",
+    "runEventLogSchemaVersion": "run-event-log-v1",
+    "terminalState": "completed"
+  },
+  "runIdentifier": "run-post-mvp-test-execution-failure-triage",
+  "runKernelCapabilitySentinel": "__run_kernel__",
+  "schemaVersion": "step-list-artifact-v1",
+  "scope": "test_execution_failure_triage_step_list_contract",
+  "sourceAgentDomain": [
+    "run_kernel",
+    "creator_agent",
+    "verifier-runtime-v1"
+  ],
+  "sourceArtifacts": [
+    {
+      "contentHash": "e026fb8f8d78f3a54d0a1a3d846cd93d8289cd9a8fefb59ead112fb18e4552f2",
+      "path": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+      "role": "agent_message_manifest"
+    },
+    {
+      "contentHash": "4e622eafff1480cb2e109aad1230e0852d99c412470ff8f33b215898beeb90b6",
+      "path": "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
+      "role": "broadcast_subscription_manifest"
+    },
+    {
+      "contentHash": "834b3c6bfe4dc401a5c34f3ed20edb479c4352e85363ac629caab3a3af429932",
+      "path": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+      "role": "creator_verifier_pairing"
+    },
+    {
+      "contentHash": "7779a468076194ccb7f88ffeb9e37727d479742ec0add917ac45777b748d5b8f",
+      "path": "artifacts/coordination/post_mvp_delegation_manifest.json",
+      "role": "delegation_manifest"
+    },
+    {
+      "contentHash": "99b6e4391d1fd0111b375c3393f20374f3c37419f3c4d6a043c1dc2eebdcb017",
+      "path": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+      "role": "human_approval_decision"
+    },
+    {
+      "contentHash": "fbbcd49ad9e7cd229658b431ab15313829f3a58107d809ef288043236746698e",
+      "path": "artifacts/coordination/post_mvp_negotiation_record.json",
+      "role": "negotiation_record"
+    },
+    {
+      "contentHash": "39d71c8275fb5432a8db3b10caae9c4602fa8a0e6f330d797e656f4a1df0e764",
+      "path": "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
+      "role": "test_execution_capability_manifest"
+    },
+    {
+      "contentHash": "8074c4224a63cf99902e20d0cfd7373c4c7907e74b82a01a61897d23fd5404ec",
+      "path": "artifacts/delivery/post_mvp_test_execution_delivery_manifest.json",
+      "role": "test_execution_delivery_manifest"
+    },
+    {
+      "contentHash": "b6bbb11ba37751a02ae7554c0c2dd182beda8d939f833ef81dbdb03fa38657bb",
+      "path": "artifacts/evidence/post_mvp_test_execution_evidence_list.json",
+      "role": "test_execution_evidence_list"
+    },
+    {
+      "contentHash": "baa32e7f16c233f50a84e79c143b4c124df996d3e228606c4e40abc4192af076",
+      "path": "artifacts/observations/post_mvp_test_execution_observation_list.json",
+      "role": "test_execution_observation_list"
+    },
+    {
+      "contentHash": "1c95304f5b2ef724737cc980bdc5df85305d56ad4cb484e27025ab8fe5764054",
+      "path": "artifacts/policy/post_mvp_test_execution_policy_manifest.json",
+      "role": "test_execution_policy_manifest"
+    },
+    {
+      "contentHash": "b835da5eed98e282f078995850e702a7f17d7d0b63a43af8b86debfd2cb0977e",
+      "path": "artifacts/runs/post_mvp_test_execution_run.json",
+      "role": "test_execution_run_artifact"
+    },
+    {
+      "contentHash": "f1a32305df32fde0cdf212bcd67a9368fc8cccbedb362b38ad1059c099f2793d",
+      "path": "artifacts/state/post_mvp_test_execution_run_event_log.json",
+      "role": "test_execution_run_event_log"
+    },
+    {
+      "contentHash": "1b9bbb64c87879848276b77fe2be1a20f89df2bfed971a7a0ec5210a91f664ba",
+      "path": "artifacts/task_specs/post_mvp_test_execution_task_spec.json",
+      "role": "test_execution_task_spec"
+    },
+    {
+      "contentHash": "c317f05c5aa5cde6ba6b86fca1968539faef29ff87dc3cf57cbb540a136b8515",
+      "path": "artifacts/verifier/post_mvp_verifier_result_test_execution.json",
+      "role": "test_execution_verifier_result"
+    }
+  ],
+  "stepCount": 8,
+  "stepItemSchemaVersion": "step-v1",
+  "stepItems": [
+    {
+      "capabilityRef": "__run_kernel__",
+      "completedAt": 0,
+      "evidenceRefs": [],
+      "inputContract": null,
+      "observationRefs": [
+        "obs-run-post-mvp-test-execution-failure-triage-0000"
+      ],
+      "outputContract": null,
+      "runEventLogRefs": [
+        "evt-run-post-mvp-test-execution-failure-triage-0000"
+      ],
+      "schemaVersion": "step-v1",
+      "sequence": 0,
+      "sourceAgent": "run_kernel",
+      "startedAt": 0,
+      "status": "completed",
+      "stepId": "step-run-post-mvp-test-execution-failure-triage-0000",
+      "stepKind": "run_state_transition_step"
+    },
+    {
+      "capabilityRef": "__run_kernel__",
+      "completedAt": 100,
+      "evidenceRefs": [],
+      "inputContract": null,
+      "observationRefs": [
+        "obs-run-post-mvp-test-execution-failure-triage-0001"
+      ],
+      "outputContract": null,
+      "runEventLogRefs": [
+        "evt-run-post-mvp-test-execution-failure-triage-0001"
+      ],
+      "schemaVersion": "step-v1",
+      "sequence": 1,
+      "sourceAgent": "run_kernel",
+      "startedAt": 100,
+      "status": "completed",
+      "stepId": "step-run-post-mvp-test-execution-failure-triage-0001",
+      "stepKind": "planning_lifecycle_step"
+    },
+    {
+      "capabilityRef": "read_test_execution_result",
+      "completedAt": 300,
+      "evidenceRefs": [],
+      "inputContract": "ReadTestExecutionResultInputV1",
+      "observationRefs": [
+        "obs-run-post-mvp-test-execution-failure-triage-0002",
+        "obs-run-post-mvp-test-execution-failure-triage-0003"
+      ],
+      "outputContract": "ReadTestExecutionResultOutputV1",
+      "runEventLogRefs": [
+        "evt-run-post-mvp-test-execution-failure-triage-0002",
+        "evt-run-post-mvp-test-execution-failure-triage-0003"
+      ],
+      "schemaVersion": "step-v1",
+      "sequence": 2,
+      "sourceAgent": "creator_agent",
+      "startedAt": 200,
+      "status": "completed",
+      "stepId": "step-run-post-mvp-test-execution-failure-triage-0002",
+      "stepKind": "capability_invocation_step"
+    },
+    {
+      "capabilityRef": "collect_test_failure_evidence",
+      "completedAt": 500,
+      "evidenceRefs": [
+        "ev-case-001-outcome",
+        "ev-case-002-outcome",
+        "ev-case-002-trace",
+        "ev-case-003-outcome"
+      ],
+      "inputContract": "CollectTestFailureEvidenceInputV1",
+      "observationRefs": [
+        "obs-run-post-mvp-test-execution-failure-triage-0004",
+        "obs-run-post-mvp-test-execution-failure-triage-0005"
+      ],
+      "outputContract": "CollectTestFailureEvidenceOutputV1",
+      "runEventLogRefs": [
+        "evt-run-post-mvp-test-execution-failure-triage-0004",
+        "evt-run-post-mvp-test-execution-failure-triage-0005"
+      ],
+      "schemaVersion": "step-v1",
+      "sequence": 3,
+      "sourceAgent": "creator_agent",
+      "startedAt": 400,
+      "status": "completed",
+      "stepId": "step-run-post-mvp-test-execution-failure-triage-0003",
+      "stepKind": "capability_invocation_step"
+    },
+    {
+      "capabilityRef": "classify_test_failure",
+      "completedAt": 700,
+      "evidenceRefs": [],
+      "inputContract": "ClassifyTestFailureInputV1",
+      "observationRefs": [
+        "obs-run-post-mvp-test-execution-failure-triage-0006",
+        "obs-run-post-mvp-test-execution-failure-triage-0007"
+      ],
+      "outputContract": "ClassifyTestFailureOutputV1",
+      "runEventLogRefs": [
+        "evt-run-post-mvp-test-execution-failure-triage-0006",
+        "evt-run-post-mvp-test-execution-failure-triage-0007"
+      ],
+      "schemaVersion": "step-v1",
+      "sequence": 4,
+      "sourceAgent": "creator_agent",
+      "startedAt": 600,
+      "status": "completed",
+      "stepId": "step-run-post-mvp-test-execution-failure-triage-0004",
+      "stepKind": "capability_invocation_step"
+    },
+    {
+      "capabilityRef": "write_artifact",
+      "completedAt": 900,
+      "evidenceRefs": [],
+      "inputContract": "WriteArtifactInputV1",
+      "observationRefs": [
+        "obs-run-post-mvp-test-execution-failure-triage-0008",
+        "obs-run-post-mvp-test-execution-failure-triage-0009"
+      ],
+      "outputContract": "WriteArtifactOutputV1",
+      "runEventLogRefs": [
+        "evt-run-post-mvp-test-execution-failure-triage-0008",
+        "evt-run-post-mvp-test-execution-failure-triage-0009"
+      ],
+      "schemaVersion": "step-v1",
+      "sequence": 5,
+      "sourceAgent": "creator_agent",
+      "startedAt": 800,
+      "status": "completed",
+      "stepId": "step-run-post-mvp-test-execution-failure-triage-0005",
+      "stepKind": "artifact_write_step"
+    },
+    {
+      "capabilityRef": "__run_kernel__",
+      "completedAt": 1000,
+      "evidenceRefs": [],
+      "inputContract": null,
+      "observationRefs": [
+        "obs-run-post-mvp-test-execution-failure-triage-0010"
+      ],
+      "outputContract": null,
+      "runEventLogRefs": [
+        "evt-run-post-mvp-test-execution-failure-triage-0010"
+      ],
+      "schemaVersion": "step-v1",
+      "sequence": 6,
+      "sourceAgent": "verifier-runtime-v1",
+      "startedAt": 1000,
+      "status": "completed",
+      "stepId": "step-run-post-mvp-test-execution-failure-triage-0006",
+      "stepKind": "verifier_step"
+    },
+    {
+      "capabilityRef": "__run_kernel__",
+      "completedAt": 1100,
+      "evidenceRefs": [],
+      "inputContract": null,
+      "observationRefs": [
+        "obs-run-post-mvp-test-execution-failure-triage-0011"
+      ],
+      "outputContract": null,
+      "runEventLogRefs": [
+        "evt-run-post-mvp-test-execution-failure-triage-0011"
+      ],
+      "schemaVersion": "step-v1",
+      "sequence": 7,
+      "sourceAgent": "run_kernel",
+      "startedAt": 1100,
+      "status": "completed",
+      "stepId": "step-run-post-mvp-test-execution-failure-triage-0007",
+      "stepKind": "run_state_transition_step"
+    }
+  ],
+  "stepKindDomain": [
+    "run_state_transition_step",
+    "planning_lifecycle_step",
+    "capability_invocation_step",
+    "artifact_write_step",
+    "verifier_step"
+  ],
+  "stepStatusDomain": [
+    "started",
+    "completed",
+    "failed"
+  ],
+  "taskSpecBinding": {
+    "taskSpecContentHash": "1b9bbb64c87879848276b77fe2be1a20f89df2bfed971a7a0ec5210a91f664ba",
+    "taskSpecEnvelopeSchemaVersion": "task-spec-v1",
+    "taskSpecId": "post-mvp-test-execution-failure-triage-task-spec",
+    "taskSpecRef": "artifacts/task_specs/post_mvp_test_execution_task_spec.json",
+    "taskSpecSchemaVersion": "test-execution-task-spec-v1"
+  },
+  "verdictDomain": [
+    "passed",
+    "failed",
+    "incomplete",
+    "needs_human_check"
+  ],
+  "verifierExpectations": {
+    "creatorMustNotOwnVerdict": true,
+    "mustValidateEvidenceCoverage": true,
+    "mustValidateEvidenceListBinding": true,
+    "mustValidateObservationCoverage": true,
+    "mustValidateObservationListBinding": true,
+    "mustValidatePermissionFlags": true,
+    "mustValidatePromotionConditions": true,
+    "mustValidateRunBinding": true,
+    "mustValidateRunEventCoverage": true,
+    "mustValidateRunEventLogBinding": true,
+    "mustValidateSchema": true,
+    "mustValidateStepKindDomain": true,
+    "mustValidateStepSchema": true,
+    "mustValidateVerifierResultBinding": true,
+    "verdictDomain": [
+      "passed",
+      "failed",
+      "incomplete",
+      "needs_human_check"
+    ],
+    "verdictOwner": "verifier-runtime-v1"
+  },
+  "verifierResultBinding": {
+    "verdict": "needs_human_check",
+    "verifierResultContentHash": "c317f05c5aa5cde6ba6b86fca1968539faef29ff87dc3cf57cbb540a136b8515",
+    "verifierResultEnvelopeSchemaVersion": "artifact-v1",
+    "verifierResultId": "post-mvp-verifier-result-test-execution-kernel-contract",
+    "verifierResultRef": "artifacts/verifier/post_mvp_verifier_result_test_execution.json",
+    "verifierResultSchemaVersion": "verifier-result-v1"
+  },
+  "verifierVerdictOwner": "verifier-runtime-v1",
+  "workloadCategory": "engineering_workload",
+  "workloadType": "test_execution_failure_triage"
+}

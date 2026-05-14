@@ -170,6 +170,11 @@ from run_artifact import (
     build_run_artifact,
     validate_run_artifact,
 )
+from step_list_artifact import (
+    STEP_LIST_ARTIFACT_PATH as POST_MVP_STEP_LIST_ARTIFACT_PATH,
+    build_step_list_artifact,
+    validate_step_list_artifact,
+)
 from verifier_runtime import (
     REQUIRED_ARTIFACT_CHECK_IDS,
     REQUIRED_VERIFIER_RULE_IDS,
@@ -220,6 +225,7 @@ POLICY_MANIFEST_PATH = ROOT / POST_MVP_POLICY_MANIFEST_ARTIFACT_PATH
 EVIDENCE_LIST_ARTIFACT_PATH = ROOT / POST_MVP_EVIDENCE_LIST_ARTIFACT_PATH
 OBSERVATION_LIST_ARTIFACT_PATH = ROOT / POST_MVP_OBSERVATION_LIST_ARTIFACT_PATH
 RUN_ARTIFACT_PATH = ROOT / POST_MVP_RUN_ARTIFACT_PATH
+STEP_LIST_ARTIFACT_PATH = ROOT / POST_MVP_STEP_LIST_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -294,6 +300,7 @@ REQUIRED_FILES = [
     "scripts/evidence_artifact.py",
     "scripts/observation_artifact.py",
     "scripts/run_artifact.py",
+    "scripts/step_list_artifact.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/capabilities/post_mvp_test_execution_capability_manifest.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
@@ -330,6 +337,7 @@ REQUIRED_FILES = [
     "artifacts/evidence/post_mvp_test_execution_evidence_list.json",
     "artifacts/observations/post_mvp_test_execution_observation_list.json",
     "artifacts/runs/post_mvp_test_execution_run.json",
+    "artifacts/steps/post_mvp_test_execution_step_list.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -471,6 +479,10 @@ PLAN_REQUIRED_MARKERS = [
     "RunV1",
     "run-artifact-v1",
     "post_mvp_test_execution_run.json",
+    "StepListV1",
+    "step-list-artifact-v1",
+    "step-v1",
+    "post_mvp_test_execution_step_list.json",
     "Agentic Engineering OS Kernel",
     "workload-independent primitives",
     "first workload: Read-only Regression Evidence Demo",
@@ -7555,6 +7567,639 @@ def run_run_artifact_builder(artifact_out: Path) -> None:
         )
 
 
+def expect_step_list_artifact_validation_failure(
+    label: str,
+    manifest: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_step_list_artifact(manifest, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"StepListV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(
+        f"StepListV1 forced-failure case {label} unexpectedly passed validation"
+    )
+
+
+def validate_committed_step_list_artifact() -> None:
+    artifact = load_json(STEP_LIST_ARTIFACT_PATH)
+    try:
+        validate_step_list_artifact(artifact, ROOT)
+    except ValueError as exc:
+        raise AssertionError(
+            f"Committed StepListV1 artifact failed validation: {exc}"
+        ) from exc
+
+    expected_artifact = build_step_list_artifact(ROOT)
+    if artifact != expected_artifact:
+        raise AssertionError(
+            "Committed StepListV1 artifact differs from deterministic builder output"
+        )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["workloadType"] = "read_only_regression_evidence_demo"
+    expect_step_list_artifact_validation_failure(
+        "workload_type_regression_reuse",
+        tampered,
+        "workloadType must be test_execution_failure_triage",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["kind"] = "RegressionResultArtifactV1"
+    expect_step_list_artifact_validation_failure(
+        "kind_regression_reuse",
+        tampered,
+        "kind must be StepListV1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["schemaVersion"] = "regression-result-artifact-v1"
+    expect_step_list_artifact_validation_failure(
+        "schema_regression_reuse",
+        tampered,
+        "schemaVersion must be step-list-artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["artifactEnvelopeSchemaVersion"] = "regression-result-artifact-v1"
+    expect_step_list_artifact_validation_failure(
+        "envelope_schema_regression_reuse",
+        tampered,
+        "artifactEnvelopeSchemaVersion must be artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItemSchemaVersion"] = "step-v0"
+    expect_step_list_artifact_validation_failure(
+        "step_item_schema_version_drift",
+        tampered,
+        "stepItemSchemaVersion must be step-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierVerdictOwner"] = "creator_agent"
+    expect_step_list_artifact_validation_failure(
+        "creator_owns_verdict",
+        tampered,
+        "verifierVerdictOwner must be verifier-runtime-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierExpectations"]["creatorMustNotOwnVerdict"] = False
+    expect_step_list_artifact_validation_failure(
+        "creator_must_not_own_verdict_disabled",
+        tampered,
+        "verifierExpectations.creatorMustNotOwnVerdict must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["permissionFlags"]["externalSideEffectsAllowed"] = True
+    expect_step_list_artifact_validation_failure(
+        "permission_flag_external_side_effects_true",
+        tampered,
+        "permissionFlags.externalSideEffectsAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["permissionFlagDomain"] = ["externalSideEffectsAllowed"]
+    expect_step_list_artifact_validation_failure(
+        "permission_flag_domain_drift",
+        tampered,
+        "permissionFlagDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepKindDomain"] = ["capability_invocation_step"]
+    expect_step_list_artifact_validation_failure(
+        "step_kind_domain_drift",
+        tampered,
+        "stepKindDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepStatusDomain"] = ["passed", "failed"]
+    expect_step_list_artifact_validation_failure(
+        "step_status_domain_drift",
+        tampered,
+        "stepStatusDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["sourceAgentDomain"] = ["creator_agent"]
+    expect_step_list_artifact_validation_failure(
+        "source_agent_domain_drift",
+        tampered,
+        "sourceAgentDomain must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runKernelCapabilitySentinel"] = "ide_terminal"
+    expect_step_list_artifact_validation_failure(
+        "run_kernel_capability_sentinel_drift",
+        tampered,
+        "runKernelCapabilitySentinel must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runIdentifier"] = "run-regression-all-passed"
+    expect_step_list_artifact_validation_failure(
+        "run_identifier_regression_reuse",
+        tampered,
+        "runIdentifier must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepCount"] = 7
+    expect_step_list_artifact_validation_failure(
+        "step_count_drift",
+        tampered,
+        "stepCount must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItems"] = tampered["stepItems"][:-1]
+    expect_step_list_artifact_validation_failure(
+        "step_items_length_drift",
+        tampered,
+        "stepItems must be a list of length",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItems"][2]["stepKind"] = "verifier_step"
+    expect_step_list_artifact_validation_failure(
+        "step_item_kind_blueprint_drift",
+        tampered,
+        "stepKind must equal blueprint stepKind",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItems"][2]["stepKind"] = "totally_invalid_kind"
+    expect_step_list_artifact_validation_failure(
+        "step_item_kind_domain_drift",
+        tampered,
+        "stepKind must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItems"][2]["status"] = "unknown_status"
+    expect_step_list_artifact_validation_failure(
+        "step_item_status_domain_drift",
+        tampered,
+        "status must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItems"][2]["sourceAgent"] = "unknown_agent"
+    expect_step_list_artifact_validation_failure(
+        "step_item_source_agent_domain_drift",
+        tampered,
+        "sourceAgent must be one of",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItems"][2]["capabilityRef"] = "send_email"
+    expect_step_list_artifact_validation_failure(
+        "step_item_capability_ref_drift",
+        tampered,
+        "capabilityRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItems"][2]["schemaVersion"] = "step-v2"
+    expect_step_list_artifact_validation_failure(
+        "step_item_schema_version_drift",
+        tampered,
+        "schemaVersion must be step-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItems"][2]["sequence"] = 99
+    expect_step_list_artifact_validation_failure(
+        "step_item_sequence_drift",
+        tampered,
+        "sequence must equal its position",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItems"][2]["stepId"] = "step-regression-all-passed-0002"
+    expect_step_list_artifact_validation_failure(
+        "step_item_step_id_regression_reuse",
+        tampered,
+        "stepId must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItems"][2]["runEventLogRefs"] = []
+    expect_step_list_artifact_validation_failure(
+        "step_item_run_event_log_refs_empty",
+        tampered,
+        "runEventLogRefs must be a non-empty list",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItems"][3]["runEventLogRefs"] = [
+        "evt-run-post-mvp-test-execution-failure-triage-9999",
+        "evt-run-post-mvp-test-execution-failure-triage-9998",
+    ]
+    expect_step_list_artifact_validation_failure(
+        "step_item_run_event_log_ref_unknown",
+        tampered,
+        "runEventLogRefs must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItems"][3]["observationRefs"] = [
+        "obs-run-post-mvp-test-execution-failure-triage-9999",
+        "obs-run-post-mvp-test-execution-failure-triage-9998",
+    ]
+    expect_step_list_artifact_validation_failure(
+        "step_item_observation_ref_unknown",
+        tampered,
+        "references unknown ObservationListV1.observationId",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItems"][3]["observationRefs"] = []
+    expect_step_list_artifact_validation_failure(
+        "step_item_observation_refs_length_drift",
+        tampered,
+        "observationRefs must mirror runEventLogRefs length",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItems"][3]["evidenceRefs"] = ["ev-case-001-outcome"]
+    expect_step_list_artifact_validation_failure(
+        "step_item_evidence_refs_blueprint_drift",
+        tampered,
+        "evidenceRefs must equal blueprint evidenceIds",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItems"][3]["evidenceRefs"] = [
+        "ev-case-001-outcome",
+        "ev-case-002-outcome",
+        "ev-case-002-trace",
+        "ev-case-999-missing",
+    ]
+    expect_step_list_artifact_validation_failure(
+        "step_item_evidence_ref_unknown",
+        tampered,
+        "evidenceRefs must equal blueprint evidenceIds",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItems"][2]["startedAt"] = 99999
+    expect_step_list_artifact_validation_failure(
+        "step_item_started_at_drift",
+        tampered,
+        "startedAt must equal first event timestampMs",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItems"][2]["completedAt"] = 0
+    expect_step_list_artifact_validation_failure(
+        "step_item_completed_at_drift",
+        tampered,
+        "completedAt must equal last event timestampMs",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItems"][2]["inputContract"] = "ReadLogInputV1"
+    expect_step_list_artifact_validation_failure(
+        "step_item_input_contract_drift",
+        tampered,
+        "inputContract must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["stepItems"][2]["outputContract"] = "ReadLogOutputV1"
+    expect_step_list_artifact_validation_failure(
+        "step_item_output_contract_drift",
+        tampered,
+        "outputContract must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventCoverage"]["everyEventCovered"] = False
+    expect_step_list_artifact_validation_failure(
+        "run_event_coverage_every_event_false",
+        tampered,
+        "runEventCoverage.everyEventCovered must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventCoverage"]["eventCount"] = 1
+    expect_step_list_artifact_validation_failure(
+        "run_event_coverage_count_drift",
+        tampered,
+        "runEventCoverage.eventCount must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventCoverage"]["missingEvents"] = ["evt-foo"]
+    expect_step_list_artifact_validation_failure(
+        "run_event_coverage_missing_events_not_empty",
+        tampered,
+        "runEventCoverage.missingEvents must be empty",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventCoverage"]["duplicateEvents"] = ["evt-foo"]
+    expect_step_list_artifact_validation_failure(
+        "run_event_coverage_duplicate_events_not_empty",
+        tampered,
+        "runEventCoverage.duplicateEvents must be empty",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["observationCoverage"]["everyObservationCovered"] = False
+    expect_step_list_artifact_validation_failure(
+        "observation_coverage_every_observation_false",
+        tampered,
+        "observationCoverage.everyObservationCovered must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["observationCoverage"]["observationItemCount"] = 1
+    expect_step_list_artifact_validation_failure(
+        "observation_coverage_count_drift",
+        tampered,
+        "observationCoverage.observationItemCount must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["evidenceCoverage"]["everyEvidenceItemCovered"] = False
+    expect_step_list_artifact_validation_failure(
+        "evidence_coverage_every_evidence_false",
+        tampered,
+        "evidenceCoverage.everyEvidenceItemCovered must be true",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["evidenceCoverage"]["evidenceItemCount"] = 99
+    expect_step_list_artifact_validation_failure(
+        "evidence_coverage_count_drift",
+        tampered,
+        "evidenceCoverage.evidenceItemCount must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runBinding"]["runSchemaVersion"] = "regression-run-v1"
+    expect_step_list_artifact_validation_failure(
+        "run_binding_regression_schema_reuse",
+        tampered,
+        "runBinding.runSchemaVersion must equal run-artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runBinding"]["runContentHash"] = "0" * 64
+    expect_step_list_artifact_validation_failure(
+        "run_binding_hash_drift",
+        tampered,
+        "runBinding.runContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runBinding"]["runIdentifier"] = "run-regression-all-passed"
+    expect_step_list_artifact_validation_failure(
+        "run_binding_identifier_drift",
+        tampered,
+        "runBinding.runIdentifier must equal RunV1.runId",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runBinding"]["runState"] = "failed"
+    expect_step_list_artifact_validation_failure(
+        "run_binding_state_drift",
+        tampered,
+        "runBinding.runState must equal RunV1.runState",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runBinding"]["eventCount"] = 99
+    expect_step_list_artifact_validation_failure(
+        "run_binding_event_count_drift",
+        tampered,
+        "runBinding.eventCount must equal RunV1.eventCount",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["taskSpecBinding"]["taskSpecSchemaVersion"] = "regression-task-spec-v1"
+    expect_step_list_artifact_validation_failure(
+        "task_spec_binding_regression_schema_reuse",
+        tampered,
+        "taskSpecSchemaVersion must equal test-execution-task-spec-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["capabilityManifestBinding"]["capabilityManifestSchemaVersion"] = "capability-envelope-v1"
+    expect_step_list_artifact_validation_failure(
+        "capability_manifest_binding_regression_schema_reuse",
+        tampered,
+        "capabilityManifestSchemaVersion must equal capability-manifest-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventLogBinding"]["runEventLogSchemaVersion"] = "regression-events-v1"
+    expect_step_list_artifact_validation_failure(
+        "run_event_log_binding_regression_schema_reuse",
+        tampered,
+        "runEventLogSchemaVersion must equal run-event-log-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["runEventLogBinding"]["runEventLogContentHash"] = "0" * 64
+    expect_step_list_artifact_validation_failure(
+        "run_event_log_binding_hash_drift",
+        tampered,
+        "runEventLogContentHash must match",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["observationListBinding"]["observationListSchemaVersion"] = "regression-observation-list-v1"
+    expect_step_list_artifact_validation_failure(
+        "observation_list_binding_regression_schema_reuse",
+        tampered,
+        "observationListSchemaVersion must equal observation-list-artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["evidenceListBinding"]["evidenceListSchemaVersion"] = "evidence-list-v1"
+    expect_step_list_artifact_validation_failure(
+        "evidence_list_binding_regression_schema_reuse",
+        tampered,
+        "evidenceListSchemaVersion must equal evidence-list-artifact-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["verifierResultBinding"]["verifierResultSchemaVersion"] = "regression-result-artifact-v1"
+    expect_step_list_artifact_validation_failure(
+        "verifier_result_binding_regression_schema_reuse",
+        tampered,
+        "verifierResultSchemaVersion must equal verifier-result-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["deliveryManifestBinding"]["deliveryManifestSchemaVersion"] = "multi-agent-delivery-manifest-v1"
+    expect_step_list_artifact_validation_failure(
+        "delivery_manifest_binding_regression_schema_reuse",
+        tampered,
+        "deliveryManifestSchemaVersion must equal delivery-manifest-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyManifestBinding"]["policyManifestSchemaVersion"] = "adapter-policy-manifest-v1"
+    expect_step_list_artifact_validation_failure(
+        "policy_manifest_binding_regression_schema_reuse",
+        tampered,
+        "policyManifestSchemaVersion must equal policy-manifest-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["policyManifestBinding"]["unlocked"] = not tampered["policyManifestBinding"]["unlocked"]
+    expect_step_list_artifact_validation_failure(
+        "policy_manifest_binding_unlocked_drift",
+        tampered,
+        "policyManifestBinding.unlocked must equal PolicyManifestV1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["approvalDecisionBinding"]["approvalDecisionSchemaVersion"] = "regression-approval-v1"
+    expect_step_list_artifact_validation_failure(
+        "approval_decision_binding_schema_drift",
+        tampered,
+        "approvalDecisionSchemaVersion must equal human-approval-decision-v1",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["approvalDecisionBinding"]["approvalGranted"] = True
+    expect_step_list_artifact_validation_failure(
+        "approval_decision_binding_granted_drift",
+        tampered,
+        "approvalGranted must equal HumanApprovalDecisionV1.decision.approvalGranted",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["promotionConditions"]["requiredVerdict"] = "needs_human_check"
+    expect_step_list_artifact_validation_failure(
+        "promotion_required_verdict_not_passed",
+        tampered,
+        "promotionConditions.requiredVerdict must be passed",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["promotionConditions"]["promoted"] = True
+    expect_step_list_artifact_validation_failure(
+        "promotion_unlocked_when_blocked",
+        tampered,
+        "promotionConditions.promoted must be true only when verdict",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["coordinationBinding"].pop("broadcastSubscriptionManifestRef")
+    expect_step_list_artifact_validation_failure(
+        "coordination_binding_missing_broadcast",
+        tampered,
+        "coordinationBinding must include",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["coordinationBinding"]["delegationManifestRef"] = "artifacts/runs/all_passed/run.json"
+    expect_step_list_artifact_validation_failure(
+        "coordination_binding_wrong_path",
+        tampered,
+        "coordinationBinding.delegationManifestRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesRegressionRunArtifact"] = True
+    expect_step_list_artifact_validation_failure(
+        "reuses_regression_run_artifact",
+        tampered,
+        "must not reuse the first-workload regression run.json",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesRegressionEventsArtifact"] = True
+    expect_step_list_artifact_validation_failure(
+        "reuses_regression_events_artifact",
+        tampered,
+        "must not reuse the first-workload regression events.jsonl",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesRegressionRunStepArray"] = True
+    expect_step_list_artifact_validation_failure(
+        "reuses_regression_run_step_array",
+        tampered,
+        "must not reuse the first-workload regression run.json steps array",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["regressionWorkloadIsolation"]["reusesSendEmailCapability"] = True
+    expect_step_list_artifact_validation_failure(
+        "reuses_send_email_capability",
+        tampered,
+        "must not reuse the send_email capability",
+    )
+
+    tampered = json.loads(json.dumps(artifact))
+    tampered["nonRegressionReusePath"] = ["read_only_regression_evidence_demo"]
+    expect_step_list_artifact_validation_failure(
+        "non_regression_reuse_path_missing",
+        tampered,
+        "nonRegressionReusePath must equal",
+    )
+
+    for hash_role, label in [
+        ("test_execution_task_spec", "source_hash_mismatch_task_spec"),
+        ("test_execution_capability_manifest", "source_hash_mismatch_capability_manifest"),
+        ("test_execution_run_event_log", "source_hash_mismatch_run_event_log"),
+        ("test_execution_observation_list", "source_hash_mismatch_observation_list"),
+        ("test_execution_evidence_list", "source_hash_mismatch_evidence_list"),
+        ("test_execution_verifier_result", "source_hash_mismatch_verifier_result"),
+        ("test_execution_delivery_manifest", "source_hash_mismatch_delivery_manifest"),
+        ("test_execution_policy_manifest", "source_hash_mismatch_policy_manifest"),
+        ("test_execution_run_artifact", "source_hash_mismatch_run_artifact"),
+        ("human_approval_decision", "source_hash_mismatch_human_approval_decision"),
+        ("broadcast_subscription_manifest", "source_hash_mismatch_broadcast"),
+    ]:
+        tampered = json.loads(json.dumps(artifact))
+        for source in tampered["sourceArtifacts"]:
+            if source.get("role") == hash_role:
+                source["contentHash"] = "0" * 64
+                break
+        expect_step_list_artifact_validation_failure(
+            label,
+            tampered,
+            "source hash mismatch",
+        )
+
+
+def run_step_list_artifact_builder(artifact_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/step_list_artifact.py"),
+        "--out",
+        str(artifact_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "StepListV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -7968,6 +8613,7 @@ def main() -> None:
     validate_committed_evidence_list_artifact()
     validate_committed_observation_list_artifact()
     validate_committed_run_artifact()
+    validate_committed_step_list_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -8148,6 +8794,12 @@ def main() -> None:
         if load_json(generated_run_artifact) != load_json(RUN_ARTIFACT_PATH):
             raise AssertionError(
                 "Committed RunV1 artifact differs from deterministic CLI output"
+            )
+        generated_step_list_artifact = temp_root / "post_mvp_test_execution_step_list.json"
+        run_step_list_artifact_builder(generated_step_list_artifact)
+        if load_json(generated_step_list_artifact) != load_json(STEP_LIST_ARTIFACT_PATH):
+            raise AssertionError(
+                "Committed StepListV1 artifact differs from deterministic CLI output"
             )
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)
