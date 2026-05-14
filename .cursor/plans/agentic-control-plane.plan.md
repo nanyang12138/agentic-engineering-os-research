@@ -4934,6 +4934,68 @@ Add IdentityBoundApprovalRecordV1 static approval identity fixture so that scrip
 新增最小 ApprovalAuditQueryV1 fixture，基于 ReplayQueryV1 和 IdentityBoundApprovalRecordV1 证明审批审计查询能同时返回 actor、intent、policy、decision、replay source hashes 和 no-side-effect 状态；仍不得接入真实身份服务、数据库、邮件发送、PR 创建或 provider side effects。
 ```
 
+### 2026-05-14 01:02 UTC Automation Sprint：Post-MVP ApprovalAuditQueryV1 Static Audit Fixture Gate
+
+Active phase：post-MVP approval / state hardening（Phase 1a-9 contract-only MVP 已满足，完整 Agentic Engineering OS 产品仍未完成）。
+
+Selected slice：
+
+```text
+Add ApprovalAuditQueryV1 fixture so that /usr/bin/python3 scripts/validate_repo.py verifies actor, intent, policy, decision, replay source hashes, and no-side-effect approval audit state.
+```
+
+为什么这是下一步：
+
+- `.github/workflows/validate.yml` 和 `.github/workflows/auto-merge-cursor-pr.yml` 均存在；本轮 baseline `/usr/bin/python3 scripts/validate_repo.py` 已通过。
+- 上一轮 `EvaluationReportV1` 与主计划均推荐 approval audit query fixture。
+- 真实 identity provider、approval backend、database audit log、邮件发送、PR 创建和 external delivery unlock 仍过早；本轮只完成可机器验证的 static audit query artifact。
+
+验收标准：
+
+- 新增 `scripts/approval_audit_query.py` builder / validator / CLI。
+- 新增 committed `artifacts/approval/post_mvp_approval_audit_query.json`，schemaVersion 为 `approval-audit-query-v1`。
+- `ApprovalAuditQueryV1` 必须绑定 `ReplayQueryV1` 和 `IdentityBoundApprovalRecordV1` source hashes，并返回 actor、intent、policy、decision、effect boundary 和 source hash chain 查询结果。
+- `scripts/validate_repo.py` 必须验证 committed artifact、deterministic CLI output，并拒绝 database enabled、external side effects、actor drift、approval grant drift、source hash chain removal 和 identity record hash mismatch。
+- `EvaluationReportV1` 必须把 approval audit query script/artifact 纳入 source hash 汇总，并把下一推荐切片推进为 approval expiry / revocation fixture。
+
+实现摘要：
+
+- 新增 `scripts/approval_audit_query.py`，提供 `ApprovalAuditQueryV1` / `approval-audit-query-v1` builder、validator 和 CLI。
+- 新增 committed `artifacts/approval/post_mvp_approval_audit_query.json`，固定五类 read-only audit query：actor、intent/policy、decision、effect boundary、source hash chain。
+- 更新 `scripts/validate_repo.py` 的 required files/markers、committed artifact validation、deterministic builder output comparison 和 forced-failure cases。
+- 更新 `scripts/evaluation_report.py` 与 `artifacts/evaluation/phase9_mvp_evaluation_report.json`，将 approval audit query 作为 post-MVP source artifact 并推进下一推荐切片。
+
+验证计划 / 结果：
+
+```text
+- Python executable resolved for this run: /usr/bin/python3.
+- Baseline `/usr/bin/python3 scripts/validate_repo.py` before edits：通过。
+- `/usr/bin/python3 -m py_compile scripts/*.py`：通过。
+- `/usr/bin/python3 scripts/validate_repo.py`：通过，覆盖 ApprovalAuditQueryV1 committed artifact、deterministic builder output，以及 database enabled / external side effects / actor drift / approval grant drift / source hash chain removal / identity record hash mismatch forced-failure cases。
+- `/usr/bin/python3 scripts/approval_audit_query.py --validate-audit artifacts/approval/post_mvp_approval_audit_query.json`：通过。
+- `/usr/bin/python3 scripts/approval_audit_query.py --audit-out /tmp/post-mvp-approval-audit-checks/post_mvp_approval_audit_query.json`：通过，可 deterministic 生成 ApprovalAuditQueryV1 artifact。
+- `/usr/bin/python3 scripts/identity_bound_approval.py --validate-record artifacts/approval/post_mvp_identity_bound_approval_record.json`：通过。
+- `/usr/bin/python3 scripts/replay_query.py --validate-query artifacts/state/post_mvp_replay_query.json`：通过。
+- `/usr/bin/python3 scripts/evaluation_report.py --validate-report artifacts/evaluation/phase9_mvp_evaluation_report.json`：通过。
+- `/usr/bin/python3 scripts/fixture_runner.py --fixture-dir fixtures/regression --out-dir /tmp/post-mvp-approval-audit-checks/fixture-smoke`：通过。
+- `/usr/bin/python3 scripts/task_spec.py ... --input-log-path fixtures/regression/all_passed/input.log --out /tmp/post-mvp-approval-audit-checks/task-spec.json`：通过。
+- `/usr/bin/python3 scripts/local_readonly_runner.py ... --context-pack-path artifacts/context/all_passed/context_pack.json`：通过。
+- `git diff --check`：通过。
+```
+
+剩余风险：
+
+- ApprovalAuditQueryV1 仍是 static JSON audit fixture，不是 production approval audit API、identity provider、signed receipt、database audit log、UI 或 revocation backend。
+- 本切片只覆盖 `all_passed` read-only regression run；多用户、多 run、多 approval point、撤销/过期、审批 UI 和 external delivery unlock 仍后移。
+- 完整 Agentic Engineering OS 产品仍缺真实 durable runtime、identity-bound approval backend、IDE/CUA providers、external delivery adapters 和 production learning/evaluation loop。
+
+下一轮建议：
+
+```text
+进入 post-MVP approval expiry / revocation fixture：
+新增最小 ApprovalRevocationOrExpiryV1 fixture，基于 ApprovalAuditQueryV1 证明审批记录可以被审计为 revoked/expired 且不能打开 send_email、external delivery 或 provider side effects；仍不得接入真实身份服务、数据库、邮件发送、PR 创建或 provider side effects。
+```
+
 ## 22. Parking Lot
 
 以下内容仍然重要，但不进入第一版 MVP：

@@ -1,0 +1,208 @@
+{
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "post-mvp-approval-audit-query-fixture-all_passed",
+  "invariants": [
+    "ApprovalAuditQueryV1 answers are derived from ReplayQueryV1 and IdentityBoundApprovalRecordV1 only.",
+    "Approval audit queries return actor, intent, policy, decision, effect boundary, and source hash state without granting approval.",
+    "Approval audit queries must not use a database, send email, mutate workspace state, or enable external delivery."
+  ],
+  "mode": "static_json_audit_query_only",
+  "phase": "post_mvp",
+  "queries": [
+    {
+      "input": {
+        "runId": "run-all_passed-988940c2"
+      },
+      "queryId": "query-approval-audit-actor-by-run-id",
+      "queryType": "approval_audit_actor_by_run_id",
+      "result": {
+        "actorId": "static-human-approver-fixture",
+        "actorType": "human",
+        "approvalAuthority": "permission-policy-v1:send_email_requires_human_approval",
+        "authenticated": true,
+        "identityProvider": "static_fixture_identity_provider",
+        "identitySynthesized": false,
+        "identityVerificationMode": "source_hash_bound_static_fixture",
+        "runId": "run-all_passed-988940c2"
+      },
+      "sourceRefs": [
+        "artifacts/approval/post_mvp_identity_bound_approval_record.json"
+      ]
+    },
+    {
+      "input": {
+        "runId": "run-all_passed-988940c2"
+      },
+      "queryId": "query-approval-audit-intent-policy-by-run-id",
+      "queryType": "approval_audit_intent_policy_by_run_id",
+      "result": {
+        "approvalPoint": "send_email_requires_human_approval",
+        "approvalRequiredFor": [
+          "dangerous",
+          "external_side_effect",
+          "send_email"
+        ],
+        "externalSideEffectsAllowed": false,
+        "fixtureId": "all_passed",
+        "goal": "Confirm whether the m2b_lec_regr regression passed and draft a grounded English status email.",
+        "inputLogPath": "fixtures/regression/all_passed/input.log",
+        "permissionPolicyContentHash": "e6924feccefad02d5a788d27956e889085e37f171b712e1fe95e75d439ab647d",
+        "permissionPolicyId": "permission-policy-all_passed",
+        "permissionPolicySchemaVersion": "permission-policy-v1",
+        "runId": "run-all_passed-988940c2",
+        "sendEmailRequiresApproval": true,
+        "taskSpecContentHash": "8227b51a438db2340c404ac5751921f92b1f7c5c8db194cbaa7183f16f242e71",
+        "taskSpecId": "task-spec-all_passed",
+        "taskSpecRef": "artifacts/runs/all_passed/run.json#taskSpec"
+      },
+      "sourceRefs": [
+        "artifacts/approval/post_mvp_identity_bound_approval_record.json"
+      ]
+    },
+    {
+      "input": {
+        "runId": "run-all_passed-988940c2"
+      },
+      "queryId": "query-approval-audit-decision-by-run-id",
+      "queryType": "approval_audit_decision_by_run_id",
+      "result": {
+        "approvalDecisionSynthesized": false,
+        "approvalGranted": false,
+        "decidedBy": "static-human-approval-fixture",
+        "decision": "rejected",
+        "decisionId": "human-decision-all_passed-send-email-rejected",
+        "humanDecisionRecorded": true,
+        "reasonCode": "mvp_external_delivery_not_allowed",
+        "runId": "run-all_passed-988940c2",
+        "taskVerdictOverrideAllowed": false,
+        "taskVerdictOwner": "verifier-runtime-v1"
+      },
+      "sourceRefs": [
+        "artifacts/approval/post_mvp_identity_bound_approval_record.json"
+      ]
+    },
+    {
+      "input": {
+        "runId": "run-all_passed-988940c2"
+      },
+      "queryId": "query-approval-audit-effect-boundary-by-run-id",
+      "queryType": "approval_audit_effect_boundary_by_run_id",
+      "result": {
+        "approvalGrantAllowed": false,
+        "databaseUsed": false,
+        "externalDeliveryAllowed": false,
+        "externalSideEffectsAllowed": false,
+        "prCreationAllowed": false,
+        "realProviderExecutionAllowed": false,
+        "runId": "run-all_passed-988940c2",
+        "sendEmailAllowed": false,
+        "workspaceMutationAllowed": false
+      },
+      "sourceRefs": [
+        "artifacts/approval/post_mvp_identity_bound_approval_record.json"
+      ]
+    },
+    {
+      "input": {
+        "runId": "run-all_passed-988940c2"
+      },
+      "queryId": "query-approval-audit-source-hashes-by-run-id",
+      "queryType": "approval_audit_source_hashes_by_run_id",
+      "result": {
+        "approvalDecisionRef": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+        "durableRunStoreRef": "artifacts/state/post_mvp_durable_run_store.json",
+        "identityRecordSourceArtifacts": [
+          {
+            "contentHash": "99b6e4391d1fd0111b375c3393f20374f3c37419f3c4d6a043c1dc2eebdcb017",
+            "path": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+            "role": "human_approval_decision"
+          },
+          {
+            "contentHash": "5e57764de6e9c125d9644d0e4a6797bf8922e5fe346062b77a8dc7c50f7cd0af",
+            "path": "artifacts/state/post_mvp_durable_run_store.json",
+            "role": "durable_run_store"
+          },
+          {
+            "contentHash": "e020d1b30f00445c7b6671f0c63a5f57da069c8c26ff4b7f13008fd73e90fe3f",
+            "path": "artifacts/state/post_mvp_replay_query.json",
+            "role": "replay_query"
+          },
+          {
+            "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
+            "path": "artifacts/runs/all_passed/run.json",
+            "role": "run"
+          }
+        ],
+        "replayQueryIds": [
+          "query-run-state-by-id",
+          "query-delivery-readiness-by-run-id",
+          "query-approval-decision-by-run-id",
+          "query-event-log-tail-by-run-id"
+        ],
+        "replayQueryRef": "artifacts/state/post_mvp_replay_query.json",
+        "replayQuerySourceArtifacts": [
+          {
+            "contentHash": "5e57764de6e9c125d9644d0e4a6797bf8922e5fe346062b77a8dc7c50f7cd0af",
+            "path": "artifacts/state/post_mvp_durable_run_store.json",
+            "role": "durable_run_store"
+          },
+          {
+            "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
+            "path": "artifacts/runs/all_passed/run.json",
+            "role": "run"
+          },
+          {
+            "contentHash": "02f5a82d1765a4443aae0d3c50502e7ee0ae6e3dcd1c2201b6e2a83daae4a6fc",
+            "path": "artifacts/runs/all_passed/events.jsonl",
+            "role": "events"
+          },
+          {
+            "contentHash": "2a340e1323b927385a2844f59110439d3ff12078c37f63a874287b006bdf8e5e",
+            "path": "artifacts/delivery/phase9_delivery_report.json",
+            "role": "delivery_report"
+          },
+          {
+            "contentHash": "99b6e4391d1fd0111b375c3393f20374f3c37419f3c4d6a043c1dc2eebdcb017",
+            "path": "artifacts/approval/phase9_human_approval_decision_fixture.json",
+            "role": "human_approval_decision"
+          }
+        ],
+        "requiredReplayQueryIds": [
+          "query-run-state-by-id",
+          "query-delivery-readiness-by-run-id",
+          "query-approval-decision-by-run-id",
+          "query-event-log-tail-by-run-id"
+        ],
+        "runId": "run-all_passed-988940c2"
+      },
+      "sourceRefs": [
+        "artifacts/approval/post_mvp_identity_bound_approval_record.json",
+        "artifacts/state/post_mvp_replay_query.json"
+      ]
+    }
+  ],
+  "queryPolicy": {
+    "approvalGrantAllowed": false,
+    "auditOnly": true,
+    "databaseUsed": false,
+    "durableBackendRequired": false,
+    "externalSideEffectsAllowed": false,
+    "queryEngine": "same_process_json_fixture",
+    "realProviderExecutionAllowed": false,
+    "sourceHashValidationRequired": true
+  },
+  "schemaVersion": "approval-audit-query-v1",
+  "scope": "approval_audit_query_fixture",
+  "sourceArtifacts": [
+    {
+      "contentHash": "e020d1b30f00445c7b6671f0c63a5f57da069c8c26ff4b7f13008fd73e90fe3f",
+      "path": "artifacts/state/post_mvp_replay_query.json",
+      "role": "replay_query"
+    },
+    {
+      "contentHash": "706b9659c784b139ca6a219d19dc9db3e203e977b312c742b789c3ac91e9bc92",
+      "path": "artifacts/approval/post_mvp_identity_bound_approval_record.json",
+      "role": "identity_bound_approval_record"
+    }
+  ]
+}
