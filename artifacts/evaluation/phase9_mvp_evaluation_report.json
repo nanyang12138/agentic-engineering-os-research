@@ -56,7 +56,7 @@
   "nextRecommendedSlice": {
     "mustRemainMachineVerifiable": true,
     "phase": "post_mvp",
-    "slice": "Add a workload-independent PolicyV1 ArtifactV1 subtype contract artifact at artifacts/policy/post_mvp_policy_v1_catalog.json that defines the canonical OS-kernel Policy primitive distinct from the workload-specific PolicyManifestV1: each policyItem must declare policyId / policyClass (permission_policy / approval_policy / delivery_policy / external_side_effect_policy / regression_isolation_policy / coordination_policy) / policyScope (workload_independent_kernel / workload_specific / coordination_layer) / policyLifecycleState (drafted / active / deprecated / withdrawn) / requiredFlag (false-only for workload-independent kernel scope) / verifierVerdictOwner / unlockConditionRef using only workload-independent vocabulary; the envelope must bind TestExecutionTaskSpecV1 / IntentV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyManifestV1 / HumanApprovalDecisionV1 by content hash plus the five Agent Coordination Layer manifests; declare verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true; force the six workload-independent permission flags to false; PolicyV1 must explicitly forbid every regression/email forbidden token and set reusesRegressionPolicyArtifact=false; ensure the artifact reuses ArtifactV1 envelope (artifactEnvelopeSchemaVersion=artifact-v1) and every PolicyManifestV1.unlockConditions key resolves into PolicyV1.policyItems[*].unlockConditionRef."
+    "slice": "Add a workload-independent RunEventV1 ArtifactV1 subtype contract artifact at artifacts/state/post_mvp_run_event_v1_catalog.json that defines the canonical OS-kernel RunEvent primitive distinct from the workload-specific RunEventLogV1: each runEventItem must declare runEventId / runEventClass (run_lifecycle / step_lifecycle / tool_call_lifecycle / verifier_lifecycle / artifact_lifecycle / approval_lifecycle / policy_lifecycle / coordination_lifecycle) / runEventScope (workload_independent_kernel / workload_specific / coordination_layer) / runEventLifecycleState (drafted / emitted / replayed / deprecated) / requiredFlag / verifierVerdictOwner / sourceEventRef using only workload-independent vocabulary; the envelope must bind TestExecutionTaskSpecV1 / IntentV1 / RunV1 / StepListV1 / ToolCallListV1 / CapabilityV1 / CapabilityManifestV1 / RunEventLogV1 / ObservationListV1 / EvidenceListV1 / VerifierResultV1 / DeliveryManifestV1 / PolicyV1 / PolicyManifestV1 / HumanApprovalDecisionV1 by content hash plus the five Agent Coordination Layer manifests; declare verifier-runtime-v1 as the verdict owner with creatorMustNotOwnVerdict=true; force the six workload-independent permission flags to false; RunEventV1 must explicitly forbid every regression/email forbidden token and set reusesRegressionRunEventLog=false; ensure the artifact reuses ArtifactV1 envelope (artifactEnvelopeSchemaVersion=artifact-v1) and every RunEventLogV1.events[*].type resolves into RunEventV1.runEventItems[*].sourceEventRef."
   },
   "outOfScope": [
     {
@@ -263,7 +263,7 @@
   "scope": "read_only_regression_evidence_demo_mvp_completion",
   "sourceArtifacts": [
     {
-      "contentHash": "8c51aeef7c4786cb20e286341bb58804bbd58c3fba492c38e7e7ee6b601c983c",
+      "contentHash": "114cb123a6e8f0b1404abc97d4ea88fc9dd3ede99fda4282b7039b3d914ee728",
       "path": "scripts/validate_repo.py",
       "role": "validation_script"
     },
@@ -511,6 +511,11 @@
       "contentHash": "a2ac7f293116ab288b9f13f0bc2f56dd86e4d16e5b0e905a7d9ddf0f21eb1f96",
       "path": "artifacts/capabilities/post_mvp_capability_v1_catalog.json",
       "role": "post_mvp_capability_v1_catalog"
+    },
+    {
+      "contentHash": "1d591cf449964f6406180a910aa7a668fde007bfeded493d04a52b29d1fb042f",
+      "path": "artifacts/policy/post_mvp_policy_v1_catalog.json",
+      "role": "post_mvp_policy_v1_catalog"
     },
     {
       "contentHash": "e159848ae8b93c985ef9a124c7598795a0709ccf5157fb03aec6135c39d44c74",
