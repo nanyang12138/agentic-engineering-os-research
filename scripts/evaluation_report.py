@@ -42,6 +42,10 @@ from coordination_contract import (
     validate_delegation_manifest,
     validate_negotiation_record,
 )
+from test_execution_task_spec import (
+    TASK_SPEC_ARTIFACT_PATH as TEST_EXECUTION_TASK_SPEC_ARTIFACT_PATH,
+    validate_test_execution_task_spec,
+)
 
 
 EVALUATION_REPORT_SCHEMA_VERSION = "mvp-evaluation-report-v1"
@@ -165,6 +169,7 @@ def _source_specs() -> list[tuple[str, str]]:
         ("post_mvp_agent_message_manifest", AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH),
         ("post_mvp_negotiation_record", NEGOTIATION_RECORD_ARTIFACT_PATH),
         ("post_mvp_broadcast_subscription_manifest", BROADCAST_SUBSCRIPTION_MANIFEST_ARTIFACT_PATH),
+        ("post_mvp_test_execution_task_spec", TEST_EXECUTION_TASK_SPEC_ARTIFACT_PATH),
     ]
     for fixture_id in FIXTURE_IDS:
         specs.append((f"phase1a_{fixture_id}_run", f"artifacts/runs/{fixture_id}/run.json"))
@@ -299,6 +304,8 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
     validate_negotiation_record(negotiation_record, root)
     broadcast_subscription_manifest = _load_json(root / BROADCAST_SUBSCRIPTION_MANIFEST_ARTIFACT_PATH)
     validate_broadcast_subscription_manifest(broadcast_subscription_manifest, root)
+    test_execution_task_spec = _load_json(root / TEST_EXECUTION_TASK_SPEC_ARTIFACT_PATH)
+    validate_test_execution_task_spec(test_execution_task_spec, root)
     delivery_readiness = delivery_report["readiness"]
     delivery_blocker_ids = [blocker["id"] for blocker in delivery_report["blockers"]]
     phase_coverage = _phase_coverage()
@@ -381,7 +388,7 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
         ],
         "nextRecommendedSlice": {
             "phase": "post_mvp",
-            "slice": "Open the second workload by adding a workload-independent TestExecutionTaskSpecV1 envelope so the Agentic Engineering OS kernel can host Test Execution / Failure Triage without reusing regression/email TaskSpec fields, while keeping DelegationManifestV1, CreatorVerifierPairingV1, AgentMessageManifestV1, NegotiationRecordV1, and BroadcastSubscriptionManifestV1 reusable.",
+            "slice": "Add a workload-independent TestExecutionResultV1 artifact contract bound to the existing TestExecutionTaskSpecV1 envelope so that Test Execution / Failure Triage produces a workload-independent ArtifactV1 subtype reusable by Code Patch / Review Loop and PR Review, without depending on regression_result / email_draft / send_email fields.",
             "mustRemainMachineVerifiable": True,
         },
         "invariants": [

@@ -115,6 +115,11 @@ from multi_agent_delivery import (
 )
 from run_control import validate_run_control
 from task_spec import TASK_SPEC_SCHEMA_VERSION, build_regression_task_spec, validate_regression_task_spec
+from test_execution_task_spec import (
+    TASK_SPEC_ARTIFACT_PATH as TEST_EXECUTION_TASK_SPEC_ARTIFACT_PATH,
+    build_test_execution_task_spec,
+    validate_test_execution_task_spec,
+)
 from verifier_runtime import (
     REQUIRED_ARTIFACT_CHECK_IDS,
     REQUIRED_VERIFIER_RULE_IDS,
@@ -154,6 +159,7 @@ CREATOR_VERIFIER_PAIRING_PATH = ROOT / CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH
 AGENT_MESSAGE_MANIFEST_PATH = ROOT / AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH
 NEGOTIATION_RECORD_PATH = ROOT / NEGOTIATION_RECORD_ARTIFACT_PATH
 BROADCAST_SUBSCRIPTION_MANIFEST_PATH = ROOT / BROADCAST_SUBSCRIPTION_MANIFEST_ARTIFACT_PATH
+TEST_EXECUTION_TASK_SPEC_PATH = ROOT / TEST_EXECUTION_TASK_SPEC_ARTIFACT_PATH
 FIXTURE_IDS = [
     "all_passed",
     "failed_tests",
@@ -217,6 +223,7 @@ REQUIRED_FILES = [
     "scripts/approval_revocation.py",
     "scripts/policy_unlock_denial.py",
     "scripts/coordination_contract.py",
+    "scripts/test_execution_task_spec.py",
     "artifacts/capabilities/phase3_capability_catalog.json",
     "artifacts/verifier/phase5_verifier_rule_catalog.json",
     "artifacts/recovery/interrupted_after_extract/run.json",
@@ -242,6 +249,7 @@ REQUIRED_FILES = [
     "artifacts/coordination/post_mvp_agent_message_manifest.json",
     "artifacts/coordination/post_mvp_negotiation_record.json",
     "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
+    "artifacts/task_specs/post_mvp_test_execution_task_spec.json",
     "artifacts/evaluation/phase9_mvp_evaluation_report.json",
 ]
 
@@ -339,6 +347,10 @@ PLAN_REQUIRED_MARKERS = [
     "broadcast-subscription-v1",
     "broadcast-fan-out-v1",
     "post_mvp_broadcast_subscription_manifest.json",
+    "TestExecutionTaskSpecV1",
+    "test-execution-task-spec-v1",
+    "test_execution_failure_triage",
+    "post_mvp_test_execution_task_spec.json",
     "Agentic Engineering OS Kernel",
     "workload-independent primitives",
     "first workload: Read-only Regression Evidence Demo",
@@ -3219,6 +3231,177 @@ def run_broadcast_subscription_manifest_builder(manifest_out: Path) -> None:
         )
 
 
+def expect_test_execution_task_spec_validation_failure(
+    label: str,
+    spec: dict,
+    expected_message_fragment: str,
+) -> None:
+    try:
+        validate_test_execution_task_spec(spec, ROOT)
+    except ValueError as exc:
+        message = str(exc)
+        if expected_message_fragment not in message:
+            raise AssertionError(
+                f"TestExecutionTaskSpecV1 forced-failure case {label} failed for the wrong reason.\n"
+                f"Expected message fragment: {expected_message_fragment}\n"
+                f"Actual message: {message}"
+            ) from exc
+        return
+    raise AssertionError(
+        f"TestExecutionTaskSpecV1 forced-failure case {label} unexpectedly passed validation"
+    )
+
+
+def validate_committed_test_execution_task_spec_artifact() -> None:
+    spec = load_json(TEST_EXECUTION_TASK_SPEC_PATH)
+    try:
+        validate_test_execution_task_spec(spec, ROOT)
+    except ValueError as exc:
+        raise AssertionError(
+            f"Committed TestExecutionTaskSpecV1 artifact failed validation: {exc}"
+        ) from exc
+
+    expected_spec = build_test_execution_task_spec(ROOT)
+    if spec != expected_spec:
+        raise AssertionError(
+            "Committed TestExecutionTaskSpecV1 artifact differs from deterministic builder output"
+        )
+
+    tampered = json.loads(json.dumps(spec))
+    tampered["workloadType"] = "read_only_regression_evidence_demo"
+    expect_test_execution_task_spec_validation_failure(
+        "workload_type_regression_reuse",
+        tampered,
+        "workloadType must be test_execution_failure_triage",
+    )
+
+    tampered = json.loads(json.dumps(spec))
+    tampered["taskSpecEnvelopeSchemaVersion"] = "regression-task-spec-v1"
+    expect_test_execution_task_spec_validation_failure(
+        "envelope_schema_regression_reuse",
+        tampered,
+        "taskSpecEnvelopeSchemaVersion must be task-spec-v1",
+    )
+
+    tampered = json.loads(json.dumps(spec))
+    tampered["regressionWorkloadIsolation"]["reusesRegressionTaskSpecFields"] = True
+    expect_test_execution_task_spec_validation_failure(
+        "regression_field_reuse_allowed",
+        tampered,
+        "must not reuse regression TaskSpec fields",
+    )
+
+    tampered = json.loads(json.dumps(spec))
+    tampered["regressionWorkloadIsolation"]["reusesRegressionTaskSpecSchemaVersion"] = True
+    expect_test_execution_task_spec_validation_failure(
+        "regression_schema_reuse_allowed",
+        tampered,
+        "must not reuse regression-task-spec-v1 schema version",
+    )
+
+    tampered = json.loads(json.dumps(spec))
+    tampered["expectedArtifactKinds"] = ["RegressionResultArtifactV1", "EmailDraftV1"]
+    expect_test_execution_task_spec_validation_failure(
+        "expected_artifact_kinds_regression_overlap",
+        tampered,
+        "expectedArtifactKinds must equal",
+    )
+
+    tampered = json.loads(json.dumps(spec))
+    tampered["forbiddenEffectClasses"] = [
+        cls for cls in tampered["forbiddenEffectClasses"] if cls != "send_external_communication"
+    ]
+    expect_test_execution_task_spec_validation_failure(
+        "forbidden_effects_drop_communication",
+        tampered,
+        "forbiddenEffectClasses must equal",
+    )
+
+    tampered = json.loads(json.dumps(spec))
+    tampered["policyBoundary"]["externalSideEffectsAllowed"] = True
+    expect_test_execution_task_spec_validation_failure(
+        "policy_external_side_effects_allowed",
+        tampered,
+        "policyBoundary.externalSideEffectsAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(spec))
+    tampered["policyBoundary"]["repositoryMutationAllowed"] = True
+    expect_test_execution_task_spec_validation_failure(
+        "policy_repository_mutation_allowed",
+        tampered,
+        "policyBoundary.repositoryMutationAllowed must be false",
+    )
+
+    tampered = json.loads(json.dumps(spec))
+    tampered["verifierExpectations"]["verdictOwner"] = "creator_agent"
+    expect_test_execution_task_spec_validation_failure(
+        "verifier_owner_override",
+        tampered,
+        "verdictOwner must be verifier-runtime-v1",
+    )
+
+    tampered = json.loads(json.dumps(spec))
+    tampered["verifierExpectations"]["creatorMustNotOwnVerdict"] = False
+    expect_test_execution_task_spec_validation_failure(
+        "creator_owns_verdict_allowed",
+        tampered,
+        "verifierExpectations.creatorMustNotOwnVerdict must be true",
+    )
+
+    tampered = json.loads(json.dumps(spec))
+    del tampered["coordinationBinding"]["broadcastSubscriptionManifestRef"]
+    expect_test_execution_task_spec_validation_failure(
+        "coordination_binding_missing_broadcast",
+        tampered,
+        "coordinationBinding must include",
+    )
+
+    tampered = json.loads(json.dumps(spec))
+    tampered["coordinationBinding"]["delegationManifestRef"] = "artifacts/runs/all_passed/run.json"
+    expect_test_execution_task_spec_validation_failure(
+        "coordination_binding_wrong_path",
+        tampered,
+        "coordinationBinding.delegationManifestRef must equal",
+    )
+
+    tampered = json.loads(json.dumps(spec))
+    tampered["nonRegressionReusePath"] = ["read_only_regression_evidence_demo"]
+    expect_test_execution_task_spec_validation_failure(
+        "non_regression_reuse_path_missing",
+        tampered,
+        "nonRegressionReusePath must equal",
+    )
+
+    tampered = json.loads(json.dumps(spec))
+    for source in tampered["sourceArtifacts"]:
+        if source.get("role") == "broadcast_subscription_manifest":
+            source["contentHash"] = "0" * 64
+            break
+    expect_test_execution_task_spec_validation_failure(
+        "source_hash_mismatch_broadcast",
+        tampered,
+        "source hash mismatch",
+    )
+
+
+def run_test_execution_task_spec_builder(spec_out: Path) -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/test_execution_task_spec.py"),
+        "--out",
+        str(spec_out),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            "TestExecutionTaskSpecV1 builder failed.\n"
+            f"Command: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def expect_evaluation_report_validation_failure(
     label: str,
     report: dict,
@@ -3621,6 +3804,7 @@ def main() -> None:
     validate_committed_agent_message_manifest_artifact()
     validate_committed_negotiation_record_artifact()
     validate_committed_broadcast_subscription_manifest_artifact()
+    validate_committed_test_execution_task_spec_artifact()
     validate_committed_evaluation_report_artifact()
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -3735,6 +3919,12 @@ def main() -> None:
         if load_json(generated_broadcast_subscription_manifest) != load_json(BROADCAST_SUBSCRIPTION_MANIFEST_PATH):
             raise AssertionError(
                 "Committed BroadcastSubscriptionManifestV1 artifact differs from deterministic CLI output"
+            )
+        generated_test_execution_task_spec = temp_root / "post_mvp_test_execution_task_spec.json"
+        run_test_execution_task_spec_builder(generated_test_execution_task_spec)
+        if load_json(generated_test_execution_task_spec) != load_json(TEST_EXECUTION_TASK_SPEC_PATH):
+            raise AssertionError(
+                "Committed TestExecutionTaskSpecV1 artifact differs from deterministic CLI output"
             )
         generated_evaluation_report = temp_root / "phase9_mvp_evaluation_report.json"
         run_evaluation_report_builder(generated_evaluation_report)

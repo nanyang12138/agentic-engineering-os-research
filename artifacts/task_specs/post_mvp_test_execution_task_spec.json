@@ -1,0 +1,142 @@
+{
+  "allowedCapabilityClasses": [
+    "read_test_execution_result",
+    "collect_test_failure_evidence",
+    "classify_test_failure",
+    "write_artifact"
+  ],
+  "approvalPoints": [
+    "external_communication_requires_human_approval",
+    "release_or_deployment_requires_human_approval"
+  ],
+  "coordinationBinding": {
+    "agentMessageManifestRef": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+    "broadcastSubscriptionManifestRef": "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
+    "creatorVerifierPairingRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+    "delegationManifestRef": "artifacts/coordination/post_mvp_delegation_manifest.json",
+    "negotiationRecordRef": "artifacts/coordination/post_mvp_negotiation_record.json"
+  },
+  "expectedArtifactKinds": [
+    "TestExecutionResultV1",
+    "FailureTriageReportV1",
+    "EvidenceListV1"
+  ],
+  "forbiddenEffectClasses": [
+    "modify_repository_or_test_artifact",
+    "execute_external_side_effect",
+    "send_external_communication",
+    "trigger_release_or_deployment",
+    "call_gui_desktop_cua_or_browser_capability",
+    "claim_passed_without_evidence"
+  ],
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "goal": "Given a recorded test execution result, classify the test run, attach evidence-backed failure triage findings, and write workload-independent artifacts that downstream coordination contracts can deliver.",
+  "id": "post-mvp-test-execution-failure-triage-task-spec",
+  "inputs": [
+    {
+      "description": "A recorded test execution result identifying framework, run id, and per-case outcomes.",
+      "id": "test_execution_result",
+      "kind": "TestExecutionResultV1",
+      "required": true
+    },
+    {
+      "description": "Optional diagnostic bundle (stack traces, logs) bound to the test execution result.",
+      "id": "failure_diagnostics",
+      "kind": "DiagnosticBundleV1",
+      "required": false
+    }
+  ],
+  "intent": "Collect deterministic evidence of a test execution outcome and produce a workload-independent failure triage artifact without modifying the repository or sending external communication.",
+  "invariants": [
+    "TestExecutionTaskSpecV1 is a TaskSpecV1 subtype distinct from RegressionTaskSpecV1.",
+    "The TestExecutionTaskSpecV1 must not reuse regression/email TaskSpec fields.",
+    "The TestExecutionTaskSpecV1 must bind all five coordination contracts by ref and content hash.",
+    "The TestExecutionTaskSpecV1 must keep the verifier verdict owned by verifier-runtime-v1.",
+    "The TestExecutionTaskSpecV1 must keep external side effects, communication, and repository mutation disabled."
+  ],
+  "nonRegressionReusePath": [
+    "test_execution_failure_triage",
+    "code_patch_review_loop",
+    "pr_review"
+  ],
+  "policyBoundary": {
+    "externalCommunicationAllowed": false,
+    "externalSideEffectsAllowed": false,
+    "guiOrBrowserOrDesktopCallAllowed": false,
+    "publicAccessAllowed": false,
+    "releaseOrDeploymentAllowed": false,
+    "repositoryMutationAllowed": false
+  },
+  "regressionWorkloadIsolation": {
+    "forbiddenFields": [
+      "regression_result",
+      "regression_result.json",
+      "email_draft",
+      "email_draft.md",
+      "send_email",
+      "regression-task-spec-v1"
+    ],
+    "reusesRegressionTaskSpecFields": false,
+    "reusesRegressionTaskSpecSchemaVersion": false
+  },
+  "requiredEvidence": [
+    "testRunIdentifier",
+    "testFrameworkAndVersion",
+    "testCaseIdentifier",
+    "failureClassification",
+    "stackTraceOrDiagnosticReference",
+    "evidenceIdReferencedByArtifacts"
+  ],
+  "schemaVersion": "test-execution-task-spec-v1",
+  "sourceArtifacts": [
+    {
+      "contentHash": "e026fb8f8d78f3a54d0a1a3d846cd93d8289cd9a8fefb59ead112fb18e4552f2",
+      "path": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+      "role": "agent_message_manifest"
+    },
+    {
+      "contentHash": "4e622eafff1480cb2e109aad1230e0852d99c412470ff8f33b215898beeb90b6",
+      "path": "artifacts/coordination/post_mvp_broadcast_subscription_manifest.json",
+      "role": "broadcast_subscription_manifest"
+    },
+    {
+      "contentHash": "834b3c6bfe4dc401a5c34f3ed20edb479c4352e85363ac629caab3a3af429932",
+      "path": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+      "role": "creator_verifier_pairing"
+    },
+    {
+      "contentHash": "7779a468076194ccb7f88ffeb9e37727d479742ec0add917ac45777b748d5b8f",
+      "path": "artifacts/coordination/post_mvp_delegation_manifest.json",
+      "role": "delegation_manifest"
+    },
+    {
+      "contentHash": "fbbcd49ad9e7cd229658b431ab15313829f3a58107d809ef288043236746698e",
+      "path": "artifacts/coordination/post_mvp_negotiation_record.json",
+      "role": "negotiation_record"
+    }
+  ],
+  "successCriteria": [
+    "Read the recorded test execution result without modifying it.",
+    "Extract a structured failure triage verdict bound to evidence ids.",
+    "Write workload-independent artifacts without external side effects.",
+    "Verify schema, evidence references, capability boundary, and forbidden effect classes."
+  ],
+  "taskSpecEnvelopeSchemaVersion": "task-spec-v1",
+  "verifierExpectations": {
+    "creatorMustNotOwnVerdict": true,
+    "mustEnforcePolicyBoundary": true,
+    "mustValidateCapabilityBoundary": true,
+    "mustValidateEvidenceProvenance": true,
+    "mustValidateForbiddenEffectClasses": true,
+    "mustValidateSchema": true,
+    "verdictDomain": [
+      "passed",
+      "failed",
+      "incomplete",
+      "needs_human_check"
+    ],
+    "verdictOwner": "verifier-runtime-v1"
+  },
+  "workloadCategory": "engineering_workload",
+  "workloadType": "test_execution_failure_triage"
+}
