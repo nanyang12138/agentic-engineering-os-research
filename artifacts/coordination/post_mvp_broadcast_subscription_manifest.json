@@ -1,0 +1,370 @@
+{
+  "broadcastInvariant": {
+    "creatorAndVerifierMustBeDistinct": true,
+    "fanOutMayCarrySideEffects": false,
+    "fanOutMayOverrideVerifierResult": false,
+    "fanOutMustReferenceDeclaredEvent": true,
+    "publicAccessAllowed": false,
+    "publishersMustBeAuthorized": true,
+    "subscribersMayBroadcastDownstream": false,
+    "subscribersMustBeOnAllowList": true,
+    "verifierResultOwner": "verifier-runtime-v1"
+  },
+  "coordinationEventRefs": [
+    "artifacts/coordination/post_mvp_delegation_manifest.json#coordinationEvents/coord-event-delegation-created",
+    "artifacts/coordination/post_mvp_delegation_manifest.json#coordinationEvents/coord-event-delegation-accepted",
+    "artifacts/coordination/post_mvp_delegation_manifest.json#coordinationEvents/coord-event-verification-requested"
+  ],
+  "coordinationProtocols": [
+    "broadcast",
+    "negotiation",
+    "direct_communication",
+    "creator_verifier",
+    "delegation"
+  ],
+  "delegationBinding": {
+    "agentMessageManifestId": "artifacts/coordination/post_mvp_agent_message_manifest.json#id/post-mvp-agent-message-manifest-kernel-contract",
+    "agentMessageManifestRef": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+    "delegationManifestRef": "artifacts/coordination/post_mvp_delegation_manifest.json",
+    "delegationRef": "artifacts/coordination/post_mvp_delegation_manifest.json#delegations/delegation-workload-independent-artifact-creation",
+    "negotiationRecordId": "artifacts/coordination/post_mvp_negotiation_record.json#id/post-mvp-negotiation-record-kernel-contract",
+    "negotiationRecordRef": "artifacts/coordination/post_mvp_negotiation_record.json",
+    "pairingManifestRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+    "pairingRef": "artifacts/coordination/post_mvp_creator_verifier_pairing.json#id/post-mvp-creator-verifier-pairing-kernel-contract",
+    "parentRunRef": "artifacts/runs/all_passed/run.json",
+    "parentTaskSpecRef": "artifacts/runs/all_passed/run.json#taskSpec",
+    "workloadIndependentObjective": "Create source-bound engineering artifacts from a reviewed TaskSpec without owning the task verdict."
+  },
+  "expectedDelegationArtifactRefs": {
+    "ArtifactV1": "artifacts/runs/all_passed/regression_result.json",
+    "EvidenceListV1": "artifacts/runs/all_passed/evidence.json",
+    "VerifierResultV1": "artifacts/runs/all_passed/verifier_report.json"
+  },
+  "fanOutEvents": [
+    {
+      "broadcastAllowedByTopic": true,
+      "broadcastTopicMatches": true,
+      "carriesSideEffects": false,
+      "causalRefs": [
+        "artifacts/coordination/post_mvp_delegation_manifest.json#coordinationEvents/coord-event-delegation-created"
+      ],
+      "eventRef": "artifacts/coordination/post_mvp_delegation_manifest.json#coordinationEvents/coord-event-delegation-created",
+      "eventType": "delegation.created",
+      "id": "broadcast-fan-out-coord-event-delegation-created",
+      "mayOverrideVerifierResult": false,
+      "schemaVersion": "broadcast-fan-out-v1",
+      "subscriberAgentIds": [
+        "planner_agent",
+        "verifier_agent",
+        "auditor_agent"
+      ],
+      "topicId": "coordination.delegation_lifecycle"
+    },
+    {
+      "broadcastAllowedByTopic": true,
+      "broadcastTopicMatches": true,
+      "carriesSideEffects": false,
+      "causalRefs": [
+        "artifacts/coordination/post_mvp_delegation_manifest.json#coordinationEvents/coord-event-delegation-accepted",
+        "broadcast-fan-out-coord-event-delegation-created"
+      ],
+      "eventRef": "artifacts/coordination/post_mvp_delegation_manifest.json#coordinationEvents/coord-event-delegation-accepted",
+      "eventType": "delegation.accepted",
+      "id": "broadcast-fan-out-coord-event-delegation-accepted",
+      "mayOverrideVerifierResult": false,
+      "schemaVersion": "broadcast-fan-out-v1",
+      "subscriberAgentIds": [
+        "planner_agent",
+        "verifier_agent",
+        "auditor_agent"
+      ],
+      "topicId": "coordination.delegation_lifecycle"
+    },
+    {
+      "broadcastAllowedByTopic": true,
+      "broadcastTopicMatches": true,
+      "carriesSideEffects": false,
+      "causalRefs": [
+        "artifacts/coordination/post_mvp_delegation_manifest.json#coordinationEvents/coord-event-verification-requested",
+        "broadcast-fan-out-coord-event-delegation-accepted"
+      ],
+      "eventRef": "artifacts/coordination/post_mvp_delegation_manifest.json#coordinationEvents/coord-event-verification-requested",
+      "eventType": "verification.requested",
+      "id": "broadcast-fan-out-coord-event-verification-requested",
+      "mayOverrideVerifierResult": false,
+      "schemaVersion": "broadcast-fan-out-v1",
+      "subscriberAgentIds": [
+        "planner_agent",
+        "verifier_agent",
+        "auditor_agent"
+      ],
+      "topicId": "coordination.delegation_lifecycle"
+    },
+    {
+      "broadcastAllowedByTopic": true,
+      "broadcastTopicMatches": true,
+      "carriesSideEffects": false,
+      "causalRefs": [
+        "artifacts/coordination/post_mvp_negotiation_record.json#proposals/negotiation-proposal-acceptance-criteria-clarification",
+        "broadcast-fan-out-coord-event-verification-requested"
+      ],
+      "eventRef": "artifacts/coordination/post_mvp_negotiation_record.json#proposals/negotiation-proposal-acceptance-criteria-clarification",
+      "eventType": "negotiation.proposal",
+      "id": "broadcast-fan-out-negotiation-proposal-acceptance-criteria-clarification",
+      "mayOverrideVerifierResult": false,
+      "schemaVersion": "broadcast-fan-out-v1",
+      "subscriberAgentIds": [
+        "planner_agent",
+        "auditor_agent"
+      ],
+      "topicId": "coordination.negotiation_lifecycle"
+    },
+    {
+      "broadcastAllowedByTopic": true,
+      "broadcastTopicMatches": true,
+      "carriesSideEffects": false,
+      "causalRefs": [
+        "artifacts/coordination/post_mvp_negotiation_record.json#proposals/negotiation-proposal-acceptance-criteria-counter",
+        "broadcast-fan-out-negotiation-proposal-acceptance-criteria-clarification"
+      ],
+      "eventRef": "artifacts/coordination/post_mvp_negotiation_record.json#proposals/negotiation-proposal-acceptance-criteria-counter",
+      "eventType": "negotiation.counter_proposal",
+      "id": "broadcast-fan-out-negotiation-proposal-acceptance-criteria-counter",
+      "mayOverrideVerifierResult": false,
+      "schemaVersion": "broadcast-fan-out-v1",
+      "subscriberAgentIds": [
+        "planner_agent",
+        "auditor_agent"
+      ],
+      "topicId": "coordination.negotiation_lifecycle"
+    },
+    {
+      "broadcastAllowedByTopic": true,
+      "broadcastTopicMatches": true,
+      "carriesSideEffects": false,
+      "causalRefs": [
+        "artifacts/coordination/post_mvp_negotiation_record.json#proposals/negotiation-proposal-acceptance-criteria-agreement",
+        "broadcast-fan-out-negotiation-proposal-acceptance-criteria-counter"
+      ],
+      "eventRef": "artifacts/coordination/post_mvp_negotiation_record.json#proposals/negotiation-proposal-acceptance-criteria-agreement",
+      "eventType": "negotiation.agreement",
+      "id": "broadcast-fan-out-negotiation-proposal-acceptance-criteria-agreement",
+      "mayOverrideVerifierResult": false,
+      "schemaVersion": "broadcast-fan-out-v1",
+      "subscriberAgentIds": [
+        "planner_agent",
+        "auditor_agent"
+      ],
+      "topicId": "coordination.negotiation_lifecycle"
+    }
+  ],
+  "generatedAt": "2026-05-12T14:39:00Z",
+  "id": "post-mvp-broadcast-subscription-kernel-contract",
+  "invariants": [
+    "BroadcastSubscriptionManifestV1 is workload-independent: it fans out CoordinationEventV1 and NegotiationRecordV1 events to declared subscribers without adding regression/email behavior.",
+    "Subscriber agents must be on the topic allow-list; broadcast must not reach unauthorized agents or public consumers.",
+    "Fan-out events must reference declared coordination events or negotiation proposals/agreements and must not carry side effects.",
+    "Subscribers must not publish, acknowledge with side effects, override verifier results, or broadcast downstream.",
+    "The manifest is a static contract artifact and does not run a real event bus, broker, blackboard, queue, or external delivery channel."
+  ],
+  "kernelPrimitive": "BroadcastSubscription",
+  "messageRefs": {
+    "verificationRequest": "artifacts/coordination/post_mvp_agent_message_manifest.json#messages/agent-message-verification-request",
+    "verificationResponse": "artifacts/coordination/post_mvp_agent_message_manifest.json#messages/agent-message-verification-response"
+  },
+  "mode": "static_contract_only",
+  "negotiationBinding": {
+    "negotiationAgreementRef": "artifacts/coordination/post_mvp_negotiation_record.json#agreement/negotiation-agreement-acceptance-criteria-source-bound",
+    "negotiationProposalRefs": [
+      "artifacts/coordination/post_mvp_negotiation_record.json#proposals/negotiation-proposal-acceptance-criteria-clarification",
+      "artifacts/coordination/post_mvp_negotiation_record.json#proposals/negotiation-proposal-acceptance-criteria-counter",
+      "artifacts/coordination/post_mvp_negotiation_record.json#proposals/negotiation-proposal-acceptance-criteria-agreement"
+    ],
+    "negotiationRecordId": "artifacts/coordination/post_mvp_negotiation_record.json#id/post-mvp-negotiation-record-kernel-contract",
+    "negotiationRecordRef": "artifacts/coordination/post_mvp_negotiation_record.json"
+  },
+  "nonRegressionReusePath": [
+    "test_execution_failure_triage",
+    "code_patch_review_loop",
+    "pr_review"
+  ],
+  "phase": "post_mvp",
+  "policyBoundary": {
+    "broadcastAllowed": true,
+    "deliverySendAllowed": false,
+    "externalSideEffectsAllowed": false,
+    "policySchemaVersion": "policy-v1",
+    "providerExecutionAllowed": false,
+    "publicAccessAllowed": false,
+    "realMultiAgentRuntimeAllowed": false,
+    "workspaceMutationAllowed": false
+  },
+  "schemaVersion": "broadcast-subscription-manifest-v1",
+  "scope": "agent_coordination_broadcast_contract",
+  "sourceArtifacts": [
+    {
+      "contentHash": "7779a468076194ccb7f88ffeb9e37727d479742ec0add917ac45777b748d5b8f",
+      "path": "artifacts/coordination/post_mvp_delegation_manifest.json",
+      "role": "delegation_manifest"
+    },
+    {
+      "contentHash": "834b3c6bfe4dc401a5c34f3ed20edb479c4352e85363ac629caab3a3af429932",
+      "path": "artifacts/coordination/post_mvp_creator_verifier_pairing.json",
+      "role": "creator_verifier_pairing"
+    },
+    {
+      "contentHash": "e026fb8f8d78f3a54d0a1a3d846cd93d8289cd9a8fefb59ead112fb18e4552f2",
+      "path": "artifacts/coordination/post_mvp_agent_message_manifest.json",
+      "role": "agent_message_manifest"
+    },
+    {
+      "contentHash": "fbbcd49ad9e7cd229658b431ab15313829f3a58107d809ef288043236746698e",
+      "path": "artifacts/coordination/post_mvp_negotiation_record.json",
+      "role": "negotiation_record"
+    }
+  ],
+  "subscriberBindings": [
+    {
+      "agentId": "planner_agent",
+      "mayAcknowledgeWithSideEffects": false,
+      "mayBroadcastDownstream": false,
+      "mayMutateDelegationArtifacts": false,
+      "mayOverrideVerifierResult": false,
+      "mayPublish": false,
+      "owns": [
+        "delegation_lifecycle_observation",
+        "negotiation_lifecycle_observation"
+      ],
+      "role": "planner"
+    },
+    {
+      "agentId": "verifier_agent",
+      "mayAcknowledgeWithSideEffects": false,
+      "mayBroadcastDownstream": false,
+      "mayMutateDelegationArtifacts": false,
+      "mayOverrideVerifierResult": false,
+      "mayPublish": false,
+      "owns": [
+        "delegation_lifecycle_observation"
+      ],
+      "role": "verifier"
+    },
+    {
+      "agentId": "auditor_agent",
+      "mayAcknowledgeWithSideEffects": false,
+      "mayBroadcastDownstream": false,
+      "mayMutateDelegationArtifacts": false,
+      "mayOverrideVerifierResult": false,
+      "mayPublish": false,
+      "owns": [
+        "read_only_audit_observation"
+      ],
+      "role": "auditor"
+    }
+  ],
+  "subscriptions": [
+    {
+      "deliveryMode": "read_only_fan_out",
+      "id": "subscription-planner-agent-delegation-lifecycle",
+      "mayAcknowledgeWithSideEffects": false,
+      "mayBroadcastDownstream": false,
+      "mayOverrideVerifierResult": false,
+      "mayPublish": false,
+      "ordering": "causal",
+      "schemaVersion": "broadcast-subscription-v1",
+      "subscriberAgent": "planner_agent",
+      "topicId": "coordination.delegation_lifecycle"
+    },
+    {
+      "deliveryMode": "read_only_fan_out",
+      "id": "subscription-verifier-agent-delegation-lifecycle",
+      "mayAcknowledgeWithSideEffects": false,
+      "mayBroadcastDownstream": false,
+      "mayOverrideVerifierResult": false,
+      "mayPublish": false,
+      "ordering": "causal",
+      "schemaVersion": "broadcast-subscription-v1",
+      "subscriberAgent": "verifier_agent",
+      "topicId": "coordination.delegation_lifecycle"
+    },
+    {
+      "deliveryMode": "read_only_fan_out",
+      "id": "subscription-auditor-agent-delegation-lifecycle",
+      "mayAcknowledgeWithSideEffects": false,
+      "mayBroadcastDownstream": false,
+      "mayOverrideVerifierResult": false,
+      "mayPublish": false,
+      "ordering": "causal",
+      "schemaVersion": "broadcast-subscription-v1",
+      "subscriberAgent": "auditor_agent",
+      "topicId": "coordination.delegation_lifecycle"
+    },
+    {
+      "deliveryMode": "read_only_fan_out",
+      "id": "subscription-planner-agent-negotiation-lifecycle",
+      "mayAcknowledgeWithSideEffects": false,
+      "mayBroadcastDownstream": false,
+      "mayOverrideVerifierResult": false,
+      "mayPublish": false,
+      "ordering": "causal",
+      "schemaVersion": "broadcast-subscription-v1",
+      "subscriberAgent": "planner_agent",
+      "topicId": "coordination.negotiation_lifecycle"
+    },
+    {
+      "deliveryMode": "read_only_fan_out",
+      "id": "subscription-auditor-agent-negotiation-lifecycle",
+      "mayAcknowledgeWithSideEffects": false,
+      "mayBroadcastDownstream": false,
+      "mayOverrideVerifierResult": false,
+      "mayPublish": false,
+      "ordering": "causal",
+      "schemaVersion": "broadcast-subscription-v1",
+      "subscriberAgent": "auditor_agent",
+      "topicId": "coordination.negotiation_lifecycle"
+    }
+  ],
+  "topics": [
+    {
+      "allowedEventTypes": [
+        "delegation.created",
+        "delegation.accepted",
+        "verification.requested"
+      ],
+      "deliveryMode": "read_only_fan_out",
+      "fanOutMayCarrySideEffects": false,
+      "fanOutMayOverrideVerifierResult": false,
+      "kind": "coordination_event_fan_out",
+      "ordering": "causal",
+      "publicAccessAllowed": false,
+      "schemaVersion": "broadcast-topic-v1",
+      "subscriberAllowList": [
+        "planner_agent",
+        "verifier_agent",
+        "auditor_agent"
+      ],
+      "subscribersMayBroadcastDownstream": false,
+      "topicId": "coordination.delegation_lifecycle"
+    },
+    {
+      "allowedEventTypes": [
+        "negotiation.proposal",
+        "negotiation.counter_proposal",
+        "negotiation.agreement"
+      ],
+      "deliveryMode": "read_only_fan_out",
+      "fanOutMayCarrySideEffects": false,
+      "fanOutMayOverrideVerifierResult": false,
+      "kind": "negotiation_event_fan_out",
+      "ordering": "causal",
+      "publicAccessAllowed": false,
+      "schemaVersion": "broadcast-topic-v1",
+      "subscriberAllowList": [
+        "planner_agent",
+        "auditor_agent"
+      ],
+      "subscribersMayBroadcastDownstream": false,
+      "topicId": "coordination.negotiation_lifecycle"
+    }
+  ]
+}

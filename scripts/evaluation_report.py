@@ -32,10 +32,12 @@ from policy_unlock_denial import (
 )
 from coordination_contract import (
     AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH,
+    BROADCAST_SUBSCRIPTION_MANIFEST_ARTIFACT_PATH,
     CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH,
     DELEGATION_MANIFEST_ARTIFACT_PATH,
     NEGOTIATION_RECORD_ARTIFACT_PATH,
     validate_agent_message_manifest,
+    validate_broadcast_subscription_manifest,
     validate_creator_verifier_pairing,
     validate_delegation_manifest,
     validate_negotiation_record,
@@ -162,6 +164,7 @@ def _source_specs() -> list[tuple[str, str]]:
         ("post_mvp_creator_verifier_pairing", CREATOR_VERIFIER_PAIRING_ARTIFACT_PATH),
         ("post_mvp_agent_message_manifest", AGENT_MESSAGE_MANIFEST_ARTIFACT_PATH),
         ("post_mvp_negotiation_record", NEGOTIATION_RECORD_ARTIFACT_PATH),
+        ("post_mvp_broadcast_subscription_manifest", BROADCAST_SUBSCRIPTION_MANIFEST_ARTIFACT_PATH),
     ]
     for fixture_id in FIXTURE_IDS:
         specs.append((f"phase1a_{fixture_id}_run", f"artifacts/runs/{fixture_id}/run.json"))
@@ -294,6 +297,8 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
     validate_agent_message_manifest(agent_message_manifest, root)
     negotiation_record = _load_json(root / NEGOTIATION_RECORD_ARTIFACT_PATH)
     validate_negotiation_record(negotiation_record, root)
+    broadcast_subscription_manifest = _load_json(root / BROADCAST_SUBSCRIPTION_MANIFEST_ARTIFACT_PATH)
+    validate_broadcast_subscription_manifest(broadcast_subscription_manifest, root)
     delivery_readiness = delivery_report["readiness"]
     delivery_blocker_ids = [blocker["id"] for blocker in delivery_report["blockers"]]
     phase_coverage = _phase_coverage()
@@ -376,7 +381,7 @@ def build_evaluation_report(root: Path) -> dict[str, Any]:
         ],
         "nextRecommendedSlice": {
             "phase": "post_mvp",
-            "slice": "Add a BroadcastSubscriptionV1 coordination contract artifact so workload-independent event broadcast subscriptions, no-side-effect/no-override invariants, and CoordinationEventV1 fan-out are machine-verifiable on top of DelegationManifestV1, CreatorVerifierPairingV1, AgentMessageManifestV1, and NegotiationRecordV1.",
+            "slice": "Open the second workload by adding a workload-independent TestExecutionTaskSpecV1 envelope so the Agentic Engineering OS kernel can host Test Execution / Failure Triage without reusing regression/email TaskSpec fields, while keeping DelegationManifestV1, CreatorVerifierPairingV1, AgentMessageManifestV1, NegotiationRecordV1, and BroadcastSubscriptionManifestV1 reusable.",
             "mustRemainMachineVerifiable": True,
         },
         "invariants": [
